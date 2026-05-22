@@ -43,6 +43,14 @@ enclave-ui/.externalNativeBuild/
 enclave-ui/.cxx/
 enclave-ui/*.jks
 enclave-ui/*.keystore
+enclave-ui/*.ap_
+enclave-ui/*.der
+enclave-ui/*.pk8
+enclave-ui/*.pem
+enclave-ui/logcat.txt
+enclave-ui/logcat_problems.md
+enclave-ui/.navigation/
+enclave-ui/idea.properties
 
 # ------------------------------------------------------------------------------
 # Enclave Server (Backend) Ignored Files
@@ -55,6 +63,10 @@ enclave-server/signaling-server/node_modules/
 enclave-server/signaling-server/dist/
 enclave-server/signaling-server.log
 enclave-server/volumes/db/data/
+enclave-server/signaling-server/package-lock.json
+enclave-server/signaling-server/npm-debug.log*
+enclave-server/signaling-server/yarn-debug.log*
+enclave-server/signaling-server/yarn-error.log*
 
 # ------------------------------------------------------------------------------
 # Global Build Outputs & Package Manager Cache Fallbacks
