@@ -14,7 +14,7 @@ Thumbs.db
 *.bak
 *.tmp
 *.log
-.codex
+*.codex
 
 # IDEs and Editors (Android Studio, VS Code, etc.)
 .idea/
