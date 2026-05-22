@@ -1,0 +1,72 @@
+# ==============================================================================
+# Enclave Workspace Global Gitignore (Monorepo Consolidated)
+# ==============================================================================
+
+# OS / System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.bak
+*.tmp
+*.log
+
+# IDEs and Editors (Android Studio, VS Code, etc.)
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+.directory
+
+# ------------------------------------------------------------------------------
+# Enclave Client (Android) Ignored Files
+# ------------------------------------------------------------------------------
+enclave-ui/local.properties
+enclave-ui/app/google-services.json
+enclave-ui/app/google-services.json.backup
+enclave-ui/app/src/main/res/values/secrets.xml
+enclave-ui/.gradle/
+enclave-ui/build/
+enclave-ui/app/build/
+enclave-ui/captures/
+enclave-ui/.externalNativeBuild/
+enclave-ui/.cxx/
+enclave-ui/*.jks
+enclave-ui/*.keystore
+
+# ------------------------------------------------------------------------------
+# Enclave Server (Backend) Ignored Files
+# ------------------------------------------------------------------------------
+enclave-server/.env
+enclave-server/.env.backup
+enclave-server/.env.fixed
+enclave-server/signaling-server/firebase-adminsdk.json
+enclave-server/signaling-server/node_modules/
+enclave-server/signaling-server/dist/
+enclave-server/signaling-server.log
+enclave-server/volumes/db/data/
+
+# ------------------------------------------------------------------------------
+# Global Build Outputs & Package Manager Cache Fallbacks
+# ------------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+.gradle/
+out/
+bin/
+obj/
+*.apk
+*.aar
+*.jar
+*.class

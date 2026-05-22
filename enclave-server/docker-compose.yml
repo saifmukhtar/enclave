@@ -1,0 +1,171 @@
+services:
+  studio:
+    container_name: supabase-studio
+    image: supabase/studio:latest
+    restart: unless-stopped
+    ports:
+      - ${STUDIO_PORT}:3000/tcp
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
+      SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
+    volumes:
+      - ./volumes/functions:/app/edge-functions:Z
+      - ./volumes/snippets:/app/snippets:Z
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - sh -lc "export IP=$$(hostname -i | awk '{print $$1}'); node -e \"fetch('http://' + process.env.IP + ':3000',{redirect:'manual'}).then((r)=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - supabase-network
+
+  kong:
+    container_name: supabase-kong
+    image: kong:2.8.1
+    restart: unless-stopped
+    ports:
+      - ${KONG_HTTP_PORT}:8000/tcp
+      - ${KONG_HTTPS_PORT}:8443/tcp
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+    volumes:
+      - ./volumes/api/kong.yml:/var/lib/kong/kong.yml:ro,Z
+    networks:
+      - supabase-network
+
+  auth:
+    container_name: supabase-auth
+    image: supabase/gotrue:v2.132.3
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY}
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_EXTERNAL_EMAIL_SIGNUP_ENABLED: "false"
+    networks:
+      - supabase-network
+
+  rest:
+    container_name: supabase-rest
+    image: postgrest/postgrest:v11.2.0
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMA: ${POSTGREST_DB_SCHEMA:-public,storage,graphql_public}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks:
+      - supabase-network
+
+  realtime:
+    container_name: supabase-realtime
+    image: supabase/realtime:v2.28.31
+    restart: unless-stopped
+    command: /bin/sh -lc 'export APP_NAME="${APP_NAME:-realtime}"; exec /app/bin/server'
+    environment:
+      - APP_NAME=realtime
+      - FLY_APP_NAME=realtime
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=supabase_admin
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=postgres
+      - DB_SSL=false
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET}
+      - REPLICATION_MODE=RLS
+      - REPLICATION_POLL_INTERVAL=100
+      - SEED_SELF_HOST=true
+      - DNS_NODES=''
+    networks:
+      - supabase-network
+
+  storage:
+    container_name: supabase-storage
+    image: supabase/storage-api:v1.10.1
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: 524288000
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+    volumes:
+      # Mapping Droplet local SSD to the container for unlimited storage
+      - storage_data:/var/lib/storage
+    networks:
+      - supabase-network
+
+  meta:
+    container_name: supabase-meta
+    image: supabase/postgres-meta:v0.68.0
+    restart: unless-stopped
+    ports:
+      - ${META_PORT:-8082}:8080
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - supabase-network
+
+  db:
+    container_name: supabase-db
+    image: supabase/postgres:15.1.0.147
+    restart: unless-stopped
+    ports:
+      - ${POSTGRES_PORT}:5432
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXP}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
+      - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+      - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
+      - ./volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+      - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
+    networks:
+      - supabase-network
+
+networks:
+  supabase-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  storage_data:

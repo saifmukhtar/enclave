@@ -1,0 +1,35 @@
+{
+  "name": "enclave-signaling-server",
+  "version": "1.1.0",
+  "description": "Production signaling relay for Enclave WebRTC + real-time sync events",
+  "main": "dist/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "node --watch --enable-source-maps dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "webrtc",
+    "signaling",
+    "websocket",
+    "enclave"
+  ],
+  "author": "Enclave",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^5.2.1",
+    "firebase-admin": "^13.10.0",
+    "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.8.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3"
+  }
+}

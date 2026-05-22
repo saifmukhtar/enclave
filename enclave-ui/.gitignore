@@ -1,0 +1,44 @@
+# ==============================================================================
+# Enclave Android Client Gitignore
+# ==============================================================================
+
+# Gradle files and cache
+.gradle/
+build/
+/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# Android Studio & IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+idea.properties
+
+# Android Studio generated files
+/local.properties
+.DS_Store
+/build
+
+# Output files
+*.apk
+*.aar
+*.ap_
+*.der
+
+# Keystores & release certificates (Do NOT commit keys)
+*.jks
+*.keystore
+*.pk8
+*.pem
+
+# Firebase Configurations (FCM credentials)
+app/google-services.json
+
+# Log Files
+*.log
+logcat.txt
+logcat_problems.md

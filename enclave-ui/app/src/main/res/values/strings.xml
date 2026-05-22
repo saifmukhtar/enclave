@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Enclave</string>
+    <string name="login_app_title">Enclave</string>
+    <string name="login_app_subtitle">Your private sanctuary</string>
+    <string name="login_email_label">Email Address</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_show_password">Show</string>
+    <string name="login_hide_password">Hide</string>
+    <string name="login_email_invalid">Please enter a valid email address.</string>
+    <string name="login_password_invalid">Password must be at least 6 characters.</string>
+    <string name="login_button_text">Sign In</string>
+    <string name="login_footer_e2ee">🔒 End-to-end encrypted · Signal Protocol</string>
+</resources>

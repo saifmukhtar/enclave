@@ -1,0 +1,192 @@
+import java.util.Properties
+
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
+    id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
+}
+
+val properties = Properties()
+val propertiesFile = rootProject.file("local.properties")
+if (propertiesFile.exists()) {
+    propertiesFile.inputStream().use { properties.load(it) }
+}
+
+fun getOrThrow(key: String): String {
+    val value = properties.getProperty(key)
+    if (value.isNullOrBlank()) {
+        throw GradleException(
+            "CRITICAL CONFIGURATION ERROR: The parameter '$key' is missing from 'local.properties'. " +
+            "For full security and FOSS sanitization, all sensitive coordinates (SIGNALING_SERVER_URL, " +
+            "TURN_SERVER_URL, TURN_USERNAME, TURN_PASSWORD, SUPABASE_URL, SUPABASE_KEY) " +
+            "must be explicitly defined in 'local.properties' and cannot fall back to hardcoded defaults."
+        )
+    }
+    return value
+}
+
+val turnUrl = getOrThrow("TURN_SERVER_URL")
+val turnUser = getOrThrow("TURN_USERNAME")
+val turnPass = getOrThrow("TURN_PASSWORD")
+val signalingUrl = getOrThrow("SIGNALING_SERVER_URL")
+val supabaseUrl = getOrThrow("SUPABASE_URL")
+val supabaseKey = getOrThrow("SUPABASE_KEY")
+
+android {
+    namespace = "com.enclave.app"
+    compileSdk = 35
+
+    val storeFilePath = properties.getProperty("RELEASE_STORE_FILE")
+    val storePass = properties.getProperty("RELEASE_STORE_PASSWORD")
+    val alias = properties.getProperty("RELEASE_KEY_ALIAS")
+    val aliasPass = properties.getProperty("RELEASE_KEY_PASSWORD")
+
+    signingConfigs {
+        create("release") {
+            if (!storeFilePath.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = aliasPass
+            }
+        }
+    }
+
+    defaultConfig {
+        applicationId = "com.enclave.app"
+        minSdk = 34
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+        
+        buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+        buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
+        buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
+        buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            if (!storeFilePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
+            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+            buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+            buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
+            buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
+            buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
+        }
+        debug {
+            buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
+            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+            buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+            buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
+            buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
+            buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.11"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // QR Code Generation (ZXing)
+    implementation("com.google.zxing:core:3.5.3")
+
+    // Room
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
+
+    // Security & Cryptography
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("org.signal:libsignal-client:0.39.2")
+    implementation("org.signal:libsignal-android:0.39.2")
+
+    // WebRTC & Signaling
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // WorkManager & Firebase Push Notifications
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("com.google.firebase:firebase-messaging-ktx:24.0.0")
+
+    // Media3 (ExoPlayer & Session)
+    val media3Version = "1.3.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+
+    // Supabase
+    val supabaseVersion = "2.6.1"
+    implementation(platform("io.github.jan-tennert.supabase:bom:$supabaseVersion"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:gotrue-kt")
+    implementation("io.github.jan-tennert.supabase:storage-kt")
+    implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation("io.ktor:ktor-client-okhttp:2.3.11")
+    implementation("io.ktor:ktor-client-websockets:2.3.11")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json") {
+        version {
+            strictly("1.6.3")
+        }
+    }
+
+    // Explicit Fragment Upgrade to satisfy ActivityResult API & Lint
+    implementation("androidx.fragment:fragment-ktx:1.7.1")
+}

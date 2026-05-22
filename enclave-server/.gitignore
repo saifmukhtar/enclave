@@ -1,0 +1,29 @@
+# ==============================================================================
+# Enclave Backend Server Gitignore
+# ==============================================================================
+
+# Node / JS dependencies
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Environment Variables & Credentials (CRITICAL)
+.env
+.env.backup
+.env.fixed
+signaling-server/firebase-adminsdk.json
+
+# Docker & PostgreSQL local database volumes
+volumes/db/data/
+
+# Application Logs
+signaling-server.log
+*.log
+
+# OS & Editor configurations
+.DS_Store
+.vscode/
+.idea/
