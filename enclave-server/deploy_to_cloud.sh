@@ -9,11 +9,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "=================================================="
 echo "🚀 1. Syncing files to VPS via rsync (enclave)..."
 echo "=================================================="
-rsync -avz \
+rsync -avz --delete \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude '.gradle' \
   --exclude 'certs' \
+  --exclude '.env' \
+  --exclude 'volumes/db/data' \
+  --exclude 'volumes/storage' \
+  --exclude 'signaling-server/dist' \
+  --exclude '*.log' \
   "$SCRIPT_DIR/" enclave:~/enclave-server/
 
 echo ""

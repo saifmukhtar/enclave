@@ -21,6 +21,8 @@
 -keep class kotlinx.serialization.json.** { *; }
 -keep class com.enclave.app.network.** { *; }
 -keep class com.enclave.app.crypto.** { *; }
+-keep class com.enclave.app.webrtc.** { *; }
+-keep class com.enclave.app.models.** { *; }
 
 # Ignore warnings from slf4j and other transitive third-party dependencies during R8/ProGuard processing
 -dontwarn org.slf4j.**

@@ -44,7 +44,13 @@ class CryptoManager(private val context: Context) {
      * Initializes the device's Identity KeyPair and PreKeys for the first time.
      */
     fun generateLocalKeysIfNecessary() {
-        if (!sharedPreferences.contains("identity_key_pair")) {
+        val signedPreKeys = try {
+            signalStore.loadSignedPreKeys()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        
+        if (!sharedPreferences.contains("identity_key_pair") || signedPreKeys.isEmpty()) {
             val identityKeyPair = org.signal.libsignal.protocol.IdentityKeyPair.generate()
             val registrationId = org.signal.libsignal.protocol.util.KeyHelper.generateRegistrationId(false)
             

@@ -28,6 +28,8 @@ services:
         protocols:
           - http
           - https
+          - ws
+          - wss
 
   - name: storage-v1
     url: http://storage:5000
