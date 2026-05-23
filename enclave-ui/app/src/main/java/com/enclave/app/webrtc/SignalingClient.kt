@@ -78,7 +78,11 @@ data class EncryptedSignalPayload(
     val messageId: String? = null
 )
 
-class SignalingClient(private val url: String, private val myId: String) {
+class SignalingClient(
+    private val url: String, 
+    private val myId: String,
+    private val tokenProvider: (suspend () -> String?)? = null
+) {
 
     // The HttpClient is long-lived and NOT closed on pause — only on full destroy.
     // Closing it on every app background caused reconnection failures (1006 disconnect).
@@ -119,7 +123,15 @@ class SignalingClient(private val url: String, private val myId: String) {
                     _connectionState.value = ConnectionState.CONNECTING
                     Log.d("SignalingClient", "Connecting to WebSocket: $url with myId=$myId")
                     
-                    client.webSocket(url) {
+                    val token = tokenProvider?.invoke()
+                    client.webSocket(
+                        urlString = url,
+                        request = {
+                            if (token != null) {
+                                headers.append(HttpHeaders.Authorization, "Bearer $token")
+                            }
+                        }
+                    ) {
                         session = this
                         _connectionState.value = ConnectionState.CONNECTED
                         Log.d("SignalingClient", "WebSocket Connected for myId=$myId")

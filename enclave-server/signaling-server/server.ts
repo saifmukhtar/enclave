@@ -154,6 +154,17 @@ type ClientRecord = {
   registeredAt: number;
   lastSeenAt: number;
   remoteAddress: string;
+  token: string | null;
+};
+
+type OfflineQueueItem = {
+  message: unknown;
+  serverTs: number;
+};
+
+type OfflineQueue = {
+  items: OfflineQueueItem[];
+  lastUpdatedAt: number;
 };
 
 const PORT = Number(process.env.PORT ?? 8085);
@@ -174,7 +185,7 @@ const wss = new WebSocketServer({
 
 const clientsById = new Map<ClientId, ClientRecord>();
 const clientsBySocket = new Map<WebSocket, ClientRecord>();
-const offlineQueues = new Map<ClientId, { message: unknown; serverTs: number }[]>();
+const offlineQueues = new Map<ClientId, OfflineQueue>();
 
 const json = (data: unknown): string => JSON.stringify(data);
 
@@ -265,6 +276,39 @@ app.get('/healthz', (_req, res) => {
   });
 });
 
+async function verifySupabaseToken(token: string): Promise<string | null> {
+  // If Supabase has a placeholder configuration, decode JWT sub claim for local dev
+  if (SUPABASE_URL.includes('your-project') || SUPABASE_KEY === 'your-anon-key') {
+    console.warn("Supabase not fully configured; decoding JWT payload sub claim without verification (DEV ONLY)");
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        return payload.sub ?? null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!res.ok) {
+      console.warn(`Supabase JWT verification returned status ${res.status}`);
+      return null;
+    }
+    const user = await res.json() as { id: string };
+    return user?.id ?? null;
+  } catch (err) {
+    console.error("JWT verification error against Supabase Auth:", err);
+    return null;
+  }
+}
+
 wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   try {
     if (clientsBySocket.size >= MAX_CLIENTS) {
@@ -275,6 +319,13 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const sessionId = crypto.randomUUID();
     const remoteAddress = req.socket?.remoteAddress ?? 'unknown';
 
+    // Extract authorization token from headers or query parameters
+    const authHeader = req.headers.authorization;
+    const urlParams = new URL(req.url ?? '', `http://${req.headers.host}`).searchParams;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : (urlParams.get('token') ?? null);
+
     const record: ClientRecord = {
       ws,
       id: `session:${sessionId}`,
@@ -282,6 +333,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       registeredAt: Date.now(),
       lastSeenAt: Date.now(),
       remoteAddress,
+      token,
     };
 
     clientsBySocket.set(ws, record);
@@ -296,20 +348,41 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       },
     });
 
-  ws.on('message', (raw: RawData) => {
+  ws.on('message', async (raw: RawData) => {
     try {
       const message = parseInboundMessage(raw);
       record.lastSeenAt = Date.now();
 
       if (message.type === 'REGISTER') {
+        if (!record.token) {
+          console.warn(`[register] Missing auth token for connection session=${record.sessionId}`);
+          safeSend(ws, {
+            type: 'ERROR',
+            payload: { code: 'UNAUTHORIZED', message: 'Authentication token required.' }
+          });
+          closeAndCleanup(record, 4002, 'unauthorized: missing token');
+          return;
+        }
+
+        const verifiedUserId = await verifySupabaseToken(record.token);
+        if (!verifiedUserId || verifiedUserId !== message.senderId) {
+          console.warn(`[register] Auth failed. verifiedUserId=${verifiedUserId} senderId=${message.senderId}`);
+          safeSend(ws, {
+            type: 'ERROR',
+            payload: { code: 'UNAUTHORIZED', message: 'JWT verification failed.' }
+          });
+          closeAndCleanup(record, 4003, 'unauthorized: invalid token');
+          return;
+        }
+
         registerClient(record, message.senderId);
         safeSend(ws, { type: 'REGISTERED', senderId: message.senderId });
 
         // Deliver offline queued messages for this registered senderId
         const queue = offlineQueues.get(message.senderId);
-        if (queue && queue.length > 0) {
-          console.log(`[offline-queue] Delivering ${queue.length} messages to registered client ${message.senderId}`);
-          for (const item of queue) {
+        if (queue && queue.items.length > 0) {
+          console.log(`[offline-queue] Delivering ${queue.items.length} messages to registered client ${message.senderId}`);
+          for (const item of queue.items) {
             safeSend(ws, item.message);
           }
           offlineQueues.delete(message.senderId);
@@ -361,18 +434,19 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         // Add to offline queue
         let queue = offlineQueues.get(message.targetId);
         if (!queue) {
-          queue = [];
+          queue = { items: [], lastUpdatedAt: Date.now() };
           offlineQueues.set(message.targetId, queue);
         }
-        if (queue.length < 100) {
-          queue.push({
+        queue.lastUpdatedAt = Date.now();
+        if (queue.items.length < 100) {
+          queue.items.push({
             message: {
               ...message,
               serverTs: Date.now(),
             },
             serverTs: Date.now(),
           });
-          console.log(`[offline-queue] Queued ${message.type} for offline target ${message.targetId} (queue: ${queue.length})`);
+          console.log(`[offline-queue] Queued ${message.type} for offline target ${message.targetId} (queue: ${queue.items.length})`);
         } else {
           console.warn(`[offline-queue] Queue full for target ${message.targetId}, dropping message`);
         }
@@ -449,7 +523,9 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
 
 const heartbeatTimer = setInterval(() => {
   const now = Date.now();
-  for (const record of clientsBySocket.values()) {
+  // Clone clientsBySocket list to avoid concurrent modification issues during iteration
+  const records = Array.from(clientsBySocket.values());
+  for (const record of records) {
     if (record.ws.readyState !== WebSocket.OPEN) {
       closeAndCleanup(record, 1001, 'socket not open');
       continue;
@@ -467,14 +543,20 @@ const heartbeatTimer = setInterval(() => {
     safeSend(record.ws, { type: 'PING', payload: { ts: now } });
   }
 
-  // Clean up expired offline messages (older than 24 hours)
+  // Clean up expired offline messages (older than 24 hours) or inactive queues (older than 7 days)
   const expirationMs = 24 * 60 * 60 * 1000;
+  const inactiveQueueMs = 7 * 24 * 60 * 60 * 1000;
   for (const [targetId, queue] of offlineQueues.entries()) {
-    const fresh = queue.filter(item => now - item.serverTs < expirationMs);
+    if (now - queue.lastUpdatedAt > inactiveQueueMs) {
+      offlineQueues.delete(targetId);
+      continue;
+    }
+
+    const fresh = queue.items.filter(item => now - item.serverTs < expirationMs);
     if (fresh.length === 0) {
       offlineQueues.delete(targetId);
-    } else if (fresh.length < queue.length) {
-      offlineQueues.set(targetId, fresh);
+    } else if (fresh.length < queue.items.length) {
+      queue.items = fresh;
     }
   }
 }, HEARTBEAT_INTERVAL_MS);
@@ -484,3 +566,21 @@ heartbeatTimer.unref();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Enclave signaling server listening on 0.0.0.0:${PORT}`);
 });
+
+// Graceful shutdown handlers
+const shutdown = () => {
+  console.log('Shutting down server gracefully...');
+  clearInterval(heartbeatTimer);
+  server.close(() => {
+    console.log('HTTP server closed.');
+    process.exit(0);
+  });
+  // Force exit after 5 seconds if graceful close hangs
+  setTimeout(() => {
+    console.error('Forcing exit...');
+    process.exit(1);
+  }, 5000);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

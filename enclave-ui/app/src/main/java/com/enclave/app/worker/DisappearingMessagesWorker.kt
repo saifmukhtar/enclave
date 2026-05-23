@@ -13,11 +13,7 @@ class DisappearingMessagesWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            val database = Room.databaseBuilder(
-                applicationContext,
-                EnclaveDatabase::class.java,
-                "enclave_secure.db"
-            ).fallbackToDestructiveMigration().build()
+            val database = EnclaveDatabase.getInstance(applicationContext)
             
             database.messageDao().deleteExpiredMessages(System.currentTimeMillis())
             Result.success()

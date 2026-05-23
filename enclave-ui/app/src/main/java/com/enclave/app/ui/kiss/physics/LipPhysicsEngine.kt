@@ -111,6 +111,14 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
     ) {
         if (nodes.isEmpty()) return
 
+        // Sanitize inputs
+        val safeGravityX = if (gravityX.isNaN() || gravityX.isInfinite()) 0f else gravityX
+        val safeGravityY = if (gravityY.isNaN() || gravityY.isInfinite()) 0f else gravityY
+        val safePressure = if (pressure.isNaN() || pressure.isInfinite() || pressure < 0f) 1.0f else pressure
+        val safeTouchMajor = if (touchMajor.isNaN() || touchMajor.isInfinite()) 0f else touchMajor
+        val safeTouchMinor = if (touchMinor.isNaN() || touchMinor.isInfinite()) 0f else touchMinor
+        val safeOrientation = if (orientationRad.isNaN() || orientationRad.isInfinite()) 0f else orientationRad
+
         val touchX = if (activeTouchX == null || activeTouchX.isNaN()) null else activeTouchX
         val touchY = if (activeTouchY == null || activeTouchY.isNaN()) null else activeTouchY
 
@@ -152,13 +160,13 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
         engineMeshStress = if (springs.isNotEmpty()) totalStress / springs.size else 0f
 
         // 3. Apply Active Touch Repulsion Force (Ellipse footprint conversion)
-        if (touchX != null && touchY != null && touchMajor > 0f) {
+        if (touchX != null && touchY != null && safeTouchMajor > 0f) {
             val drawingScale = (canvasWidth * 0.6f) / 4.5f
-            val rMajor = (touchMajor / (2f * drawingScale)).coerceAtLeast(0.1f)
-            val rMinor = (touchMinor / (2f * drawingScale)).coerceAtLeast(0.1f)
+            val rMajor = (safeTouchMajor / (2f * drawingScale)).coerceAtLeast(0.1f)
+            val rMinor = (safeTouchMinor / (2f * drawingScale)).coerceAtLeast(0.1f)
 
-            val cosTheta = cos(-orientationRad)
-            val sinTheta = sin(-orientationRad)
+            val cosTheta = cos(-safeOrientation)
+            val sinTheta = sin(-safeOrientation)
 
             for (node in nodes) {
                 // Vector relative to local touch space origin
@@ -174,7 +182,7 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
 
                 if (dEllipse < 1.0f) {
                     val nodeMag = sqrt(node.currentX * node.currentX + node.currentY * node.currentY).coerceAtLeast(0.001f)
-                    val repelFactor = kRepel * pressure * (1.0f - dEllipse)
+                    val repelFactor = kRepel * safePressure * (1.0f - dEllipse)
 
                     // Push outward from the center grid
                     node.forceX += repelFactor * (node.currentX / nodeMag)
@@ -185,8 +193,8 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
 
         // 4. Apply Accelerometer Gravity Sag Forces
         for (node in nodes) {
-            node.forceX += gravityX * kGravity
-            node.forceY += gravityY * kGravity
+            node.forceX += safeGravityX * kGravity
+            node.forceY += safeGravityY * kGravity
         }
 
         // 5. Verlet Integration / Velocity Update with Damping
@@ -197,7 +205,7 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
             node.currentX += node.velocityX
             node.currentY += node.velocityY
 
-            if (node.currentX.isNaN() || node.currentY.isNaN()) {
+            if (node.currentX.isNaN() || node.currentY.isNaN() || node.velocityX.isNaN() || node.velocityY.isNaN()) {
                 node.currentX = node.baseX
                 node.currentY = node.baseY
                 node.velocityX = 0f

@@ -23,6 +23,8 @@
 -keep class com.enclave.app.crypto.** { *; }
 -keep class com.enclave.app.webrtc.** { *; }
 -keep class com.enclave.app.models.** { *; }
+-keep class com.enclave.app.data.local.** { *; }
+-keep class com.enclave.app.data.local.* { *; }
 
 # Ignore warnings from slf4j and other transitive third-party dependencies during R8/ProGuard processing
 -dontwarn org.slf4j.**

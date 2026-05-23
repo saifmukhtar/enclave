@@ -7,6 +7,11 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.room.Room
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.gotrue.SessionStatus
+import kotlinx.coroutines.flow.first
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -52,19 +57,27 @@ class EnclaveSyncWorker(
         }
         val partnerAddress = SignalProtocolAddress(partnerId, 1)
 
-        val database = Room.databaseBuilder(
-            applicationContext,
-            EnclaveDatabase::class.java,
-            "enclave_db"
-        )
-        .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
-        .fallbackToDestructiveMigration()
-        .build()
+        val database = EnclaveDatabase.getInstance(applicationContext)
 
         val encryptedFileManager = EncryptedFileManager(applicationContext)
         val vaultRepository = VaultRepository(encryptedFileManager, database.mediaMetadataDao())
 
-        val signalingClient = SignalingClient(BuildConfig.SIGNALING_SERVER_URL, myId)
+        // Initialize Supabase Auth to fetch cached user session tokens for signaling authentication
+        val supabase = createSupabaseClient(
+            supabaseUrl = BuildConfig.SUPABASE_URL,
+            supabaseKey = BuildConfig.SUPABASE_KEY
+        ) {
+            install(Auth)
+        }
+
+        // Wait for session status flow to finish initial load of cached session
+        supabase.auth.sessionStatus.first { it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated }
+
+        val signalingClient = SignalingClient(
+            url = BuildConfig.SIGNALING_SERVER_URL,
+            myId = myId,
+            tokenProvider = { supabase.auth.currentSessionOrNull()?.accessToken }
+        )
         signalingClient.connect()
 
         try {
@@ -140,7 +153,6 @@ class EnclaveSyncWorker(
             return Result.retry()
         } finally {
             signalingClient.close()
-            database.close()
         }
 
         return Result.success()

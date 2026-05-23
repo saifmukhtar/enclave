@@ -69,15 +69,6 @@
             </intent-filter>
         </service>
 
-        <!-- FCM messaging service — secondary handler that triggers EnclaveSyncWorker -->
-        <service
-            android:name=".notifications.EnclaveMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <!-- Screen share foreground service (WebRTC MediaProjection) -->
         <service
             android:name=".webrtc.ScreenShareService"

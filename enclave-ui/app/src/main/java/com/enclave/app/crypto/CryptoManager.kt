@@ -89,34 +89,6 @@ class CryptoManager(private val context: Context) {
         }
     }
 
-    private fun encryptFallback(plaintext: ByteArray): ByteArray {
-        val key = java.security.MessageDigest.getInstance("SHA-256").digest("enclave_fallback_key".toByteArray(kotlin.text.Charsets.UTF_8))
-        val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")
-        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-        val iv = ByteArray(12)
-        java.security.SecureRandom().nextBytes(iv)
-        val spec = javax.crypto.spec.GCMParameterSpec(128, iv)
-        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, secretKey, spec)
-        val ciphertext = cipher.doFinal(plaintext)
-        return iv + ciphertext
-    }
-
-    private fun decryptFallback(combined: ByteArray): Result<ByteArray> {
-        return try {
-            val key = java.security.MessageDigest.getInstance("SHA-256").digest("enclave_fallback_key".toByteArray(kotlin.text.Charsets.UTF_8))
-            if (combined.size < 12) return Result.failure(IllegalArgumentException("Invalid ciphertext length"))
-            val iv = combined.copyOfRange(0, 12)
-            val ciphertext = combined.copyOfRange(12, combined.size)
-            val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")
-            val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-            val spec = javax.crypto.spec.GCMParameterSpec(128, iv)
-            cipher.init(javax.crypto.Cipher.DECRYPT_MODE, secretKey, spec)
-            Result.success(cipher.doFinal(ciphertext))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     /**
      * Encrypts plaintext bytes into a Double Ratchet CiphertextMessage.
      */
@@ -126,11 +98,7 @@ class CryptoManager(private val context: Context) {
             val ciphertextMessage = sessionCipher.encrypt(plaintext)
             Result.success(ciphertextMessage.serialize())
         } catch (e: Exception) {
-            try {
-                Result.success(encryptFallback(plaintext))
-            } catch (fallbackEx: Exception) {
-                Result.failure(e)
-            }
+            Result.failure(e)
         }
     }
 
@@ -153,7 +121,7 @@ class CryptoManager(private val context: Context) {
             
             Result.success(plaintext)
         } catch (e: Exception) {
-            decryptFallback(ciphertext)
+            Result.failure(e)
         }
     }
 

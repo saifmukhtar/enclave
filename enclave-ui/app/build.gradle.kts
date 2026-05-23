@@ -79,20 +79,8 @@ android {
             if (!storeFilePath.isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
-            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-            buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
-            buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
-            buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
-            buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
         }
         debug {
-            buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
-            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-            buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
-            buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
-            buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
-            buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
         }
     }
 

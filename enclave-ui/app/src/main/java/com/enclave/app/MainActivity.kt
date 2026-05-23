@@ -348,14 +348,7 @@ class MainActivity : FragmentActivity(), LifecycleEventObserver {
                     }
                     
                     val database = remember {
-                        Room.databaseBuilder(
-                            this@MainActivity.applicationContext,
-                            EnclaveDatabase::class.java,
-                            "enclave_db"
-                        )
-                        .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
-                        .fallbackToDestructiveMigration()
-                        .build()
+                        EnclaveDatabase.getInstance(this@MainActivity.applicationContext)
                     }
                     val encryptedFileManager = remember { EncryptedFileManager(this@MainActivity) }
                     val repo = remember { VaultRepository(encryptedFileManager, database.mediaMetadataDao()) }
@@ -364,7 +357,13 @@ class MainActivity : FragmentActivity(), LifecycleEventObserver {
                     val vaultViewModel = remember { VaultViewModel(repo) }
                     val biometricManager = remember { BiometricPromptManager(this@MainActivity) }
 
-                    val signalingClient = remember(myId) { SignalingClient(BuildConfig.SIGNALING_SERVER_URL, myId) }
+                    val signalingClient = remember(myId) {
+                        SignalingClient(
+                            url = BuildConfig.SIGNALING_SERVER_URL,
+                            myId = myId,
+                            tokenProvider = { supabase.auth.currentSessionOrNull()?.accessToken }
+                        )
+                    }
                     
                     // Manage the WebSocket connection lifecycle dynamically based on app lifecycle state
                     DisposableEffect(signalingClient, resolvedMyId, lifecycleOwner) {

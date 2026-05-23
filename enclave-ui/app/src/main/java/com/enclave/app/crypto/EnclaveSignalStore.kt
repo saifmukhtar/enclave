@@ -46,10 +46,12 @@ class EnclaveSignalStore(
     override fun isTrustedIdentity(address: SignalProtocolAddress, identityKey: IdentityKey, direction: IdentityKeyStore.Direction): Boolean {
         val serialized = Base64.encodeToString(identityKey.serialize(), Base64.NO_WRAP)
         val trusted = prefs.getString("identity_${address.name}", null)
-        if (trusted != serialized) {
+        return if (trusted == null) {
             prefs.edit().putString("identity_${address.name}", serialized).apply()
+            true
+        } else {
+            trusted == serialized
         }
-        return true
     }
 
     override fun getIdentity(address: SignalProtocolAddress): IdentityKey? {

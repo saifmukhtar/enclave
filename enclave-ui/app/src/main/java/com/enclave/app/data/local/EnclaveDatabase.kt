@@ -84,4 +84,24 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun userProfileDao(): UserProfileDao
     abstract fun statusStoryDao(): StatusStoryDao
     abstract fun callLogDao(): CallLogDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: EnclaveDatabase? = null
+
+        fun getInstance(context: android.content.Context): EnclaveDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = androidx.room.Room.databaseBuilder(
+                    context.applicationContext,
+                    EnclaveDatabase::class.java,
+                    "enclave_db"
+                )
+                .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
+                .fallbackToDestructiveMigration()
+                .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 }

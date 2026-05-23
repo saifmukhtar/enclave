@@ -38,62 +38,70 @@ class VoiceMemoController(
     private var mediaPlayer: MediaPlayer? = null
     private var tempRecordFile: File? = null
 
+    private val recorderLock = Any()
+
     fun startRecording(): Boolean {
-        return try {
-            tempRecordFile = File(context.cacheDir, "voice_record_temp.m4a")
-            if (tempRecordFile?.exists() == true) {
-                tempRecordFile?.delete()
+        synchronized(recorderLock) {
+            return try {
+                tempRecordFile = File(context.cacheDir, "voice_record_temp.m4a")
+                if (tempRecordFile?.exists() == true) {
+                    tempRecordFile?.delete()
+                }
+                
+                mediaRecorder = MediaRecorder(context).apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setOutputFile(tempRecordFile?.absolutePath)
+                    prepare()
+                    start()
+                }
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
             }
-            
-            mediaRecorder = MediaRecorder(context).apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setOutputFile(tempRecordFile?.absolutePath)
-                prepare()
-                start()
-            }
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
         }
     }
 
     fun stopRecording(): ByteArray? {
-        return try {
-            mediaRecorder?.apply {
-                stop()
-                release()
+        synchronized(recorderLock) {
+            return try {
+                mediaRecorder?.apply {
+                    stop()
+                    release()
+                }
+                mediaRecorder = null
+                
+                val file = tempRecordFile ?: return null
+                if (!file.exists()) return null
+                
+                val bytes = file.readBytes()
+                shredFile(file)
+                tempRecordFile = null
+                
+                bytes
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
             }
-            mediaRecorder = null
-            
-            val file = tempRecordFile ?: return null
-            if (!file.exists()) return null
-            
-            val bytes = file.readBytes()
-            shredFile(file)
-            tempRecordFile = null
-            
-            bytes
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
         }
     }
 
     fun cancelRecording() {
-        try {
-            mediaRecorder?.apply {
-                stop()
-                release()
+        synchronized(recorderLock) {
+            try {
+                mediaRecorder?.apply {
+                    stop()
+                    release()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            mediaRecorder = null
+            tempRecordFile?.let { shredFile(it) }
+            tempRecordFile = null
         }
-        mediaRecorder = null
-        tempRecordFile?.let { shredFile(it) }
-        tempRecordFile = null
     }
 
     fun playVoiceMemo(audioBytes: ByteArray, onComplete: () -> Unit = {}) {
@@ -127,10 +135,12 @@ class VoiceMemoController(
     }
 
     fun getAmplitude(): Int {
-        return try {
-            mediaRecorder?.maxAmplitude ?: 0
-        } catch (e: Exception) {
-            0
+        synchronized(recorderLock) {
+            return try {
+                mediaRecorder?.maxAmplitude ?: 0
+            } catch (e: Exception) {
+                0
+            }
         }
     }
 
