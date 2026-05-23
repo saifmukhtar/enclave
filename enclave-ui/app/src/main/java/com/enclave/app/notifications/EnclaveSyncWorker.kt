@@ -67,6 +67,28 @@ class EnclaveSyncWorker(
             supabaseUrl = BuildConfig.SUPABASE_URL,
             supabaseKey = BuildConfig.SUPABASE_KEY
         ) {
+            httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
+                 config {
+                    val parsedHost = try {
+                        java.net.URI(BuildConfig.SUPABASE_URL).host
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (parsedHost != null && !parsedHost.replace(".", "").all { it.isDigit() } && parsedHost != "localhost") {
+                        val pinner = okhttp3.CertificatePinner.Builder()
+                            .add("*.$parsedHost", "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
+                            .add("*.$parsedHost", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
+                            .add("*.$parsedHost", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
+                            .add("*.$parsedHost", "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
+                            .add(parsedHost, "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
+                            .add(parsedHost, "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
+                            .add(parsedHost, "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
+                            .add(parsedHost, "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
+                            .build()
+                        certificatePinner(pinner)
+                    }
+                }
+            }
             install(Auth)
         }
 

@@ -65,6 +65,13 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE user_profiles ADD COLUMN loveLanguage TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE user_profiles ADD COLUMN locationCity TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 @Database(
     entities = [
         MessageEntity::class,
@@ -74,7 +81,7 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         StatusStoryEntity::class,
         CallLogEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class EnclaveDatabase : RoomDatabase() {
@@ -96,7 +103,7 @@ abstract class EnclaveDatabase : RoomDatabase() {
                     EnclaveDatabase::class.java,
                     "enclave_db"
                 )
-                .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

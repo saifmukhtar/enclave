@@ -19,5 +19,7 @@ data class UserProfileEntity(
     @ColumnInfo(defaultValue = "") val avatarLocalPath: String = "",    // Local encrypted vault path
     @ColumnInfo(defaultValue = "0") val lastSeen: Long = 0L,
     @ColumnInfo(defaultValue = "0") val isOnline: Boolean = false,
-    @ColumnInfo(defaultValue = "0") val isMe: Boolean = false           // true = my own profile
+    @ColumnInfo(defaultValue = "0") val isMe: Boolean = false,           // true = my own profile
+    @ColumnInfo(defaultValue = "") val loveLanguage: String = "",
+    @ColumnInfo(defaultValue = "") val locationCity: String = ""
 )

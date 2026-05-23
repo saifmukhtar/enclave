@@ -63,7 +63,13 @@ import com.enclave.app.data.local.LetterEntity
 import com.enclave.app.media.MusicSyncController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import androidx.compose.foundation.BorderStroke
 import java.io.File
+
 
 @Composable
 fun LoungeScreen(
@@ -112,7 +118,10 @@ fun LoungeScreen(
                     Triple("letters", "💌 Letters", Icons.Default.Mail),
                     Triple("dice", "🎲 Games", Icons.Default.Casino),
                     Triple("canvas", "🖌️ Live Draw", Icons.Default.Edit),
-                    Triple("secret", "🫣 Reveal", Icons.Default.VisibilityOff)
+                    Triple("secret", "🫣 Reveal", Icons.Default.VisibilityOff),
+                    Triple("music", "🎵 Music", Icons.Default.MusicNote),
+                    Triple("quiz", "❤️ Quiz", Icons.Default.Favorite),
+                    Triple("scrapbook", "📸 Scrapbook", Icons.Default.PhotoLibrary)
                 )
 
                 tabs.forEach { (id, label, icon) ->
@@ -156,7 +165,10 @@ fun LoungeScreen(
                     "letters" -> DailyLettersTab(viewModel)
                     "dice" -> DiceAndIntimacyTab(viewModel)
                     "canvas" -> LiveSharedCanvasTab(viewModel)
-                    else -> ScratchToRevealTab(viewModel)
+                    "secret" -> ScratchToRevealTab(viewModel)
+                    "music" -> MusicLoungeTab(viewModel, musicSyncController)
+                    "quiz" -> LoveLanguageQuizTab(viewModel)
+                    "scrapbook" -> ScrapbookTab(viewModel)
                 }
             }
         }
@@ -182,6 +194,15 @@ fun ProfileCardsTab(
     var editEmoji by remember { mutableStateOf(myStatus.moodEmoji) }
     var editMsg by remember { mutableStateOf(myStatus.statusText) }
     var editListen by remember { mutableStateOf(myStatus.nowListening) }
+    var editCity by remember { mutableStateOf("") }
+
+    val myProfileVal by viewModel.myProfile.collectAsState()
+
+    LaunchedEffect(showEditDialog) {
+        if (showEditDialog) {
+            editCity = myProfileVal?.locationCity.orEmpty()
+        }
+    }
 
     var showCountdownDialog by remember { mutableStateOf(false) }
     var countdownLabelInput by remember { mutableStateOf("Our Next Visit ✈️") }
@@ -216,23 +237,33 @@ fun ProfileCardsTab(
     // Ephemeral Countdown timer ticker logic
     val targetTime = if (partnerStatus.countdownTarget > 0) partnerStatus.countdownTarget else myStatus.countdownTarget
     val targetLabel = if (partnerStatus.countdownLabel.isNotEmpty()) partnerStatus.countdownLabel else myStatus.countdownLabel
-    var countdownText by remember { mutableStateOf("No countdown active") }
+    
+    var days by remember { mutableStateOf(0L) }
+    var hours by remember { mutableStateOf(0L) }
+    var minutes by remember { mutableStateOf(0L) }
+    var seconds by remember { mutableStateOf(0L) }
+    var isExpired by remember { mutableStateOf(true) }
 
     LaunchedEffect(targetTime) {
         while (true) {
             val diff = targetTime - System.currentTimeMillis()
             if (diff <= 0) {
-                countdownText = "Countdown expired! 💕"
+                isExpired = true
+                days = 0L
+                hours = 0L
+                minutes = 0L
+                seconds = 0L
             } else {
-                val days = diff / (1000 * 60 * 60 * 24)
-                val hours = (diff / (1000 * 60 * 60)) % 24
-                val minutes = (diff / (1000 * 60)) % 60
-                val seconds = (diff / 1000) % 60
-                countdownText = "$days Days, $hours Hours, $minutes Mins, $seconds Secs"
+                isExpired = false
+                days = diff / (1000 * 60 * 60 * 24)
+                hours = (diff / (1000 * 60 * 60)) % 24
+                minutes = (diff / (1000 * 60)) % 60
+                seconds = (diff / 1000) % 60
             }
             delay(1000)
         }
     }
+
 
     // State variables for Passphrase-Encrypted backups
     var showExportPassphraseDialog by remember { mutableStateOf(false) }
@@ -372,7 +403,10 @@ fun ProfileCardsTab(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(myStatus.statusText, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("🔋 Battery: ${myStatus.batteryPct}%", fontSize = 10.sp, color = Color.Gray)
+                        val myWeatherStr = if (myStatus.weatherTemp != -999.0) {
+                            " • ${myStatus.weatherCondition} ${myStatus.weatherTemp.toInt()}°C"
+                        } else ""
+                        Text("🔋 Battery: ${myStatus.batteryPct}%$myWeatherStr", fontSize = 10.sp, color = Color.Gray)
                     }
 
                     Row(
@@ -476,7 +510,10 @@ fun ProfileCardsTab(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(partnerStatus.statusText, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("🔋 Battery: ${partnerStatus.batteryPct}% • 🕒 ${partnerStatus.localTimeStr}", fontSize = 10.sp, color = Color.Gray)
+                        val partnerWeatherStr = if (partnerStatus.weatherTemp != -999.0) {
+                            " • ${partnerStatus.weatherCondition} ${partnerStatus.weatherTemp.toInt()}°C"
+                        } else ""
+                        Text("🔋 Battery: ${partnerStatus.batteryPct}% • 🕒 ${partnerStatus.localTimeStr}$partnerWeatherStr", fontSize = 10.sp, color = Color.Gray)
                     }
 
                     Row(
@@ -537,22 +574,51 @@ fun ProfileCardsTab(
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFFFF5F6))
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = countdownText,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFE598A7),
-                        fontFamily = FontFamily.Monospace
-                    )
+                if (isExpired) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFFFF5F6))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (targetLabel.isNotEmpty()) "Countdown expired! 💕" else "No countdown active",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFE598A7)
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularCountdownUnit(
+                            value = days,
+                            label = "Days",
+                            progress = if (days > 30) 1.0f else days / 30.0f
+                        )
+                        CircularCountdownUnit(
+                            value = hours,
+                            label = "Hours",
+                            progress = hours / 24.0f
+                        )
+                        CircularCountdownUnit(
+                            value = minutes,
+                            label = "Mins",
+                            progress = minutes / 60.0f
+                        )
+                        CircularCountdownUnit(
+                            value = seconds,
+                            label = "Secs",
+                            progress = seconds / 60.0f
+                        )
+                    }
                 }
+
             }
         }
 
@@ -673,12 +739,19 @@ fun ProfileCardsTab(
                         label = { Text("🎵 Now Listening") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    OutlinedTextField(
+                        value = editCity,
+                        onValueChange = { editCity = it },
+                        label = { Text("🌍 City for Weather Sync") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         viewModel.updateMyStatus(editEmoji, editMsg, editListen)
+                        viewModel.updateProfileLocation(editCity)
                         showEditDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7))
@@ -717,8 +790,8 @@ fun ProfileCardsTab(
             confirmButton = {
                 Button(
                     onClick = {
-                        val days = countdownDaysInput.toLongOrNull() ?: 7
-                        val targetMs = System.currentTimeMillis() + (days * 86400 * 1000)
+                        val parsedDays = countdownDaysInput.toLongOrNull() ?: 7
+                        val targetMs = System.currentTimeMillis() + (parsedDays * 86400 * 1000)
                         viewModel.setCountdown(countdownLabelInput, targetMs)
                         showCountdownDialog = false
                     },
@@ -1084,6 +1157,12 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
     val activeLocalStroke by viewModel.currentLocalStroke.collectAsState()
     val activePartnerStroke by viewModel.currentPartnerStroke.collectAsState()
 
+    val drawings by viewModel.loungeDrawings.collectAsState()
+    val isDrawingUploading by viewModel.isDrawingUploading.collectAsState()
+
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var saveTitle by remember { mutableStateOf("") }
+
     var drawColorHex by remember { mutableStateOf("#E598A7") } // Pink default local
     var brushWidth by remember { mutableStateOf(8f) }
 
@@ -1110,12 +1189,33 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
                 }
             }
 
-            Button(
-                onClick = { viewModel.clearCanvas() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text("Clear Canvas", color = Color.White, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.clearCanvas() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text("Clear Canvas", color = Color.White, fontSize = 11.sp)
+                }
+
+                Button(
+                    onClick = { showSaveDialog = true },
+                    enabled = !isDrawingUploading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    if (isDrawingUploading) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 1.dp,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Saving...", color = Color.White, fontSize = 11.sp)
+                    } else {
+                        Text("Save 💾", color = Color.White, fontSize = 11.sp)
+                    }
+                }
             }
         }
 
@@ -1160,7 +1260,7 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(0.65f)
                 .clip(RoundedCornerShape(24.dp))
                 .background(Color.White)
                 .pointerInput(Unit) {
@@ -1217,8 +1317,110 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
 
             }
         }
+
+        if (drawings.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("🎨 Saved Shared Sketches", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D))
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                drawings.forEach { drawing ->
+                    Card(
+                        modifier = Modifier
+                            .width(100.dp)
+                            .fillMaxHeight(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            NetworkImage(
+                                url = drawing.url,
+                                contentDescription = drawing.title,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .align(Alignment.BottomCenter)
+                                    .padding(4.dp)
+                            ) {
+                                Text(
+                                    text = drawing.title,
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            if (drawing.uploaded_by == viewModel.myId) {
+                                IconButton(
+                                    onClick = { viewModel.deleteDrawing(drawing) },
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Delete",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showSaveDialog) {
+            AlertDialog(
+                onDismissRequest = { showSaveDialog = false },
+                title = { Text("Save Sketch to Gallery") },
+                text = {
+                    OutlinedTextField(
+                        value = saveTitle,
+                        onValueChange = { saveTitle = it },
+                        label = { Text("Sketch Title") },
+                        placeholder = { Text("e.g. Happy Flowers") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (saveTitle.isNotBlank()) {
+                                viewModel.saveCanvasToGallery(saveTitle)
+                                showSaveDialog = false
+                                saveTitle = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7))
+                    ) {
+                        Text("Save", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSaveDialog = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                }
+            )
+        }
     }
 }
+
 
 // ==========================================
 // 5. 🫣 Touch-Activated Scratch-to-Reveal / View-Once Tab
@@ -1635,107 +1837,230 @@ fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncCon
                 }
             }
 
-            Text(
-                text = "Lounge Playlist (${loungeSongs.size} tracks)",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2A1B1D).copy(alpha = 0.7f),
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            val playlistQueue by viewModel.playlistQueue.collectAsState()
+            var currentSubTab by remember { mutableStateOf("library") }
 
-            val filteredSongs = loungeSongs.filter { it.title.contains(searchQuery, ignoreCase = true) }
-
-            if (filteredSongs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (searchQuery.isEmpty())
-                            "No songs uploaded yet.\nTap the upload icon to listen together! 🎵"
-                            else "No matching songs found.",
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                    )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                listOf(
+                    "library" to "🎵 Songs Library",
+                    "queue" to "📋 Shared Queue"
+                ).forEach { (id, label) ->
+                    val isSel = currentSubTab == id
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSel) Color(0xFFE598A7) else Color(0xFFFCE2E6))
+                            .clickable { currentSubTab = id }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSel) Color.White else Color(0xFF2A1B1D)
+                        )
+                    }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredSongs) { song ->
-                        val isSelected = currentTrackUrl == song.url
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) Color(0xFFFFF5F6) else Color.White)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) Color(0xFFE598A7) else Color(0xFFFCE2E6),
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .clickable {
-                                    musicSyncController.playTrack(song.url, song.title)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = if (isSelected) Color(0xFFE598A7) else Color.Gray,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = song.title,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = Color(0xFF2A1B1D),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+            }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (song.uploaded_by == myId) {
+            if (currentSubTab == "library") {
+                val filteredSongs = loungeSongs.filter { it.title.contains(searchQuery, ignoreCase = true) }
+
+                if (filteredSongs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (searchQuery.isEmpty())
+                                "No songs uploaded yet.\nTap the upload icon to listen together! 🎵"
+                                else "No matching songs found.",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredSongs) { song ->
+                            val isSelected = currentTrackUrl == song.url
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) Color(0xFFFFF5F6) else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) Color(0xFFE598A7) else Color(0xFFFCE2E6),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        musicSyncController.playTrack(song.url, song.title)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color(0xFFE598A7) else Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = song.title,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = Color(0xFF2A1B1D),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(
-                                        onClick = { viewModel.deleteSong(song) },
+                                        onClick = { viewModel.addToQueue(song.id.orEmpty()) },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete",
-                                            tint = Color.Gray.copy(alpha = 0.6f),
+                                            imageVector = Icons.Default.Queue,
+                                            contentDescription = "Add to Queue",
+                                            tint = Color(0xFFE598A7),
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
+
+                                    if (song.uploaded_by == myId) {
+                                        IconButton(
+                                            onClick = { viewModel.deleteSong(song) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = Color.Gray.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Active",
+                                            tint = Color(0xFFE598A7),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                val resolvedQueue = playlistQueue.mapNotNull { queueItem ->
+                    val song = loungeSongs.find { it.id == queueItem.song_id }
+                    if (song != null) Pair(queueItem, song) else null
+                }
+
+                if (resolvedQueue.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Queue is empty.\nAdd songs from the Library! 🎵",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(resolvedQueue) { (queueItem, song) ->
+                            val isSelected = currentTrackUrl == song.url
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) Color(0xFFFFF5F6) else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) Color(0xFFE598A7) else Color(0xFFFCE2E6),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        musicSyncController.playTrack(song.url, song.title)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color(0xFFE598A7) else Color.Gray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = song.title,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = Color(0xFF2A1B1D),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
 
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Active",
-                                        tint = Color(0xFFE598A7),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { viewModel.removeFromQueue(queueItem.id.orEmpty()) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.RemoveCircleOutline,
+                                            contentDescription = "Remove from queue",
+                                            tint = Color.Red.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+
         }
     } else {
         Column(
@@ -2071,4 +2396,631 @@ private fun formatDuration(ms: Long): String {
     val secs = totalSecs % 60
     return String.format("%02d:%02d", mins, secs)
 }
+
+// ==========================================
+// 7. ❤️ Love Language Quiz Tab
+// ==========================================
+@Composable
+fun LoveLanguageQuizTab(viewModel: LoungeViewModel) {
+    val myProfile by viewModel.myProfile.collectAsState()
+    val partnerProfile by viewModel.partnerProfile.collectAsState()
+
+    var currentQuestionIdx by remember { mutableStateOf(0) }
+    val answers = remember { mutableStateListOf<String>() }
+    var quizInProgress by remember { mutableStateOf(false) }
+
+    val myLoveLanguage = myProfile?.loveLanguage
+    val partnerLoveLanguage = partnerProfile?.loveLanguage
+
+    if (!quizInProgress && !myLoveLanguage.isNullOrEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "❤️ Couples Love Language Comparison",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2A1B1D),
+                        fontFamily = FontFamily.Serif
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F6))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "YOU",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE598A7)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = myLoveLanguage,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF2A1B1D),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFCE2E6))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "PARTNER",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2A1B1D)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (!partnerLoveLanguage.isNullOrEmpty()) partnerLoveLanguage else "Not completed ⌛",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF2A1B1D),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = Color(0xFFFFF5F6), thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Understanding each other's primary love language helps you express affection in ways that truly resonate. Words of Affirmation value spoken praise; Quality Time values undivided attention; Receiving Gifts values thought and effort; Acts of Service value actions that ease stress; Physical Touch values tactile closeness.",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            currentQuestionIdx = 0
+                            answers.clear()
+                            quizInProgress = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Retake Quiz", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    } else {
+        val questions = viewModel.quizQuestions
+        if (currentQuestionIdx < questions.size) {
+            val question = questions[currentQuestionIdx]
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Love Language Evaluation Quiz",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE598A7)
+                    )
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LinearProgressIndicator(
+                            progress = { (currentQuestionIdx + 1).toFloat() / questions.size.toFloat() },
+                            color = Color(0xFFE598A7),
+                            trackColor = Color(0xFFFFF5F6),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Question ${currentQuestionIdx + 1} of ${questions.size}",
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Which statement resonates with you more?",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF2A1B1D),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Button(
+                        onClick = {
+                            answers.add(question.optionACategory)
+                            if (currentQuestionIdx + 1 < questions.size) {
+                                currentQuestionIdx++
+                            } else {
+                                viewModel.submitQuizResults(answers.toList())
+                                quizInProgress = false
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 60.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF5F6)),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE598A7))
+                    ) {
+                        Text(
+                            text = question.optionA,
+                            color = Color(0xFF2A1B1D),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            answers.add(question.optionBCategory)
+                            if (currentQuestionIdx + 1 < questions.size) {
+                                currentQuestionIdx++
+                            } else {
+                                viewModel.submitQuizResults(answers.toList())
+                                quizInProgress = false
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 60.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF5F6)),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE598A7))
+                    ) {
+                        Text(
+                            text = question.optionB,
+                            color = Color(0xFF2A1B1D),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 8. 📸 Scrapbook Memories Tab
+// ==========================================
+@Composable
+fun ScrapbookTab(viewModel: LoungeViewModel) {
+    val entries by viewModel.scrapbookEntries.collectAsState()
+    val isUploading by viewModel.isScrapbookUploading.collectAsState()
+    val myId = viewModel.myId
+    val context = LocalContext.current
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var caption by remember { mutableStateOf("") }
+    var eventDate by remember { mutableStateOf("") }
+    var selectedPhotoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var previewBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.use { it.readBytes() }
+                if (bytes != null) {
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bmp != null) {
+                        val outputStream = java.io.ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, outputStream)
+                        selectedPhotoBytes = outputStream.toByteArray()
+                        previewBitmap = bmp
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    LaunchedEffect(showAddDialog) {
+        if (showAddDialog) {
+            caption = ""
+            val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            eventDate = formatter.format(java.util.Date())
+            selectedPhotoBytes = null
+            previewBitmap = null
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (entries.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    tint = Color(0xFFE598A7),
+                    modifier = Modifier.size(80.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Shared Scrapbook",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2A1B1D)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Create a collaborative photographic timeline of your favorite moments together.",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                items(entries) { entry ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(220.dp)
+                            ) {
+                                NetworkImage(
+                                    url = entry.photo_url,
+                                    contentDescription = entry.caption,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                if (entry.uploaded_by == myId) {
+                                    IconButton(
+                                        onClick = { viewModel.deleteScrapbookEntry(entry) },
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(12.dp)
+                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete",
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(12.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = entry.event_date,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = entry.caption,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF2A1B1D),
+                                    fontFamily = FontFamily.Serif
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            containerColor = Color(0xFFE598A7),
+            contentColor = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            shape = CircleShape
+        ) {
+            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Add memory")
+        }
+
+        if (isUploading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFFE598A7))
+                        Text("Uploading to Scrapbook...", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("Add New Memory") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFF5F6))
+                            .clickable {
+                                com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val preview = previewBitmap
+                        if (preview != null) {
+                            Image(
+                                bitmap = preview.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFFE598A7), modifier = Modifier.size(36.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Tap to select photo", fontSize = 11.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = caption,
+                        onValueChange = { caption = it },
+                        label = { Text("Caption") },
+                        placeholder = { Text("Describe this sweet moment...") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = eventDate,
+                        onValueChange = { eventDate = it },
+                        label = { Text("Event Date") },
+                        placeholder = { Text("YYYY-MM-DD") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val bytes = selectedPhotoBytes
+                        if (bytes != null && caption.isNotBlank() && eventDate.isNotBlank()) {
+                            viewModel.uploadAndAddScrapbook(caption, eventDate, bytes)
+                            showAddDialog = false
+                        }
+                    },
+                    enabled = selectedPhotoBytes != null && caption.isNotBlank() && eventDate.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7))
+                ) {
+                    Text("Upload", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
+    }
+}
+
+// ==========================================
+// 9. Composable Helpers for UI
+// ==========================================
+@Composable
+fun CircularCountdownUnit(
+    value: Long,
+    label: String,
+    progress: Float,
+    color: Color = Color(0xFFE598A7)
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(4.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(60.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawArc(
+                    color = color.copy(alpha = 0.15f),
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                )
+                drawArc(
+                    color = color,
+                    startAngle = -90f,
+                    sweepAngle = progress * 360f,
+                    useCenter = false,
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+            Text(
+                text = String.format("%02d", value),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF2A1B1D),
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Gray
+        )
+    }
+}
+
+@Composable
+fun NetworkImage(
+    url: String,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    var bitmapState by remember(url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var isLoading by remember(url) { mutableStateOf(true) }
+
+    LaunchedEffect(url) {
+        if (url.isBlank()) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val bytes = response.body?.bytes()
+                    if (bytes != null) {
+                        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (bmp != null) {
+                            bitmapState = bmp.asImageBitmap()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NetworkImage", "Failed to download image from $url", e)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = Color(0xFFE598A7),
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            val bitmap = bitmapState
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.BrokenImage,
+                    contentDescription = "Broken image",
+                    tint = Color.Gray.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+}
+
 

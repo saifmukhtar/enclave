@@ -45,4 +45,7 @@ interface MessageDao {
     /** Get all unread received messages (for sending batch read receipts) */
     @Query("SELECT * FROM messages WHERE senderId != :myId AND isRead = 0")
     suspend fun getUnreadReceivedMessages(myId: String): List<MessageEntity>
+
+    @Query("SELECT * FROM messages ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getLastMessages(limit: Int): List<MessageEntity>
 }

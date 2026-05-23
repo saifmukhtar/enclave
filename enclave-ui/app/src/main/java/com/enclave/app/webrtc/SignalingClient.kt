@@ -90,6 +90,28 @@ class SignalingClient(
         install(WebSockets) {
             pingInterval = 20_000L // 20 seconds keep-alive
         }
+        engine {
+            config {
+                val parsedHost = try {
+                    java.net.URI(url).host
+                } catch (e: Exception) {
+                    null
+                }
+                if (parsedHost != null && !parsedHost.replace(".", "").all { it.isDigit() } && parsedHost != "localhost") {
+                    val pinner = okhttp3.CertificatePinner.Builder()
+                        .add("*.$parsedHost", "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
+                        .add("*.$parsedHost", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
+                        .add("*.$parsedHost", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
+                        .add("*.$parsedHost", "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
+                        .add(parsedHost, "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
+                        .add(parsedHost, "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
+                        .add(parsedHost, "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
+                        .add(parsedHost, "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
+                        .build()
+                    certificatePinner(pinner)
+                }
+            }
+        }
     }
 
     private val _incomingSignalPayloads = MutableSharedFlow<EncryptedSignalPayload>(replay = 100, extraBufferCapacity = 100)

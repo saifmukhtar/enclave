@@ -46,6 +46,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -118,6 +119,11 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsState()
     val partnerProfile by profileViewModel?.partnerProfile?.collectAsState() ?: remember { mutableStateOf(null) }
     val partnerStatus by loungeViewModel?.partnerStatus?.collectAsState() ?: remember { mutableStateOf(null) }
+
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    var isSearchActive by remember { mutableStateOf(false) }
+
 
     // Compute partner display name and last-seen text
     val partnerName = partnerProfile?.displayName?.ifBlank { partnerProfile?.username }?.ifBlank { "Partner" } ?: "Partner"
@@ -199,7 +205,7 @@ fun ChatScreen(
     val activePlaybackKiss by viewModel.activePlaybackKiss.collectAsState()
     var lightboxMessage by remember { mutableStateOf<ChatMessage?>(null) }
 
-    androidx.activity.compose.BackHandler(enabled = showKissCanvas || lightboxMessage != null || showAttachmentSheet || activePlaybackKiss != null) {
+    androidx.activity.compose.BackHandler(enabled = showKissCanvas || lightboxMessage != null || showAttachmentSheet || activePlaybackKiss != null || isSearchActive) {
         if (showKissCanvas) {
             showKissCanvas = false
         } else if (lightboxMessage != null) {
@@ -208,8 +214,12 @@ fun ChatScreen(
             showAttachmentSheet = false
         } else if (activePlaybackKiss != null) {
             viewModel.clearPlaybackKiss()
+        } else if (isSearchActive) {
+            isSearchActive = false
+            viewModel.updateSearchQuery("")
         }
     }
+
 
     // Microphone Permission Launcher
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
@@ -242,7 +252,16 @@ fun ChatScreen(
                     onAudioCallClick = onAudioCallClick,
                     onVideoCallClick = onVideoCallClick,
                     onKissClick = { showKissCanvas = !showKissCanvas },
-                    onProfileClick = onProfileClick
+                    onProfileClick = onProfileClick,
+                    isSearchActive = isSearchActive,
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                    onToggleSearch = { active ->
+                        isSearchActive = active
+                        if (!active) {
+                            viewModel.updateSearchQuery("")
+                        }
+                    }
                 )
             },
             bottomBar = {
@@ -272,6 +291,12 @@ fun ChatScreen(
             ) {
                 CoListeningLounge(musicSyncController)
 
+                val displayMessages = if (isSearchActive && searchQuery.isNotEmpty()) {
+                    searchResults
+                } else {
+                    messages
+                }
+
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -279,16 +304,17 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp),
                     reverseLayout = true
                 ) {
-                    if (isPartnerTyping) {
+                    if (isPartnerTyping && !isSearchActive) {
                         item {
                             BouncingTypingIndicator()
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
-                    items(messages.reversed()) { message ->
+                    items(displayMessages.reversed()) { message ->
                         SwipeToReplyMessageBubble(
                             message = message,
                             viewModel = viewModel,
+                            searchQuery = if (isSearchActive) searchQuery else "",
                             onMediaClick = {
                                 if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO") {
                                     lightboxMessage = message
@@ -423,7 +449,11 @@ fun GlassmorphicTopBar(
     onAudioCallClick: () -> Unit,
     onVideoCallClick: () -> Unit,
     onKissClick: () -> Unit,
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    isSearchActive: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
+    onToggleSearch: (Boolean) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -433,100 +463,156 @@ fun GlassmorphicTopBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar + name + online status
+        if (isSearchActive) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onProfileClick() }
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar circle with initials or decrypted E2EE avatar
-                com.enclave.app.ui.profile.E2eeAvatar(
-                    avatarBase64 = partnerAvatarUrl,
-                    isMe = false,
-                    profileViewModel = profileViewModel,
-                    initials = partnerInitials.ifBlank { "P" },
-                    modifier = Modifier.size(44.dp),
-                    displayName = partnerDisplayName ?: partnerName,
-                    username = partnerUsername,
-                    bio = partnerBio,
-                    statusText = partnerStatusText,
-                    enablePreview = true
-                )
-
-                // Online indicator dot
-                Box(
-                    modifier = Modifier
-                        .offset(x = (-12).dp, y = 14.dp)
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(ComposeColor.White)
-                        .padding(2.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(
-                                if (isPartnerOnline) ComposeColor(0xFF4CAF50)
-                                else ComposeColor(0xFFBDBDBD)
-                            )
+                IconButton(onClick = { onToggleSearch(false) }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Cancel Search",
+                        tint = CharcoalText
                     )
                 }
-
-                Spacer(modifier = Modifier.width(6.dp))
-                Column {
-                    Text(
-                        text = partnerName,
-                        fontFamily = OutfitFont,
-                        fontWeight = FontWeight.Bold,
-                        color = CharcoalText,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = when {
-                            uiState is ChatUiState.Secured && isPartnerOnline -> "Online · E2EE"
-                            uiState is ChatUiState.Secured && lastSeenText.isNotBlank() -> lastSeenText
-                            uiState is ChatUiState.Secured -> "Signal-Grade E2EE Active"
-                            uiState is ChatUiState.Connecting -> "Connecting securely..."
-                            uiState is ChatUiState.Handshaking -> "Exchanging PreKeys..."
-                            uiState is ChatUiState.WaitingForPartner -> "Waiting for partner..."
-                            else -> "Connection failed"
-                        },
+                Spacer(modifier = Modifier.width(8.dp))
+                TextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            text = "Search messages...",
+                            fontFamily = InterFont,
+                            color = CharcoalText.copy(alpha = 0.5f),
+                            fontSize = 14.sp
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = ComposeColor.Transparent,
+                        unfocusedContainerColor = ComposeColor.Transparent,
+                        disabledContainerColor = ComposeColor.Transparent,
+                        focusedIndicatorColor = ComposeColor.Transparent,
+                        unfocusedIndicatorColor = ComposeColor.Transparent
+                    ),
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
                         fontFamily = InterFont,
-                        color = if (uiState is ChatUiState.Secured && isPartnerOnline)
-                            ComposeColor(0xFF4CAF50) else CharcoalText.copy(alpha = 0.6f),
-                        fontSize = 11.sp
+                        fontSize = 14.sp,
+                        color = CharcoalText
                     )
+                )
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear search",
+                            tint = CharcoalText
+                        )
+                    }
                 }
             }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Avatar + name + online status
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onProfileClick() }
+                ) {
+                    // Avatar circle with initials or decrypted E2EE avatar
+                    com.enclave.app.ui.profile.E2eeAvatar(
+                        avatarBase64 = partnerAvatarUrl,
+                        isMe = false,
+                        profileViewModel = profileViewModel,
+                        initials = partnerInitials.ifBlank { "P" },
+                        modifier = Modifier.size(44.dp),
+                        displayName = partnerDisplayName ?: partnerName,
+                        username = partnerUsername,
+                        bio = partnerBio,
+                        statusText = partnerStatusText,
+                        enablePreview = true
+                    )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onKissClick) {
-                    Icon(Icons.Default.Favorite, contentDescription = "Kiss", tint = ComposeColor(0xFFE598A7))
+                    // Online indicator dot
+                    Box(
+                        modifier = Modifier
+                            .offset(x = (-12).dp, y = 14.dp)
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(ComposeColor.White)
+                            .padding(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(
+                                    if (isPartnerOnline) ComposeColor(0xFF4CAF50)
+                                    else ComposeColor(0xFFBDBDBD)
+                                )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column {
+                        Text(
+                            text = partnerName,
+                            fontFamily = OutfitFont,
+                            fontWeight = FontWeight.Bold,
+                            color = CharcoalText,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = when {
+                                uiState is ChatUiState.Secured && isPartnerOnline -> "Online · E2EE"
+                                uiState is ChatUiState.Secured && lastSeenText.isNotBlank() -> lastSeenText
+                                uiState is ChatUiState.Secured -> "Signal-Grade E2EE Active"
+                                uiState is ChatUiState.Connecting -> "Connecting securely..."
+                                uiState is ChatUiState.Handshaking -> "Exchanging PreKeys..."
+                                uiState is ChatUiState.WaitingForPartner -> "Waiting for partner..."
+                                else -> "Connection failed"
+                            },
+                            fontFamily = InterFont,
+                            color = if (uiState is ChatUiState.Secured && isPartnerOnline)
+                                ComposeColor(0xFF4CAF50) else CharcoalText.copy(alpha = 0.6f),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
-                // Separate Audio Call button (Signal-style 📞)
-                IconButton(onClick = onAudioCallClick) {
-                    Icon(Icons.Default.Call, contentDescription = "Audio Call", tint = CharcoalText)
-                }
-                // Separate Video Call button 📹
-                IconButton(onClick = onVideoCallClick) {
-                    Icon(Icons.Default.Videocam, contentDescription = "Video Call", tint = CharcoalText)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onToggleSearch(true) }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search Messages", tint = CharcoalText)
+                    }
+                    IconButton(onClick = onKissClick) {
+                        Icon(Icons.Default.Favorite, contentDescription = "Kiss", tint = ComposeColor(0xFFE598A7))
+                    }
+                    // Separate Audio Call button (Signal-style 📞)
+                    IconButton(onClick = onAudioCallClick) {
+                        Icon(Icons.Default.Call, contentDescription = "Audio Call", tint = CharcoalText)
+                    }
+                    // Separate Video Call button 📹
+                    IconButton(onClick = onVideoCallClick) {
+                        Icon(Icons.Default.Videocam, contentDescription = "Video Call", tint = CharcoalText)
+                    }
                 }
             }
         }
     }
 }
 
+
 @Composable
 fun SwipeToReplyMessageBubble(
     message: ChatMessage,
     viewModel: ChatViewModel,
+    searchQuery: String = "",
     onMediaClick: () -> Unit
 ) {
     var offsetX by remember { mutableStateOf(0f) }
@@ -848,13 +934,44 @@ fun SwipeToReplyMessageBubble(
                             }
                         }
                     } else {
-                        Text(
-                            text = message.text,
-                            fontFamily = InterFont,
-                            fontSize = 14.sp,
-                            color = CharcoalText,
-                            modifier = Modifier.padding(bottom = 2.dp)
-                        )
+                        val text = message.text
+                        if (searchQuery.isNotEmpty() && text.contains(searchQuery, ignoreCase = true)) {
+                            val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
+                                var startIndex = 0
+                                while (startIndex < text.length) {
+                                    val index = text.indexOf(searchQuery, startIndex, ignoreCase = true)
+                                    if (index == -1) {
+                                        append(text.substring(startIndex))
+                                        break
+                                    }
+                                    append(text.substring(startIndex, index))
+                                    pushStyle(
+                                        androidx.compose.ui.text.SpanStyle(
+                                            background = androidx.compose.ui.graphics.Color.Yellow,
+                                            color = CharcoalText
+                                        )
+                                    )
+                                    append(text.substring(index, index + searchQuery.length))
+                                    pop()
+                                    startIndex = index + searchQuery.length
+                                }
+                            }
+                            Text(
+                                text = annotatedString,
+                                fontFamily = InterFont,
+                                fontSize = 14.sp,
+                                color = CharcoalText,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        } else {
+                            Text(
+                                text = text,
+                                fontFamily = InterFont,
+                                fontSize = 14.sp,
+                                color = CharcoalText,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(2.dp))

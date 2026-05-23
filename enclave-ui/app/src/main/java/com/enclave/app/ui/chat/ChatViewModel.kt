@@ -742,4 +742,80 @@ class ChatViewModel(
             }
         }
     }
+
+    // --- Secure Encrypted Message Search ---
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _searchResults = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val searchResults: StateFlow<List<ChatMessage>> = _searchResults.asStateFlow()
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Fetch last 1000 messages
+                val entities = database.messageDao().getLastMessages(1000)
+                val matches = entities.mapNotNull { entity ->
+                    val decryptedText = decryptedMessagesCache.getOrPut(entity.id) {
+                        try {
+                            val decryptedBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
+                            when (entity.messageType) {
+                                "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
+                                "MEDIA_VIDEO" -> "🎥 Video"
+                                "MEDIA_AUDIO" -> "🎵 Audio File"
+                                "VOICE" -> "🎤 Voice Memo"
+                                "RECORDED_KISS" -> "Kiss Impression"
+                                else -> String(decryptedBytes, Charsets.UTF_8)
+                            }
+                        } catch (e: Exception) {
+                            "🔒 Decryption failed"
+                        }
+                    }
+
+                    var parsedText = decryptedText
+                    var qId: String? = null
+                    var qText: String? = null
+                    var qSender: String? = null
+
+                    if (decryptedText.startsWith("{\"body\":")) {
+                        try {
+                            val reply = LenientJson.decodeFromString<ReplyPayload>(decryptedText)
+                            parsedText = reply.body
+                            qId = reply.quotedMsgId
+                            qText = reply.quotedMsgText
+                            qSender = reply.quotedMsgSender
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    }
+
+                    if (parsedText.contains(query, ignoreCase = true)) {
+                        val isFromMe = entity.senderId == myId
+                        ChatMessage(
+                            id = entity.id,
+                            text = parsedText,
+                            isFromMe = isFromMe,
+                            timestamp = entity.timestamp,
+                            deliveryStatus = entity.deliveryStatus,
+                            disappearingDuration = entity.disappearingDuration,
+                            expiresAt = entity.expiresAt,
+                            reaction = entity.reaction,
+                            messageType = entity.messageType,
+                            quotedMsgId = qId,
+                            quotedMsgText = qText,
+                            quotedMsgSender = qSender
+                        )
+                    } else null
+                }
+                _searchResults.value = matches
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Secure search failed", e)
+            }
+        }
+    }
 }

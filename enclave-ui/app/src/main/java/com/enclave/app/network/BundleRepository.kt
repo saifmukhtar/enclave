@@ -43,7 +43,9 @@ data class UserProfile(
     val bio: String? = null,
     val avatar_url: String? = null,
     val last_seen: String? = null,
-    val is_online: Boolean? = null
+    val is_online: Boolean? = null,
+    val love_language: String? = null,
+    val location_city: String? = null
 )
 
 @Serializable
@@ -53,7 +55,9 @@ data class ProfileUpdate(
     val display_name: String? = null,
     val bio: String? = null,
     val avatar_url: String? = null,
-    val is_online: Boolean? = null
+    val is_online: Boolean? = null,
+    val love_language: String? = null,
+    val location_city: String? = null
 )
 
 /**
@@ -68,6 +72,34 @@ data class LoungeSong(
     val uploaded_by: String = "",
     val created_at: String? = null
 )
+
+@Serializable
+data class LoungeDrawing(
+    val id: String? = null,
+    val title: String = "",
+    val url: String = "",
+    val uploaded_by: String = "",
+    val created_at: String? = null
+)
+
+@Serializable
+data class ScrapbookEntry(
+    val id: String? = null,
+    val caption: String = "",
+    val photo_url: String = "",
+    val event_date: String = "",
+    val uploaded_by: String = "",
+    val created_at: String? = null
+)
+
+@Serializable
+data class LoungeQueueItem(
+    val id: String? = null,
+    val song_id: String = "",
+    val queued_by: String = "",
+    val created_at: String? = null
+)
+
 
 /**
  * Manages Signal crypto Key Bundles and User Profile syncing via Supabase.
@@ -328,6 +360,165 @@ class BundleRepository(
         val path = "$myId/$fileName"
         supabase.storage.from("music").upload(path, fileBytes, upsert = true)
         supabase.storage.from("music").publicUrl(path)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Drawings Board API
+    // ─────────────────────────────────────────────────────────────────────────
+
+    suspend fun fetchLoungeDrawings(): List<LoungeDrawing> = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_drawings"]
+                .select {
+                    order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                }
+                .decodeList<LoungeDrawing>()
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "fetchLoungeDrawings failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun insertLoungeDrawing(title: String, url: String) = withContext(Dispatchers.IO) {
+        try {
+            val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
+            supabase.postgrest["lounge_drawings"].insert(
+                LoungeDrawing(title = title, url = url, uploaded_by = myId)
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "insertLoungeDrawing failed", e)
+        }
+    }
+
+    suspend fun deleteLoungeDrawing(id: String) = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_drawings"].delete {
+                filter { eq("id", id) }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "deleteLoungeDrawing failed", e)
+        }
+    }
+
+    suspend fun uploadDrawingFile(fileName: String, fileBytes: ByteArray): String = withContext(Dispatchers.IO) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+            ?: error("Not authenticated — cannot upload drawing")
+        val path = "$myId/$fileName"
+        supabase.storage.from("drawings").upload(path, fileBytes, upsert = true)
+        supabase.storage.from("drawings").publicUrl(path)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Scrapbook API
+    // ─────────────────────────────────────────────────────────────────────────
+
+    suspend fun fetchScrapbookEntries(): List<ScrapbookEntry> = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_scrapbook"]
+                .select {
+                    order("event_date", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                }
+                .decodeList<ScrapbookEntry>()
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "fetchScrapbookEntries failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun insertScrapbookEntry(caption: String, photoUrl: String, eventDate: String) = withContext(Dispatchers.IO) {
+        try {
+            val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
+            supabase.postgrest["lounge_scrapbook"].insert(
+                ScrapbookEntry(caption = caption, photo_url = photoUrl, event_date = eventDate, uploaded_by = myId)
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "insertScrapbookEntry failed", e)
+        }
+    }
+
+    suspend fun deleteScrapbookEntry(id: String) = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_scrapbook"].delete {
+                filter { eq("id", id) }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "deleteScrapbookEntry failed", e)
+        }
+    }
+
+    suspend fun uploadScrapbookPhoto(fileName: String, fileBytes: ByteArray): String = withContext(Dispatchers.IO) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+            ?: error("Not authenticated — cannot upload photo")
+        val path = "$myId/$fileName"
+        supabase.storage.from("scrapbook").upload(path, fileBytes, upsert = true)
+        supabase.storage.from("scrapbook").publicUrl(path)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Music Queue API
+    // ─────────────────────────────────────────────────────────────────────────
+
+    suspend fun fetchLoungeQueue(): List<LoungeQueueItem> = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_music_queue"]
+                .select {
+                    order("created_at", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                }
+                .decodeList<LoungeQueueItem>()
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "fetchLoungeQueue failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun insertQueueItem(songId: String) = withContext(Dispatchers.IO) {
+        try {
+            val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
+            val item = LoungeQueueItem(song_id = songId, queued_by = myId)
+            supabase.postgrest["lounge_music_queue"].insert(item)
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "insertQueueItem failed", e)
+        }
+    }
+
+    suspend fun deleteQueueItem(id: String) = withContext(Dispatchers.IO) {
+        try {
+            supabase.postgrest["lounge_music_queue"].delete {
+                filter { eq("id", id) }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "deleteQueueItem failed", e)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Love Language & Location City Profiles updates
+    // ─────────────────────────────────────────────────────────────────────────
+
+    suspend fun updateLoveLanguage(loveLanguage: String) = withContext(Dispatchers.IO) {
+        try {
+            val currentUser = supabase.auth.currentUserOrNull() ?: return@withContext
+            val update = ProfileUpdate(
+                id = currentUser.id,
+                love_language = loveLanguage
+            )
+            supabase.postgrest["profiles"].upsert(update)
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "updateLoveLanguage failed", e)
+        }
+    }
+
+    suspend fun updateLocationCity(locationCity: String) = withContext(Dispatchers.IO) {
+        try {
+            val currentUser = supabase.auth.currentUserOrNull() ?: return@withContext
+            val update = ProfileUpdate(
+                id = currentUser.id,
+                location_city = locationCity
+            )
+            supabase.postgrest["profiles"].upsert(update)
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "updateLocationCity failed", e)
+        }
     }
 }
 

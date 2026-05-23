@@ -16,8 +16,12 @@ import com.enclave.app.data.local.BackupManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.local.LetterDao
 import com.enclave.app.data.local.LetterEntity
+import com.enclave.app.data.local.UserProfileEntity
 import com.enclave.app.network.BundleRepository
 import com.enclave.app.network.LoungeSong
+import com.enclave.app.network.LoungeDrawing
+import com.enclave.app.network.ScrapbookEntry
+import com.enclave.app.network.LoungeQueueItem
 import com.enclave.app.webrtc.SignalMessageWrapper
 import com.enclave.app.webrtc.SignalingClient
 import com.enclave.app.webrtc.LenientJson
@@ -32,6 +36,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -60,8 +65,20 @@ data class ProfileStatus(
     val nowListening: String,
     val localTimeStr: String,
     val countdownTarget: Long = 0L,
-    val countdownLabel: String = ""
+    val countdownLabel: String = "",
+    val weatherTemp: Double = -999.0,
+    val weatherCondition: String = ""
 )
+
+@Serializable
+data class QuizQuestion(
+    val id: Int,
+    val optionA: String,
+    val optionACategory: String,
+    val optionB: String,
+    val optionBCategory: String
+)
+
 
 @Serializable
 data class SyncedDiceEvent(
@@ -148,6 +165,44 @@ class LoungeViewModel(
     private val _scratchImageBytes = MutableStateFlow<ByteArray?>(null)
     val scratchImageBytes: StateFlow<ByteArray?> = _scratchImageBytes.asStateFlow()
 
+    // --- Drawings board gallery ---
+    val loungeDrawings = MutableStateFlow<List<LoungeDrawing>>(emptyList())
+    val isDrawingUploading = MutableStateFlow(false)
+
+    // --- Weather Sync Cache ---
+    private var cachedWeather: Pair<Double, String>? = null
+    private var lastWeatherFetchTime = 0L
+
+    // --- Quiz Question List ---
+    val quizQuestions = listOf(
+        QuizQuestion(1, "I like to receive notes of appreciation.", "A", "I like to be hugged.", "E"),
+        QuizQuestion(2, "I like to spend one-on-one time with you.", "B", "I feel loved when you help me with a chore.", "D"),
+        QuizQuestion(3, "I love receiving small gifts from you.", "C", "I love going on walks or trips together.", "B"),
+        QuizQuestion(4, "I feel valued when you praise my achievements.", "A", "I feel loved when you do the dishes or clean up.", "D"),
+        QuizQuestion(5, "I love it when you hold my hand in public.", "E", "I love when you surprise me with a small present.", "C"),
+        QuizQuestion(6, "I like to hear you say 'I love you'.", "A", "I like when we sit close and talk for hours.", "B"),
+        QuizQuestion(7, "I value when you help me when I'm tired.", "D", "I value receiving a thoughtful gift.", "C"),
+        QuizQuestion(8, "I feel secure when you touch my arm or shoulder.", "E", "I feel happy when we do something creative together.", "B"),
+        QuizQuestion(9, "I appreciate when you write a sweet text message.", "A", "I appreciate when you make me dinner.", "D"),
+        QuizQuestion(10, "I love receiving holiday or birthday gifts from you.", "C", "I love when you kiss me hello and goodbye.", "E"),
+        QuizQuestion(11, "I love having your undivided attention.", "B", "I love when you help me fix something.", "D"),
+        QuizQuestion(12, "I feel loved when you buy me something I wanted.", "C", "I feel loved when you encourage me.", "A"),
+        QuizQuestion(13, "I love when we cuddle on the couch.", "E", "I love when we make breakfast together.", "B"),
+        QuizQuestion(14, "I appreciate when you take care of tasks for me.", "D", "I appreciate when you give me verbal compliments.", "A"),
+        QuizQuestion(15, "I like when we hug tightly.", "E", "I like when you bring me coffee or a treat.", "C")
+    )
+
+    // --- Scrapbook States ---
+    val scrapbookEntries = MutableStateFlow<List<ScrapbookEntry>>(emptyList())
+    val isScrapbookUploading = MutableStateFlow(false)
+
+    // --- Playlist Queue States ---
+    val playlistQueue = MutableStateFlow<List<LoungeQueueItem>>(emptyList())
+
+    // --- User profile states for Love Language quiz side-by-side display ---
+    val myProfile = MutableStateFlow<UserProfileEntity?>(null)
+    val partnerProfile = MutableStateFlow<UserProfileEntity?>(null)
+
     init {
         // Load persistent countdown states
         val myCountdownLabel = prefs.getString("my_countdown_label", "") ?: ""
@@ -168,6 +223,10 @@ class LoungeViewModel(
         startStrokeBatchingScheduler()
         startProfileSyncTicker()
         refreshSongs()
+        refreshDrawings()
+        refreshScrapbook()
+        refreshQueue()
+        refreshProfiles()
     }
 
     private fun getBatteryPercentage(): Int {
@@ -228,18 +287,307 @@ class LoungeViewModel(
         }
     }
 
+    private suspend fun fetchWeatherForCity(city: String): Pair<Double, String>? {
+        if (city.isBlank()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = okhttp3.OkHttpClient()
+                // 1. Geocode city to lat/lon
+                val geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=${java.net.URLEncoder.encode(city, "UTF-8")}&count=1&language=en&format=json"
+                val geoRequest = okhttp3.Request.Builder().url(geoUrl).build()
+                val geoResponse = client.newCall(geoRequest).execute()
+                if (!geoResponse.isSuccessful) return@withContext null
+                val geoBody = geoResponse.body?.string() ?: return@withContext null
+                val geoJson = org.json.JSONObject(geoBody)
+                val results = geoJson.optJSONArray("results")
+                if (results == null || results.length() == 0) return@withContext null
+                val firstResult = results.getJSONObject(0)
+                val lat = firstResult.getDouble("latitude")
+                val lon = firstResult.getDouble("longitude")
+
+                // 2. Fetch current temperature & weather code
+                val weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code"
+                val weatherRequest = okhttp3.Request.Builder().url(weatherUrl).build()
+                val weatherResponse = client.newCall(weatherRequest).execute()
+                if (!weatherResponse.isSuccessful) return@withContext null
+                val weatherBody = weatherResponse.body?.string() ?: return@withContext null
+                val weatherJson = org.json.JSONObject(weatherBody)
+                val current = weatherJson.getJSONObject("current")
+                val temp = current.getDouble("temperature_2m")
+                val code = current.getInt("weather_code")
+
+                // Map WMO code to condition emoji
+                val conditionEmoji = when (code) {
+                    0 -> "☀️" // Clear sky
+                    1, 2, 3 -> "🌤️" // Mainly clear, partly cloudy, and overcast
+                    45, 48 -> "🌫️" // Fog and depositing rime fog
+                    51, 53, 55 -> "🌧️" // Drizzle
+                    61, 63, 65 -> "🌧️" // Rain
+                    71, 73, 75 -> "❄️" // Snow fall
+                    77 -> "❄️" // Snow grains
+                    80, 81, 82 -> "🌧️" // Rain showers
+                    85, 86 -> "❄️" // Snow showers
+                    95 -> "⛈️" // Thunderstorm
+                    96, 99 -> "⛈️" // Thunderstorm with hail
+                    else -> "🌤️"
+                }
+                Pair(temp, conditionEmoji)
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "Failed to fetch weather for $city", e)
+                null
+            }
+        }
+    }
+
     private fun syncMyStatus() {
         viewModelScope.launch {
+            val myProfileVal = bundleRepository?.fetchMyProfile()
+            val city = myProfileVal?.locationCity.orEmpty()
+            
+            // Refresh weather every 15 minutes if city is set
+            val now = System.currentTimeMillis()
+            if (city.isNotEmpty() && (cachedWeather == null || now - lastWeatherFetchTime > 15 * 60 * 1000L)) {
+                val weather = fetchWeatherForCity(city)
+                if (weather != null) {
+                    cachedWeather = weather
+                    lastWeatherFetchTime = now
+                }
+            }
+
             val formatter = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
             val timeStr = formatter.format(java.util.Date())
+            
             _myStatus.value = _myStatus.value.copy(
                 batteryPct = getBatteryPercentage(),
-                localTimeStr = timeStr
+                localTimeStr = timeStr,
+                weatherTemp = cachedWeather?.first ?: -999.0,
+                weatherCondition = cachedWeather?.second ?: ""
             )
             val json = Json.encodeToString(_myStatus.value)
             sendLoungeMessage("LOUNGE_PROFILE_UPDATE", json)
         }
     }
+
+    // --- Profile Management ---
+    fun refreshProfiles() {
+        viewModelScope.launch {
+            val repo = bundleRepository ?: return@launch
+            myProfile.value = repo.fetchMyProfile()
+            partnerProfile.value = repo.fetchPartnerProfile(partnerId)
+        }
+    }
+
+    fun updateProfileLocation(city: String) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            repo.updateLocationCity(city)
+            refreshProfiles()
+            cachedWeather = null // Reset cache to force immediate reload
+            syncMyStatus()
+        }
+    }
+
+    // --- Love Language Quiz ---
+    fun submitQuizResults(answers: List<String>) {
+        val counts = answers.groupingBy { it }.eachCount()
+        val dominant = counts.maxByOrNull { it.value }?.key ?: "A"
+        val dominantLabel = when (dominant) {
+            "A" -> "Words of Affirmation"
+            "B" -> "Quality Time"
+            "C" -> "Receiving Gifts"
+            "D" -> "Acts of Service"
+            "E" -> "Physical Touch"
+            else -> "Words of Affirmation"
+        }
+        viewModelScope.launch {
+            bundleRepository?.updateLoveLanguage(dominantLabel)
+            sendLoungeMessage("LOUNGE_QUIZ_COMPLETED", dominantLabel)
+            refreshProfiles()
+        }
+    }
+
+    // --- Shared Drawings board gallery ---
+    fun refreshDrawings() {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                loungeDrawings.value = repo.fetchLoungeDrawings()
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "refreshDrawings failed", e)
+            }
+        }
+    }
+
+    fun uploadAndAddDrawing(title: String, bytes: ByteArray) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            isDrawingUploading.value = true
+            try {
+                val fileName = "drawing_${System.currentTimeMillis()}.png"
+                val url = repo.uploadDrawingFile(fileName, bytes)
+                repo.insertLoungeDrawing(title, url)
+                refreshDrawings()
+                sendLoungeMessage("LOUNGE_DRAWINGS_UPDATE", "")
+            } catch (t: Throwable) {
+                android.util.Log.e("LoungeViewModel", "uploadAndAddDrawing failed", t)
+            } finally {
+                isDrawingUploading.value = false
+            }
+        }
+    }
+
+    fun deleteDrawing(drawing: LoungeDrawing) {
+        if (drawing.uploaded_by != myId) return
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.deleteLoungeDrawing(drawing.id.orEmpty())
+                refreshDrawings()
+                sendLoungeMessage("LOUNGE_DRAWINGS_UPDATE", "")
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "deleteDrawing failed", e)
+            }
+        }
+    }
+
+    fun saveCanvasToGallery(title: String) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            isDrawingUploading.value = true
+            try {
+                val size = 800
+                val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.drawColor(android.graphics.Color.WHITE)
+
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeCap = android.graphics.Paint.Cap.ROUND
+                    strokeJoin = android.graphics.Paint.Join.ROUND
+                }
+
+                fun drawStrokeToBitmap(stroke: LoungeStroke) {
+                    if (stroke.points.isEmpty()) return
+                    try {
+                        paint.color = android.graphics.Color.parseColor(stroke.colorHex)
+                    } catch (e: Exception) {
+                        paint.color = android.graphics.Color.BLACK
+                    }
+                    paint.strokeWidth = stroke.brushWidth
+
+                    val path = android.graphics.Path()
+                    path.moveTo(stroke.points[0].x * size, stroke.points[0].y * size)
+                    for (i in 1 until stroke.points.size) {
+                        path.lineTo(stroke.points[i].x * size, stroke.points[i].y * size)
+                    }
+                    canvas.drawPath(path, paint)
+                }
+
+                val allStrokes = localStrokes.toList() + partnerStrokes.toList()
+                allStrokes.forEach { drawStrokeToBitmap(it) }
+
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outputStream)
+                val bytes = outputStream.toByteArray()
+
+                val fileName = "drawing_${System.currentTimeMillis()}.png"
+                val url = repo.uploadDrawingFile(fileName, bytes)
+                repo.insertLoungeDrawing(title, url)
+
+                refreshDrawings()
+                sendLoungeMessage("LOUNGE_DRAWINGS_UPDATE", "")
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "saveCanvasToGallery failed", e)
+            } finally {
+                isDrawingUploading.value = false
+            }
+        }
+    }
+
+
+    // --- Scrapbook ---
+    fun refreshScrapbook() {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                scrapbookEntries.value = repo.fetchScrapbookEntries()
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "refreshScrapbook failed", e)
+            }
+        }
+    }
+
+    fun uploadAndAddScrapbook(caption: String, eventDate: String, bytes: ByteArray) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            isScrapbookUploading.value = true
+            try {
+                val fileName = "scrapbook_${System.currentTimeMillis()}.jpg"
+                val url = repo.uploadScrapbookPhoto(fileName, bytes)
+                repo.insertScrapbookEntry(caption, url, eventDate)
+                refreshScrapbook()
+                sendLoungeMessage("LOUNGE_SCRAPBOOK_UPDATE", "")
+            } catch (t: Throwable) {
+                android.util.Log.e("LoungeViewModel", "uploadAndAddScrapbook failed", t)
+            } finally {
+                isScrapbookUploading.value = false
+            }
+        }
+    }
+
+    fun deleteScrapbookEntry(entry: ScrapbookEntry) {
+        if (entry.uploaded_by != myId) return
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.deleteScrapbookEntry(entry.id.orEmpty())
+                refreshScrapbook()
+                sendLoungeMessage("LOUNGE_SCRAPBOOK_UPDATE", "")
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "deleteScrapbookEntry failed", e)
+            }
+        }
+    }
+
+    // --- Playlist Queue ---
+    fun refreshQueue() {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                playlistQueue.value = repo.fetchLoungeQueue()
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "refreshQueue failed", e)
+            }
+        }
+    }
+
+    fun addToQueue(songId: String) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.insertQueueItem(songId)
+                refreshQueue()
+                sendLoungeMessage("LOUNGE_QUEUE_UPDATE", "")
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "addToQueue failed", e)
+            }
+        }
+    }
+
+    fun removeFromQueue(id: String) {
+        val repo = bundleRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.deleteQueueItem(id)
+                refreshQueue()
+                sendLoungeMessage("LOUNGE_QUEUE_UPDATE", "")
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "removeFromQueue failed", e)
+            }
+        }
+    }
+
 
     // --- High-Performance Secure Backup Controllers ---
     fun exportSecureBackup(
@@ -655,6 +1003,18 @@ class LoungeViewModel(
                         "LOUNGE_PLAYLIST_UPDATE" -> {
                             // Partner added or removed a song — refresh our local list
                             refreshSongs()
+                        }
+                        "LOUNGE_DRAWINGS_UPDATE" -> {
+                            refreshDrawings()
+                        }
+                        "LOUNGE_SCRAPBOOK_UPDATE" -> {
+                            refreshScrapbook()
+                        }
+                        "LOUNGE_QUEUE_UPDATE" -> {
+                            refreshQueue()
+                        }
+                        "LOUNGE_QUIZ_COMPLETED" -> {
+                            refreshProfiles()
                         }
                     }
                 } catch (e: Exception) {
