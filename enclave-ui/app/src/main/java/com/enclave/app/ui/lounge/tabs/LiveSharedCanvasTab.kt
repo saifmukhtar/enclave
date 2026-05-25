@@ -75,14 +75,14 @@ import java.io.File
 // 4. 🖌️ Live Shared Canvas Tab
 // ==========================================
 @Composable
-fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
-    val localStrokes = viewModel.localStrokes
-    val partnerStrokes = viewModel.partnerStrokes
-    val activeLocalStroke by viewModel.currentLocalStroke.collectAsState()
-    val activePartnerStroke by viewModel.currentPartnerStroke.collectAsState()
+fun LiveSharedCanvasTab( loungeDrawingFactory: androidx.lifecycle.ViewModelProvider.Factory) {
+    val drawingViewModel: com.enclave.app.ui.lounge.LoungeDrawingViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeDrawingFactory)
 
-    val drawings by viewModel.loungeDrawings.collectAsState()
-    val isDrawingUploading by viewModel.isDrawingUploading.collectAsState()
+    val localStrokes = drawingViewModel.localStrokes
+    val partnerStrokes = drawingViewModel.partnerStrokes
+    val activeLocalStroke by drawingViewModel.currentLocalStroke.collectAsState()
+    val activePartnerStroke by drawingViewModel.currentPartnerStroke.collectAsState()
+    val isDrawingUploading by drawingViewModel.isDrawingUploading.collectAsState()
 
     var showSaveDialog by remember { mutableStateOf(false) }
     var saveTitle by remember { mutableStateOf("") }
@@ -115,7 +115,7 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { viewModel.clearCanvas() },
+                    onClick = { drawingViewModel.clearCanvas() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                 ) {
@@ -190,15 +190,15 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            viewModel.startLocalStroke(offset.x / size.width.toFloat(), offset.y / size.height.toFloat(), drawColorHex, brushWidth)
+                            drawingViewModel.startLocalStroke(offset.x / size.width.toFloat(), offset.y / size.height.toFloat(), drawColorHex, brushWidth)
                         },
                         onDrag = { change, _ ->
                             change.consume()
                             val offset = change.position
-                            viewModel.addLocalStrokePoint(offset.x / size.width.toFloat(), offset.y / size.height.toFloat())
+                            drawingViewModel.addLocalStrokePoint(offset.x / size.width.toFloat(), offset.y / size.height.toFloat())
                         },
                         onDragEnd = {
-                            viewModel.finalizeLocalStroke()
+                            drawingViewModel.finalizeLocalStroke()
                         }
                     )
                 }
@@ -261,7 +261,7 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
                     Button(
                         onClick = {
                             if (saveTitle.isNotBlank()) {
-                                viewModel.saveCanvasToGallery(saveTitle)
+                                drawingViewModel.saveCanvasToGallery(saveTitle)
                                 showSaveDialog = false
                                 saveTitle = ""
                             }
@@ -280,5 +280,4 @@ fun LiveSharedCanvasTab(viewModel: LoungeViewModel) {
         }
     }
 }
-
 

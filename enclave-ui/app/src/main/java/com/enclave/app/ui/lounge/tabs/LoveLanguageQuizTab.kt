@@ -75,9 +75,13 @@ import java.io.File
 // 7. ❤️ Love Language Quiz Tab
 // ==========================================
 @Composable
-fun LoveLanguageQuizTab(viewModel: LoungeViewModel) {
-    val myProfile by viewModel.myProfile.collectAsState()
-    val partnerProfile by viewModel.partnerProfile.collectAsState()
+fun LoveLanguageQuizTab(
+    
+    loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory
+) {
+    val gamesViewModel: com.enclave.app.ui.lounge.LoungeGamesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeGamesFactory)
+    val myProfile by gamesViewModel.myProfile.collectAsState()
+    val partnerProfile by gamesViewModel.partnerProfile.collectAsState()
 
     var currentQuestionIdx by remember { mutableStateOf(0) }
     val answers = remember { mutableStateListOf<String>() }
@@ -306,7 +310,7 @@ fun LoveLanguageQuizTab(viewModel: LoungeViewModel) {
             }
         }
     } else {
-        val questions = viewModel.quizQuestions
+        val questions = gamesViewModel.quizQuestions
         if (currentQuestionIdx < questions.size) {
             val question = questions[currentQuestionIdx]
             Card(
@@ -364,7 +368,7 @@ fun LoveLanguageQuizTab(viewModel: LoungeViewModel) {
                             if (currentQuestionIdx + 1 < questions.size) {
                                 currentQuestionIdx++
                             } else {
-                                viewModel.submitQuizResults(answers.toList())
+                                gamesViewModel.submitQuizResults(answers.toList())
                                 quizInProgress = false
                             }
                         },
@@ -391,7 +395,7 @@ fun LoveLanguageQuizTab(viewModel: LoungeViewModel) {
                             if (currentQuestionIdx + 1 < questions.size) {
                                 currentQuestionIdx++
                             } else {
-                                viewModel.submitQuizResults(answers.toList())
+                                gamesViewModel.submitQuizResults(answers.toList())
                                 quizInProgress = false
                             }
                         },

@@ -78,7 +78,11 @@ fun LoungeScreen(
     viewModel: LoungeViewModel,
     profileViewModel: com.enclave.app.ui.profile.ProfileViewModel? = null,
     @Suppress("UNUSED_PARAMETER") musicSyncController: MusicSyncController?,
-    chatViewModel: com.enclave.app.ui.chat.ChatViewModel? = null
+    chatViewModel: com.enclave.app.ui.chat.ChatViewModel? = null,
+    loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeDrawingFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory
 ) {
     var activeTab by remember { mutableStateOf("profiles") }
 
@@ -125,7 +129,8 @@ fun LoungeScreen(
                     Triple("secret", "🫣 Reveal", Icons.Default.VisibilityOff),
                     Triple("quiz", "❤️ Quiz", Icons.Default.Favorite),
                     Triple("scrapbook", "📸 Scrapbook", Icons.Default.PhotoLibrary),
-                    Triple("timeline", "📅 Timeline", Icons.Default.History)
+                    Triple("timeline", "📅 Timeline", Icons.Default.History),
+                    Triple("music", "🎵 Music", Icons.Default.MusicNote)
                 )
 
                 tabs.forEach { (id, label, icon) ->
@@ -166,14 +171,15 @@ fun LoungeScreen(
             ) {
                 when (activeTab) {
                     "profiles" -> ProfileCardsTab(viewModel, profileViewModel)
-                    "notes" -> E2EENotesTab(viewModel)
-                    "letters" -> DailyLettersTab(viewModel)
-                    "dice" -> DiceAndIntimacyTab(viewModel)
-                    "canvas" -> LiveSharedCanvasTab(viewModel)
-                    "secret" -> ScratchToRevealTab(viewModel)
-                    "quiz" -> LoveLanguageQuizTab(viewModel)
-                    "scrapbook" -> ScrapbookTab(viewModel)
+                    "notes" -> E2EENotesTab(loungeMediaFactory)
+                    "letters" -> DailyLettersTab(loungeMediaFactory)
+                    "dice" -> DiceAndIntimacyTab(loungeGamesFactory)
+                    "canvas" -> LiveSharedCanvasTab(loungeDrawingFactory)
+                    "secret" -> ScratchToRevealTab(loungeGamesFactory)
+                    "quiz" -> LoveLanguageQuizTab(loungeGamesFactory)
+                    "scrapbook" -> ScrapbookTab(loungeMediaFactory)
                     "timeline" -> MemoryTimelineTab(chatViewModel)
+                    "music" -> MusicLoungeTab(musicSyncController, loungeMusicFactory)
                 }
             }
         }

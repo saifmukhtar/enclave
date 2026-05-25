@@ -75,8 +75,12 @@ import java.io.File
 // 5. 🫣 Touch-Activated Scratch-to-Reveal / View-Once Tab
 // ==========================================
 @Composable
-fun ScratchToRevealTab(viewModel: LoungeViewModel) {
-    val scratchState by viewModel.scratchState.collectAsState()
+fun ScratchToRevealTab(
+    
+    loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory
+) {
+    val gamesViewModel: com.enclave.app.ui.lounge.LoungeGamesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeGamesFactory)
+    val scratchState by gamesViewModel.scratchState.collectAsState()
     val context = LocalContext.current
     val pickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -118,9 +122,9 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                         val outputStream = java.io.ByteArrayOutputStream()
                         scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
                         val compressedBytes = outputStream.toByteArray()
-                        viewModel.sendScratchImage(compressedBytes)
+                        gamesViewModel.sendScratchImage(compressedBytes)
                     } else {
-                        viewModel.sendScratchImage(bytes)
+                        gamesViewModel.sendScratchImage(bytes)
                     }
                 }
             } catch (e: Exception) {
@@ -209,7 +213,7 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = {
-                        viewModel.clearScratchImage()
+                        gamesViewModel.clearScratchImage()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
                     shape = RoundedCornerShape(16.dp)
@@ -229,13 +233,15 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
 
             var remainingTimeMs by remember { mutableStateOf(10000L) }
             var isSelfDestructed by remember { mutableStateOf(false) }
-            val pathsScratched = remember { mutableStateListOf<Offset>() }
+            val scratchPath = remember { androidx.compose.ui.graphics.Path() }
+            var drawTrigger by remember { androidx.compose.runtime.mutableIntStateOf(0) }
             var isTouching by remember { mutableStateOf(false) }
 
             LaunchedEffect(state.bytes) {
                 remainingTimeMs = 10000L
                 isSelfDestructed = false
-                pathsScratched.clear()
+                scratchPath.reset()
+                drawTrigger++
                 isTouching = false
             }
 
@@ -247,8 +253,8 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                     }
                     if (remainingTimeMs <= 0) {
                         isSelfDestructed = true
-                        viewModel.notifyScratchDestroyed()
-                        viewModel.clearScratchImage()
+                        gamesViewModel.notifyScratchDestroyed()
+                        gamesViewModel.clearScratchImage()
                     }
                 }
             }
@@ -274,7 +280,7 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
                             onClick = {
-                                viewModel.clearScratchImage()
+                                gamesViewModel.clearScratchImage()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7))
                         ) {
@@ -330,14 +336,16 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                                 detectDragGestures(
                                     onDragStart = { offset ->
                                         if (!state.isSeen) {
-                                            viewModel.notifyScratchSeen()
+                                            gamesViewModel.notifyScratchSeen()
                                         }
                                         isTouching = true
-                                        pathsScratched.add(offset)
+                                        scratchPath.moveTo(offset.x, offset.y)
+                                        drawTrigger++
                                     },
                                     onDrag = { change, _ ->
                                         change.consume()
-                                        pathsScratched.add(change.position)
+                                        scratchPath.lineTo(change.position.x, change.position.y)
+                                        drawTrigger++
                                     },
                                     onDragEnd = {
                                         isTouching = false
@@ -348,16 +356,19 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                                 )
                             }
                     ) {
+                        drawTrigger // Read state to trigger redraw without recomposing parent
                         drawRect(color = Color(0xFFE598A7))
 
-                        pathsScratched.forEach { offset ->
-                            drawCircle(
-                                color = Color.Transparent,
-                                radius = 45.dp.toPx(),
-                                center = offset,
-                                blendMode = BlendMode.Clear
-                            )
-                        }
+                        drawPath(
+                            path = scratchPath,
+                            color = Color.Transparent,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 90.dp.toPx(),
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            ),
+                            blendMode = BlendMode.Clear
+                        )
                     }
 
                     Row(
@@ -382,7 +393,7 @@ fun ScratchToRevealTab(viewModel: LoungeViewModel) {
                         }
 
                         IconButton(
-                            onClick = { viewModel.clearScratchImage() },
+                            onClick = { gamesViewModel.clearScratchImage() },
                             modifier = Modifier
                                 .size(32.dp)
                                 .background(Color.Black.copy(alpha = 0.6f), CircleShape)

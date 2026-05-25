@@ -264,7 +264,7 @@ fun KissGestureCanvasOverlay(
         if (isMutual) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
 
-    val mutualPulse by animateFloatAsState(
+    val mutualPulseState = animateFloatAsState(
         targetValue = if (isMutual) 1.15f else 1f,
         animationSpec = infiniteRepeatable(tween(300), RepeatMode.Reverse),
         label = "mutual_pulse"
@@ -342,7 +342,7 @@ fun KissGestureCanvasOverlay(
 
             localPayload?.let { payload ->
                 if (payload.isTouching) {
-                    val scale = if (isMutual) mutualPulse else 1f
+                    val scale = if (isMutual) mutualPulseState.value else 1f
                     val targetAlpha = if (remoteActive) 0.08f else 0.85f
                     drawLipPhysicsMesh(
                         engine = localEngine,
@@ -388,7 +388,7 @@ fun KissGestureCanvasOverlay(
                     Offset(w * 0.15f, h * 0.7f), Offset(w * 0.85f, h * 0.65f),
                     Offset(w * 0.5f, h * 0.15f), Offset(w * 0.5f, h * 0.85f)
                 ).forEach { pos ->
-                    drawCircle(color = Color(0xFFFFD700).copy(alpha = 0.55f), radius = 6f * mutualPulse, center = pos)
+                    drawCircle(color = Color(0xFFFFD700).copy(alpha = 0.55f), radius = 6f * mutualPulseState.value, center = pos)
                 }
             }
         }

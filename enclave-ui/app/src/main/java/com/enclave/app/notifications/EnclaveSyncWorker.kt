@@ -209,7 +209,7 @@ class EnclaveSyncWorker(
                             if (baseType == "LOUNGE_NOTE_SYNC") {
                                 try {
                                     val text = String(decryptedBytes, Charsets.UTF_8)
-                                    val payloadObj = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.lounge.LoungeViewModel.SyncedNotePayload>(text)
+                                    val payloadObj = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.lounge.SyncedNotePayload>(text)
                                     val entity = com.enclave.app.data.local.EncryptedNoteEntity(
                                         id = payloadObj.id,
                                         titlePayload = android.util.Base64.decode(payloadObj.titlePayloadBase64, android.util.Base64.NO_WRAP),
@@ -231,8 +231,6 @@ class EnclaveSyncWorker(
                                 try {
                                     val text = String(decryptedBytes, Charsets.UTF_8)
                                     val payloadObj = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.lounge.SyncedLetterPayload>(text)
-                                    val cal = java.util.Calendar.getInstance()
-                                    val dateStr = "${cal.get(java.util.Calendar.YEAR)}-${cal.get(java.util.Calendar.MONTH) + 1}-${cal.get(java.util.Calendar.DAY_OF_MONTH)}"
                                     val enc = cryptoManager.encryptLocal(payloadObj.plainContent.toByteArray(Charsets.UTF_8))
                                     val entity = com.enclave.app.data.local.LetterEntity(
                                         id = java.util.UUID.randomUUID().toString(),

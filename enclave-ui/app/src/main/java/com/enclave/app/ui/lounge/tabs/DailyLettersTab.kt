@@ -75,7 +75,8 @@ import java.io.File
 // 2. 💌 Daily Decrypted In-Memory Letters Tab
 // ==========================================
 @Composable
-fun DailyLettersTab(viewModel: LoungeViewModel) {
+fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory) {
+    val viewModel: com.enclave.app.ui.lounge.LoungeMediaViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeMediaFactory)
     val letters by viewModel.decryptedLettersFlow.collectAsState(initial = emptyList())
     var newLetterText by remember { mutableStateOf("") }
     

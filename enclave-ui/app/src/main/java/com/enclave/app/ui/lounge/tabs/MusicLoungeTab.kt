@@ -76,7 +76,11 @@ import java.io.File
 // 6. 🎵 Music Lounge Vinyl Tab
 // ==========================================
 @Composable
-fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncController?) {
+fun MusicLoungeTab(
+    
+    musicSyncController: MusicSyncController?,
+    loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory
+) {
     if (musicSyncController == null) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -87,6 +91,8 @@ fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncCon
         return
     }
 
+    val musicViewModel: com.enclave.app.ui.lounge.LoungeMusicViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeMusicFactory)
+
     val context = LocalContext.current
     val isPlaying by musicSyncController.isPlaying.collectAsState()
     val currentPosition by musicSyncController.currentPosition.collectAsState()
@@ -95,7 +101,7 @@ fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncCon
     val shuffleEnabled by musicSyncController.shuffleEnabled.collectAsState()
     val sleepTimerRemaining by musicSyncController.sleepTimerRemaining.collectAsState()
 
-    val loungeSongs by viewModel.loungeSongs.collectAsState()
+    val loungeSongs by musicViewModel.loungeSongs.collectAsState()
 
     // Sync playlist whenever lounge songs change
     LaunchedEffect(loungeSongs) {
@@ -125,7 +131,7 @@ fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncCon
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bytes = inputStream?.use { it.readBytes() }
                 if (bytes != null) {
-                    viewModel.uploadAndAddSong(displayName, bytes)
+                    musicViewModel.uploadAndAddSong(displayName, bytes)
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Upload failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -135,7 +141,7 @@ fun MusicLoungeTab(viewModel: LoungeViewModel, musicSyncController: MusicSyncCon
 
     if (showPlaylistView) {
         MusicQueueList(
-            viewModel = viewModel,
+            musicViewModel = musicViewModel,
             musicSyncController = musicSyncController,
             onClose = { showPlaylistView = false },
             audioPickerLauncher = audioPickerLauncher

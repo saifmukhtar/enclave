@@ -361,12 +361,46 @@ fun EnclaveApp(
     }
 
     val letterDao = remember { database.letterDao() }
-    val loungeViewModel = remember(myId, partnerId, signalingClient) {
-        LoungeViewModel(
+    val loungeSyncUseCase = remember(myId, partnerId, signalingClient) {
+        com.enclave.app.ui.lounge.LoungeSyncUseCase(signalingClient, myId, partnerId)
+    }
+    
+    val loungeGamesFactory = remember(myId, partnerId, signalingClient) {
+        com.enclave.app.ui.lounge.LoungeGamesViewModel.Factory(
+            signalingClient, cryptoManager, database, bundleRepository, partnerId, myId, loungeSyncUseCase
+        )
+    }
+
+    val loungeMediaFactory = remember(myId, partnerId, signalingClient) {
+        com.enclave.app.ui.lounge.LoungeMediaViewModel.Factory(
             application = application,
             signalingClient = signalingClient,
             cryptoManager = cryptoManager,
             letterDao = letterDao,
+            database = database,
+            partnerId = partnerId,
+            myId = myId,
+            loungeSyncUseCase = loungeSyncUseCase,
+            bundleRepository = bundleRepository
+        )
+    }
+    
+    val loungeDrawingFactory = remember(myId, partnerId, signalingClient) {
+        com.enclave.app.ui.lounge.LoungeDrawingViewModel.Factory(
+            signalingClient, cryptoManager, bundleRepository, partnerId, myId, loungeSyncUseCase
+        )
+    }
+    
+    val loungeMusicFactory = remember(myId, partnerId, signalingClient) {
+        com.enclave.app.ui.lounge.LoungeMusicViewModel.Factory(
+            signalingClient, cryptoManager, bundleRepository, partnerId, myId, loungeSyncUseCase
+        )
+    }
+    
+    val loungeViewModel = remember(myId, partnerId, signalingClient) {
+        LoungeViewModel(
+            application = application,
+            signalingClient = signalingClient,
             database = database,
             partnerId = partnerId,
             myId = myId,
@@ -441,7 +475,11 @@ fun EnclaveApp(
             signalingClient = signalingClient,
             musicSyncController = musicSyncController,
             autoLaunchKissState = autoLaunchKissState,
-            onKissCanvasClosed = onKissCanvasClosed
+            onKissCanvasClosed = onKissCanvasClosed,
+            loungeGamesFactory = loungeGamesFactory,
+            loungeDrawingFactory = loungeDrawingFactory,
+            loungeMusicFactory = loungeMusicFactory,
+            loungeMediaFactory = loungeMediaFactory
         )
 
         // Secure Full-screen App Lock Overlay (drawn on top of all screens to prevent any interaction)

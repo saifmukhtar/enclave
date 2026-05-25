@@ -75,17 +75,22 @@ import java.io.File
 // 3. 🎲 3D Tumbling Dice & Intimacy Prompts Tab
 // ==========================================
 @Composable
-fun DiceAndIntimacyTab(viewModel: LoungeViewModel) {
-    val isRolling by viewModel.isDiceRolling.collectAsState()
-    val diceValue by viewModel.diceValue.collectAsState()
-    val currentPrompt by viewModel.currentPrompt.collectAsState()
-    val isTruthSelected by viewModel.isTruthSelected.collectAsState()
+fun DiceAndIntimacyTab(
+    
+    loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory
+) {
+    val gamesViewModel: com.enclave.app.ui.lounge.LoungeGamesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeGamesFactory)
+
+    val isRolling by gamesViewModel.isDiceRolling.collectAsState()
+    val diceValue by gamesViewModel.diceValue.collectAsState()
+    val currentPrompt by gamesViewModel.currentPrompt.collectAsState()
+    val isTruthSelected by gamesViewModel.isTruthSelected.collectAsState()
 
     val haptic = LocalView.current
 
     // Trigger local clock-tick haptics coordinated with tumbling frames
     LaunchedEffect(Unit) {
-        viewModel.diceTickerEvent.collect {
+        gamesViewModel.diceTickerEvent.collect {
             haptic.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
     }
@@ -123,7 +128,7 @@ fun DiceAndIntimacyTab(viewModel: LoungeViewModel) {
                         }
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFFFFF5F6))
-                        .clickable { viewModel.rollDice() },
+                        .clickable { gamesViewModel.rollDice() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -172,7 +177,7 @@ fun DiceAndIntimacyTab(viewModel: LoungeViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Button(
-                        onClick = { viewModel.pickTruthOrDare(true) },
+                        onClick = { gamesViewModel.pickTruthOrDareCard(true) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF5F6)),
                         shape = RoundedCornerShape(12.dp)
@@ -181,7 +186,7 @@ fun DiceAndIntimacyTab(viewModel: LoungeViewModel) {
                     }
 
                     Button(
-                        onClick = { viewModel.pickTruthOrDare(false) },
+                        onClick = { gamesViewModel.pickTruthOrDareCard(false) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
                         shape = RoundedCornerShape(12.dp)

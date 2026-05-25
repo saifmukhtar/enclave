@@ -75,7 +75,8 @@ import java.io.File
 // 8. 📸 Scrapbook Memories Tab
 // ==========================================
 @Composable
-fun ScrapbookTab(viewModel: LoungeViewModel) {
+fun ScrapbookTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory) {
+    val viewModel: com.enclave.app.ui.lounge.LoungeMediaViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeMediaFactory)
     val entries by viewModel.scrapbookEntries.collectAsState()
     val isUploading by viewModel.isScrapbookUploading.collectAsState()
     val myId = viewModel.myId

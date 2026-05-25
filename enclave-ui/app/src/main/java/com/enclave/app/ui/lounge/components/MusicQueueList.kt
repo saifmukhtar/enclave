@@ -29,17 +29,17 @@ import com.enclave.app.ui.lounge.LoungeViewModel
 
 @Composable
 fun MusicQueueList(
-    viewModel: LoungeViewModel,
+    musicViewModel: com.enclave.app.ui.lounge.LoungeMusicViewModel,
     musicSyncController: MusicSyncController,
     onClose: () -> Unit,
     audioPickerLauncher: androidx.activity.result.ActivityResultLauncher<String>
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val currentTrackUrl by musicSyncController.currentTrackUrl.collectAsState()
-    val loungeSongs by viewModel.loungeSongs.collectAsState()
-    val playlistQueue by viewModel.playlistQueue.collectAsState()
-    val isUploading by viewModel.isUploading.collectAsState()
-    val myId = viewModel.myId
+    val loungeSongs by musicViewModel.loungeSongs.collectAsState()
+    val playlistQueue by musicViewModel.playlistQueue.collectAsState()
+    val isUploading by musicViewModel.isUploading.collectAsState()
+    val myId = musicViewModel.myId
     var currentSubTab by remember { mutableStateOf("library") }
 
     BackHandler(enabled = true) {
@@ -224,7 +224,7 @@ fun MusicQueueList(
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
-                                    onClick = { viewModel.addToQueue(song.id.orEmpty()) },
+                                    onClick = { musicViewModel.addToQueue(song.id.orEmpty()) },
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
@@ -237,7 +237,7 @@ fun MusicQueueList(
 
                                 if (song.uploaded_by == myId) {
                                     IconButton(
-                                        onClick = { viewModel.deleteSong(song) },
+                                        onClick = { musicViewModel.deleteSong(song) },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
@@ -331,7 +331,7 @@ fun MusicQueueList(
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
-                                    onClick = { viewModel.removeFromQueue(queueItem.id.orEmpty()) },
+                                    onClick = { musicViewModel.removeFromQueue(queueItem.id.orEmpty()) },
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(

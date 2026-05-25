@@ -1,35 +1,19 @@
-# Preserve the underlying native JNI library references from code shrinking
+# Preserve Signal Protocol JNI and Models
 -keep class org.signal.libsignal.** { *; }
--keep class org.whispersystems.libsignal.** { *; }
+-keepclassmembers class org.signal.libsignal.** { *; }
+
+# Preserve WebRTC native bindings
 -keep class org.webrtc.** { *; }
+-keepclassmembers class org.webrtc.** { *; }
+-keep class J.* { *; }
 
-# Prevent R8 from stripping or renaming native JNI code entry points
--keepclasseswithmembernames,includedescriptorclasses class * {
-    native <methods>;
+# Preserve Kotlinx Serialization models
+-keepattributes *Annotation*, InnerClasses
+-keep,allowoptimization,allowobfuscation @kotlinx.serialization.Serializable class *
+-keepclassmembers @kotlinx.serialization.Serializable class * {
+    <fields>;
 }
 
-# Keep native library loading signatures intact
--keepclassmembers class * {
-    *** loadLibrary(...);
-}
-
-# Preserve kotlinx.serialization metadata and deserializers
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
--keepclassmembers class * {
-    *** Companion;
-}
--keep class kotlinx.serialization.json.** { *; }
--keep class com.enclave.app.network.** { *; }
--keep class com.enclave.app.crypto.** { *; }
--keep class com.enclave.app.webrtc.** { *; }
--keep class com.enclave.app.models.** { *; }
--keep class com.enclave.app.data.local.** { *; }
--keep class com.enclave.app.data.local.* { *; }
-
-# Ignore warnings from slf4j and other transitive third-party dependencies during R8/ProGuard processing
--dontwarn org.slf4j.**
--dontwarn okio.**
--dontwarn io.ktor.**
--dontwarn org.signal.**
--dontwarn org.webrtc.**
-
+# Preserve Supabase Gotrue / Postgrest Network models
+-keep class io.github.jan.supabase.** { *; }
+-keepclassmembers class io.github.jan.supabase.** { *; }

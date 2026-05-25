@@ -263,7 +263,8 @@ fun MemoryTimelineItem(msg: com.enclave.app.ui.chat.ChatMessage, chatViewModel: 
 }
 
 @Composable
-fun E2EENotesTab(viewModel: LoungeViewModel) {
+fun E2EENotesTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory) {
+    val viewModel: com.enclave.app.ui.lounge.LoungeMediaViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeMediaFactory)
     val notes by viewModel.encryptedNotesFlow.collectAsState(initial = emptyList())
     var showComposer by remember { mutableStateOf(false) }
     var noteTitle by remember { mutableStateOf("") }

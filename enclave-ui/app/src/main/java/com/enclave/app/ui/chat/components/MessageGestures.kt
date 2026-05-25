@@ -9,28 +9,39 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
 
 fun Modifier.swipeToReplyGesture(
-    offsetX: Float,
-    onOffsetChange: (Float) -> Unit,
     onReplyTriggered: () -> Unit,
     haptic: HapticFeedback
 ): Modifier = composed {
-    draggable(
-        orientation = Orientation.Horizontal,
-        state = rememberDraggableState { delta ->
-            val newOffset = offsetX + delta
-            if (newOffset >= 0f && newOffset < 150f) {
-                onOffsetChange(newOffset)
-            }
-        },
-        onDragStopped = {
-            if (offsetX > 80f) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onReplyTriggered()
-            }
-            onOffsetChange(0f)
-        }
+    var offsetX by remember { mutableStateOf(0f) }
+    
+    this.then(
+        Modifier
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
+            .draggable(
+                orientation = Orientation.Horizontal,
+                state = rememberDraggableState { delta ->
+                    val newOffset = offsetX + delta
+                    if (newOffset >= 0f && newOffset < 150f) {
+                        offsetX = newOffset
+                    }
+                },
+                onDragStopped = {
+                    if (offsetX > 80f) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onReplyTriggered()
+                    }
+                    offsetX = 0f
+                }
+            )
     )
 }
 

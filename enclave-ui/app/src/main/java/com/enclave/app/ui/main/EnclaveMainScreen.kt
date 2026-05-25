@@ -68,7 +68,11 @@ fun EnclaveMainScreen(
     signalingClient: SignalingClient,
     musicSyncController: MusicSyncController?,
     autoLaunchKissState: Boolean,
-    onKissCanvasClosed: () -> Unit
+    onKissCanvasClosed: () -> Unit,
+    loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeDrawingFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory
 ) {
     val context = LocalContext.current
     var currentTab by rememberSaveable { mutableStateOf("chat") }
@@ -248,9 +252,9 @@ fun EnclaveMainScreen(
                     )
                     "calls" -> CallLogScreen(callLogDao)
                     "stories" -> StatusStoriesScreen(storyViewModel)
-                    "music" -> com.enclave.app.ui.lounge.tabs.MusicLoungeTab(loungeViewModel, musicSyncController)
+                    "music" -> com.enclave.app.ui.lounge.tabs.MusicLoungeTab(musicSyncController, loungeMusicFactory)
                     "vault" -> VaultScreen(vaultViewModel, biometricManager, vaultRepository)
-                    else -> LoungeScreen(loungeViewModel, profileViewModel, musicSyncController, chatViewModel)
+                    else -> LoungeScreen(loungeViewModel, profileViewModel, musicSyncController, chatViewModel, loungeGamesFactory, loungeDrawingFactory, loungeMusicFactory, loungeMediaFactory)
                 }
             }
         }

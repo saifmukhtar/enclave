@@ -44,7 +44,6 @@ fun SwipeToReplyMessageBubble(
     searchQuery: String = "",
     onMediaClick: () -> Unit
 ) {
-    var offsetX by remember { mutableStateOf(0f) }
     var showContextMenu by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
@@ -60,8 +59,6 @@ fun SwipeToReplyMessageBubble(
         modifier = Modifier
             .fillMaxWidth()
             .swipeToReplyGesture(
-                offsetX = offsetX,
-                onOffsetChange = { offsetX = it },
                 onReplyTriggered = { viewModel.setReplyToMessage(message) },
                 haptic = haptic
             ),
