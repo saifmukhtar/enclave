@@ -44,72 +44,7 @@ import java.util.UUID
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 
-@Serializable
-data class LoungePoint(val x: Float, val y: Float)
 
-data class ScratchState(
-    val bytes: ByteArray,
-    val isSender: Boolean,
-    val isSeen: Boolean = false,
-    val isDestroyed: Boolean = false
-)
-
-data class DrawingStroke(
-    val points: List<LoungePoint>, val colorHex: String, val brushWidth: Float)
-
-@Serializable
-data class LoungeStroke(val points: List<LoungePoint>, val colorHex: String, val brushWidth: Float)
-
-@Serializable
-data class LoungeDrawEvent(
-    val action: String, // "START", "MOVE", "END"
-    val points: List<LoungePoint>,
-    val colorHex: String,
-    val brushWidth: Float
-)
-
-
-@Serializable
-data class ProfileStatus(
-    val moodEmoji: String,
-    val statusText: String,
-    val batteryPct: Int,
-    val nowListening: String,
-    val localTimeStr: String,
-    val countdownTarget: Long = 0L,
-    val countdownLabel: String = "",
-    val weatherTemp: Double = -999.0,
-    val weatherCondition: String = ""
-)
-
-@Serializable
-data class QuizQuestion(
-    val id: Int,
-    val optionA: String,
-    val optionACategory: String,
-    val optionB: String,
-    val optionBCategory: String
-)
-
-
-@Serializable
-data class SyncedDiceEvent(
-    val rolledValue: Int,
-    val seed: Long
-)
-
-@Serializable
-data class SyncedTruthOrDareEvent(
-    val cardIndex: Int,
-    val isTruth: Boolean,
-    val prompt: String
-)
-
-@Serializable
-data class SyncedLetterPayload(
-    val senderId: String,
-    val plainContent: String
-)
 
 class LoungeViewModel(
     application: Application,
@@ -1006,158 +941,113 @@ class LoungeViewModel(
         }
     }
 
+    private val syncUseCase = LoungeSyncUseCase(signalingClient, myId, partnerId)
+
     private fun observeSignaling() {
         viewModelScope.launch {
-            signalingClient.incomingRawMessages.collect { rawText ->
-                try {
-                    val msg = LenientJson.decodeFromString<SignalMessageWrapper>(rawText)
-                    if (msg.senderId != partnerId) return@collect
-
-                    when (msg.type) {
-                        "LOUNGE_HEARTBEAT" -> {
-                            triggerHeartbeatHaptic()
-                        }
-                        "LOUNGE_PROFILE_UPDATE" -> {
-                            msg.payload?.let {
-                                val status = LenientJson.decodeFromString<ProfileStatus>(it)
-                                _partnerStatus.value = status
-                                prefs.edit()
-                                    .putString("partner_countdown_label", status.countdownLabel)
-                                    .putLong("partner_countdown_target", status.countdownTarget)
-                                    .apply()
-                            }
-                        }
-                        "LOUNGE_SCRATCH_UPLOAD" -> {
-                            msg.payload?.let { base64 ->
-                                if (base64.isNotEmpty()) {
-                                    val bytes = android.util.Base64.decode(base64, android.util.Base64.NO_WRAP)
-                                    _scratchState.value = ScratchState(bytes, isSender = false, isSeen = false)
-                                } else {
-                                    _scratchState.value = null
-                                }
-                            }
-                        }
-                        "LOUNGE_SCRATCH_SEEN" -> {
-                            _scratchState.value = _scratchState.value?.copy(isSeen = true)
-                        }
-                        "LOUNGE_SCRATCH_DESTROYED" -> {
-                            _scratchState.value = _scratchState.value?.copy(isDestroyed = true)
-                        }
-                        "LOUNGE_DICE_ROLL" -> {
-                            msg.payload?.let {
-                                val event = LenientJson.decodeFromString<SyncedDiceEvent>(it)
-                                triggerLocalDiceAnimation(event.rolledValue)
-                            }
-                        }
-                        "LOUNGE_TRUTH_OR_DARE" -> {
-                            msg.payload?.let {
-                                val event = LenientJson.decodeFromString<SyncedTruthOrDareEvent>(it)
-                                _isTruthSelected.value = event.isTruth
-                                _currentPrompt.value = event.prompt
-                            }
-                        }
-                        "LOUNGE_CANVAS_EVENT" -> {
-                            msg.payload?.let {
-                                val event = LenientJson.decodeFromString<LoungeDrawEvent>(it)
-                                when (event.action) {
-                                    "START" -> {
-                                        _currentPartnerStroke.value = LoungeStroke(event.points, event.colorHex, event.brushWidth)
-                                    }
-                                    "MOVE" -> {
-                                        val active = _currentPartnerStroke.value
-                                        if (active != null) {
-                                            _currentPartnerStroke.value = active.copy(points = active.points + event.points)
-                                        } else {
-                                            _currentPartnerStroke.value = LoungeStroke(event.points, event.colorHex, event.brushWidth)
-                                        }
-                                    }
-                                    "END" -> {
-                                        val active = _currentPartnerStroke.value
-                                        val finalStroke = if (active != null) {
-                                            active.copy(points = active.points + event.points)
-                                        } else {
-                                            LoungeStroke(event.points, event.colorHex, event.brushWidth)
-                                        }
-                                        partnerStrokes.add(finalStroke)
-                                        _currentPartnerStroke.value = null
-                                    }
-                                }
-                            }
-                        }
-                        "LOUNGE_CANVAS_STROKE_BATCH" -> {
-                            msg.payload?.let {
-                                val stroke = LenientJson.decodeFromString<LoungeStroke>(it)
-                                partnerStrokes.add(stroke)
-                            }
-                        }
-                        "LOUNGE_CANVAS_STROKE" -> {
-                            msg.payload?.let {
-                                val stroke = LenientJson.decodeFromString<LoungeStroke>(it)
-                                partnerStrokes.add(stroke)
-                            }
-                        }
-                        "LOUNGE_CANVAS_CLEAR" -> {
-                            localStrokes.clear()
-                            partnerStrokes.clear()
-                            _currentLocalStroke.value = null
-                            _currentPartnerStroke.value = null
-                        }
-                        "LOUNGE_LETTER_SEND" -> {
-                            msg.payload?.let {
-                                val payload = LenientJson.decodeFromString<SyncedLetterPayload>(it)
-                                val encryptedB64 = cryptoManager.encryptLocal(payload.plainContent.toByteArray(Charsets.UTF_8))
-                                val letterEntity = LetterEntity(
-                                    id = UUID.randomUUID().toString(),
-                                    senderId = payload.senderId,
-                                    ciphertext = encryptedB64,
-                                    createdAt = System.currentTimeMillis(),
-                                    isRead = false
-                                )
-                                letterDao.insertLetter(letterEntity)
-                            }
-                        }
-                        "LOUNGE_NOTE_SYNC" -> {
-                            msg.payload?.let {
-                                val payload = LenientJson.decodeFromString<SyncedNotePayload>(it)
-                                val titleBytes = android.util.Base64.decode(payload.titlePayloadBase64, android.util.Base64.NO_WRAP)
-                                val contentBytes = android.util.Base64.decode(payload.contentPayloadBase64, android.util.Base64.NO_WRAP)
-                                
-                                val entity = com.enclave.app.data.local.EncryptedNoteEntity(
-                                    id = payload.id,
-                                    titlePayload = titleBytes,
-                                    contentPayload = contentBytes,
-                                    createdAt = System.currentTimeMillis(),
-                                    updatedAt = System.currentTimeMillis(),
-                                    authorId = payload.authorId,
-                                    isSynced = true
-                                )
-                                database.encryptedNoteDao().insertNote(entity)
-                            }
-                        }
-                        "LOUNGE_NOTE_DELETE" -> {
-                            msg.payload?.let { id ->
-                                database.encryptedNoteDao().deleteNote(id)
-                            }
-                        }
-                        "LOUNGE_PLAYLIST_UPDATE" -> {
-                            // Partner added or removed a song — refresh our local list
-                            refreshSongs()
-                        }
-                        "LOUNGE_DRAWINGS_UPDATE" -> {
-                            refreshDrawings()
-                        }
-                        "LOUNGE_SCRAPBOOK_UPDATE" -> {
-                            refreshScrapbook()
-                        }
-                        "LOUNGE_QUEUE_UPDATE" -> {
-                            refreshQueue()
-                        }
-                        "LOUNGE_QUIZ_COMPLETED" -> {
-                            refreshProfiles()
+            syncUseCase.observeEvents().collect { event ->
+                when (event) {
+                    is LoungeIncomingEvent.Heartbeat -> triggerHeartbeatHaptic()
+                    is LoungeIncomingEvent.ProfileUpdate -> {
+                        _partnerStatus.value = event.status
+                        prefs.edit()
+                            .putString("partner_countdown_label", event.status.countdownLabel)
+                            .putLong("partner_countdown_target", event.status.countdownTarget)
+                            .apply()
+                    }
+                    is LoungeIncomingEvent.ScratchUpload -> {
+                        if (event.bytes != null) {
+                            _scratchState.value = ScratchState(event.bytes, isSender = false, isSeen = false)
+                        } else {
+                            _scratchState.value = null
                         }
                     }
-                } catch (e: Exception) {
-                    // Fail silently on non-lounge wrapper parse
+                    is LoungeIncomingEvent.ScratchSeen -> {
+                        _scratchState.value = _scratchState.value?.copy(isSeen = true)
+                    }
+                    is LoungeIncomingEvent.ScratchDestroyed -> {
+                        _scratchState.value = _scratchState.value?.copy(isDestroyed = true)
+                    }
+                    is LoungeIncomingEvent.DiceRoll -> {
+                        triggerLocalDiceAnimation(event.event.rolledValue)
+                    }
+                    is LoungeIncomingEvent.TruthOrDare -> {
+                        _isTruthSelected.value = event.event.isTruth
+                        _currentPrompt.value = event.event.prompt
+                    }
+                    is LoungeIncomingEvent.CanvasEvent -> {
+                        val drawEvent = event.event
+                        when (drawEvent.action) {
+                            "START" -> {
+                                _currentPartnerStroke.value = LoungeStroke(drawEvent.points, drawEvent.colorHex, drawEvent.brushWidth)
+                            }
+                            "MOVE" -> {
+                                val active = _currentPartnerStroke.value
+                                if (active != null) {
+                                    _currentPartnerStroke.value = active.copy(points = active.points + drawEvent.points)
+                                } else {
+                                    _currentPartnerStroke.value = LoungeStroke(drawEvent.points, drawEvent.colorHex, drawEvent.brushWidth)
+                                }
+                            }
+                            "END" -> {
+                                val active = _currentPartnerStroke.value
+                                val finalStroke = if (active != null) {
+                                    active.copy(points = active.points + drawEvent.points)
+                                } else {
+                                    LoungeStroke(drawEvent.points, drawEvent.colorHex, drawEvent.brushWidth)
+                                }
+                                partnerStrokes.add(finalStroke)
+                                _currentPartnerStroke.value = null
+                            }
+                        }
+                    }
+                    is LoungeIncomingEvent.CanvasClear -> {
+                        localStrokes.clear()
+                        partnerStrokes.clear()
+                        _currentLocalStroke.value = null
+                        _currentPartnerStroke.value = null
+                    }
+                    is LoungeIncomingEvent.CanvasStrokeBatch -> {
+                        partnerStrokes.add(event.stroke)
+                    }
+                    is LoungeIncomingEvent.CanvasStroke -> {
+                        partnerStrokes.add(event.stroke)
+                    }
+                    is LoungeIncomingEvent.LetterSend -> {
+                        val payload = event.payload
+                        val encryptedB64 = cryptoManager.encryptLocal(payload.plainContent.toByteArray(Charsets.UTF_8))
+                        val letterEntity = LetterEntity(
+                            id = UUID.randomUUID().toString(),
+                            senderId = payload.senderId,
+                            ciphertext = encryptedB64,
+                            createdAt = System.currentTimeMillis(),
+                            isRead = false
+                        )
+                        letterDao.insertLetter(letterEntity)
+                    }
+                    is LoungeIncomingEvent.NoteSync -> {
+                        val titleBytes = android.util.Base64.decode(event.payload.titlePayloadBase64, android.util.Base64.NO_WRAP)
+                        val contentBytes = android.util.Base64.decode(event.payload.contentPayloadBase64, android.util.Base64.NO_WRAP)
+                        
+                        val entity = com.enclave.app.data.local.EncryptedNoteEntity(
+                            id = event.payload.id,
+                            titlePayload = titleBytes,
+                            contentPayload = contentBytes,
+                            createdAt = System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis(),
+                            authorId = event.payload.authorId,
+                            isSynced = true
+                        )
+                        database.encryptedNoteDao().insertNote(entity)
+                    }
+                    is LoungeIncomingEvent.NoteDelete -> {
+                        database.encryptedNoteDao().deleteNote(event.id)
+                    }
+                    is LoungeIncomingEvent.PlaylistUpdate -> refreshSongs()
+                    is LoungeIncomingEvent.DrawingsUpdate -> refreshDrawings()
+                    is LoungeIncomingEvent.ScrapbookUpdate -> refreshScrapbook()
+                    is LoungeIncomingEvent.QueueUpdate -> refreshQueue()
+                    is LoungeIncomingEvent.QuizCompleted -> refreshProfiles()
                 }
             }
         }
