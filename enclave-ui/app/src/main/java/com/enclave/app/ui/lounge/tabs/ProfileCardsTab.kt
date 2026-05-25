@@ -2,6 +2,7 @@
 package com.enclave.app.ui.lounge.tabs
 
 import com.enclave.app.ui.lounge.*
+import com.enclave.app.ui.lounge.components.*
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -213,218 +214,41 @@ fun ProfileCardsTab(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // "You" Card
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(260.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = myName.uppercase(),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE598A7),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (myUsername.isNotBlank()) {
-                            Text(
-                                text = myUsername,
-                                fontSize = 9.sp,
-                                color = Color.Gray.copy(alpha = 0.8f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    
-                    Box(
-                        modifier = Modifier.size(76.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFFFFF5F6), Color(0xFFE598A7), Color(0xFFFFF5F6))
-                                    )
-                                )
-                                .padding(3.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.White, CircleShape)
-                                    .padding(2.dp)
-                            ) {
-                                com.enclave.app.ui.profile.E2eeAvatar(
-                                    avatarBase64 = myProfile?.avatarLocalPath,
-                                    isMe = true,
-                                    profileViewModel = profileViewModel,
-                                    initials = myName.take(2),
-                                    size = 64.dp,
-                                    displayName = myProfile?.displayName?.ifBlank { myProfile?.username } ?: "You",
-                                    username = myProfile?.username,
-                                    bio = myProfile?.bio,
-                                    statusText = myStatus.statusText,
-                                    enablePreview = true
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.BottomEnd)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .border(1.dp, Color(0xFFFFF5F6), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(myStatus.moodEmoji.ifBlank { "❤️" }, fontSize = 12.sp)
-                        }
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(myStatus.statusText, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        val myWeatherStr = if (myStatus.weatherTemp != -999.0) {
-                            " • ${myStatus.weatherCondition} ${myStatus.weatherTemp.toInt()}°C"
-                        } else ""
-                        Text("🔋 Battery: ${myStatus.batteryPct}%$myWeatherStr", fontSize = 10.sp, color = Color.Gray)
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFFFF5F6))
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.MusicNote, contentDescription = "Listen", tint = Color(0xFFE598A7), modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(myStatus.nowListening, fontSize = 9.sp, color = Color(0xFF2A1B1D), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            PresenceCard(
+                isMe = true,
+                name = myName,
+                username = myUsername,
+                avatarLocalPath = myProfile?.avatarLocalPath,
+                avatarUrl = null,
+                bio = myProfile?.bio,
+                statusText = myStatus.statusText,
+                moodEmoji = myStatus.moodEmoji,
+                batteryPct = myStatus.batteryPct,
+                weatherTemp = myStatus.weatherTemp,
+                weatherCondition = myStatus.weatherCondition,
+                nowListening = myStatus.nowListening,
+                profileViewModel = profileViewModel,
+                modifier = Modifier.weight(1f)
+            )
 
             // "Partner" Card
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(260.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = partnerName.uppercase(),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2A1B1D),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (partnerUsername.isNotBlank()) {
-                            Text(
-                                text = partnerUsername,
-                                fontSize = 9.sp,
-                                color = Color.Gray.copy(alpha = 0.8f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier.size(76.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFFFFF5F6), Color(0xFFE598A7), Color(0xFFFFF5F6))
-                                    )
-                                )
-                                .padding(3.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.White, CircleShape)
-                                    .padding(2.dp)
-                            ) {
-                                com.enclave.app.ui.profile.E2eeAvatar(
-                                    avatarBase64 = partnerProfile?.avatarUrl,
-                                    isMe = false,
-                                    profileViewModel = profileViewModel,
-                                    initials = partnerName.take(2),
-                                    size = 64.dp,
-                                    displayName = partnerProfile?.displayName?.ifBlank { partnerProfile?.username } ?: "Partner",
-                                    username = partnerProfile?.username,
-                                    bio = partnerProfile?.bio,
-                                    statusText = partnerStatus.statusText,
-                                    enablePreview = true
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.BottomEnd)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .border(1.dp, Color(0xFFFFF5F6), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(partnerStatus.moodEmoji.ifBlank { "❤️" }, fontSize = 12.sp)
-                        }
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(partnerStatus.statusText, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        val partnerWeatherStr = if (partnerStatus.weatherTemp != -999.0) {
-                            " • ${partnerStatus.weatherCondition} ${partnerStatus.weatherTemp.toInt()}°C"
-                        } else ""
-                        Text("🔋 Battery: ${partnerStatus.batteryPct}% • 🕒 ${partnerStatus.localTimeStr}$partnerWeatherStr", fontSize = 10.sp, color = Color.Gray)
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFFCE2E6))
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.MusicNote, contentDescription = "Listen", tint = Color(0xFF2A1B1D), modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(partnerStatus.nowListening, fontSize = 9.sp, color = Color(0xFF2A1B1D), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            PresenceCard(
+                isMe = false,
+                name = partnerName,
+                username = partnerUsername,
+                avatarLocalPath = null,
+                avatarUrl = partnerProfile?.avatarUrl,
+                bio = partnerProfile?.bio,
+                statusText = partnerStatus.statusText,
+                moodEmoji = partnerStatus.moodEmoji,
+                batteryPct = partnerStatus.batteryPct,
+                weatherTemp = partnerStatus.weatherTemp,
+                weatherCondition = partnerStatus.weatherCondition,
+                nowListening = partnerStatus.nowListening,
+                localTimeStr = partnerStatus.localTimeStr,
+                profileViewModel = profileViewModel,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         // Set Status Button
@@ -442,172 +266,32 @@ fun ProfileCardsTab(
         }
 
         // Shared visit countdown clock widget
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Shared Visit Countdown", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-                        Text(
-                            text = if (targetLabel.isNotEmpty()) targetLabel else "Set countdown to keep track of next meeting!",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                    }
-                    IconButton(onClick = { showCountdownDialog = true }) {
-                        Icon(Icons.Default.Timer, contentDescription = "Edit timer", tint = Color(0xFFE598A7))
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                if (isExpired) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFFFFF5F6))
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (targetLabel.isNotEmpty()) "Countdown expired! 💕" else "No countdown active",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFE598A7)
-                        )
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularCountdownUnit(
-                            value = days,
-                            label = "Days",
-                            progress = if (days > 30) 1.0f else days / 30.0f
-                        )
-                        CircularCountdownUnit(
-                            value = hours,
-                            label = "Hours",
-                            progress = hours / 24.0f
-                        )
-                        CircularCountdownUnit(
-                            value = minutes,
-                            label = "Mins",
-                            progress = minutes / 60.0f
-                        )
-                        CircularCountdownUnit(
-                            value = seconds,
-                            label = "Secs",
-                            progress = seconds / 60.0f
-                        )
-                    }
-                }
-
-            }
-        }
+        CountdownCard(
+            targetLabel = targetLabel,
+            isExpired = isExpired,
+            days = days,
+            hours = hours,
+            minutes = minutes,
+            seconds = seconds,
+            onEditClick = { showCountdownDialog = true }
+        )
 
         // Pulse Heartbeat Widget Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Tactile Heartbeat Synchronizer", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-                Text("Hold the heart to transmit your real-time vital sign pulse to your partner.", color = Color.Gray, fontSize = 11.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(110.dp)
-                        .scale(heartbeatScale)
-                        .clip(CircleShape)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0xFFFFF5F6), Color(0xFFFCE2E6))
-                            )
-                        )
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    awaitFirstDown()
-                                    isHoldingHeartbeat = true
-                                    waitForUpOrCancellation()
-                                    isHoldingHeartbeat = false
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Pulse heart",
-                        tint = if (isHoldingHeartbeat) Color.Red else Color(0xFFE598A7),
-                        modifier = Modifier.size(54.dp)
-                    )
-                }
-            }
-        }
+        HeartbeatCard(
+            isHoldingHeartbeat = isHoldingHeartbeat,
+            onHoldStart = { isHoldingHeartbeat = true },
+            onHoldEnd = { isHoldingHeartbeat = false },
+            heartbeatScale = heartbeatScale
+        )
 
         // SQLite Secure Backup Management Panel
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Enclave Database Encrypted Backup", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-                Text("Safeguard or migrate your ratchet databases via secure AES-256 GCM passphrase-encrypted backup files.", color = Color.Gray, fontSize = 11.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            showExportPassphraseDialog = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export Backup", fontSize = 11.sp)
-                    }
-
-                    Button(
-                        onClick = {
-                            com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
-                            importBackupLauncher.launch(arrayOf("*/*"))
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Restore Backup", fontSize = 11.sp)
-                    }
-                }
+        BackupManagementCard(
+            onExportClick = { showExportPassphraseDialog = true },
+            onRestoreClick = {
+                com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                importBackupLauncher.launch(arrayOf("*/*"))
             }
-        }
+        )
     }
 
     if (showEditDialog) {
