@@ -4,10 +4,6 @@ package com.enclave.app.ui.chat.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +19,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -35,7 +30,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.enclave.app.media.MemoryMediaDataSource
 import com.enclave.app.ui.chat.ChatMessage
 import com.enclave.app.ui.chat.ChatViewModel
 import com.enclave.app.ui.theme.*
@@ -65,22 +59,11 @@ fun SwipeToReplyMessageBubble(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .offset { IntOffset(offsetX.roundToInt(), 0) }
-            .draggable(
-                orientation = Orientation.Horizontal,
-                state = rememberDraggableState { delta ->
-                    val newOffset = offsetX + delta
-                    if (newOffset >= 0f && newOffset < 150f) {
-                        offsetX = newOffset
-                    }
-                },
-                onDragStopped = {
-                    if (offsetX > 80f) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.setReplyToMessage(message)
-                    }
-                    offsetX = 0f
-                }
+            .swipeToReplyGesture(
+                offsetX = offsetX,
+                onOffsetChange = { offsetX = it },
+                onReplyTriggered = { viewModel.setReplyToMessage(message) },
+                haptic = haptic
             ),
         contentAlignment = if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
@@ -105,21 +88,17 @@ fun SwipeToReplyMessageBubble(
                             bottomEnd = if (message.isFromMe) 4.dp else 20.dp
                         )
                     )
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onLongPress = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showContextMenu = true
-                            },
-                            onTap = {
-                                if (message.messageType == "MEDIA") {
-                                    onMediaClick()
-                                } else if (message.messageType == "RECORDED_KISS") {
-                                    viewModel.playRecordedKiss(message.id)
-                                }
+                    .messageContextMenuGesture(
+                        onLongPress = { showContextMenu = true },
+                        onTap = {
+                            if (message.messageType == "MEDIA") {
+                                onMediaClick()
+                            } else if (message.messageType == "RECORDED_KISS") {
+                                viewModel.playRecordedKiss(message.id)
                             }
-                        )
-                    }
+                        },
+                        haptic = haptic
+                    )
                     .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)
             ) {
                 Column(horizontalAlignment = Alignment.End) {
@@ -367,232 +346,6 @@ private fun KissMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
             fontSize = 12.sp,
             color = RoseAccent,
             fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun VoiceMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
-    val activePlayingId by viewModel.activePlayingVoiceMessageId.collectAsState()
-    val isPlaying = activePlayingId == message.id
-    var durationState by remember { mutableStateOf<Int?>(null) }
-
-    LaunchedEffect(message.id) {
-        val bytes = viewModel.getMediaBytes(message.id)
-        if (bytes != null) {
-            try {
-                val mp = android.media.MediaPlayer()
-                val dataSource = MemoryMediaDataSource(bytes)
-                mp.setDataSource(dataSource)
-                mp.prepare()
-                durationState = mp.duration / 1000
-                mp.release()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 4.dp)
-    ) {
-        IconButton(
-            onClick = { viewModel.playVoiceMessage(message.id) },
-            modifier = Modifier
-                .size(32.dp)
-                .background(CharcoalText.copy(alpha = 0.08f), CircleShape)
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = "Play voice capsule",
-                tint = CharcoalText,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.width(80.dp)
-        ) {
-            val heights = listOf(10, 16, 8, 20, 14, 24, 12, 18, 8, 14, 10)
-            heights.forEach { h ->
-                Box(
-                    modifier = Modifier
-                        .width(3.dp)
-                        .height(h.dp)
-                        .clip(RoundedCornerShape(1.5.dp))
-                        .background(if (isPlaying) RoseAccent else CharcoalText.copy(alpha = 0.3f))
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = durationState?.let { d -> "${d / 60}:${(d % 60).toString().padStart(2, '0')}" } ?: "0:00",
-            fontSize = 11.sp,
-            color = CharcoalText.copy(alpha = 0.6f)
-        )
-    }
-}
-
-@Composable
-private fun ImageMessageContent(
-    message: ChatMessage,
-    viewModel: ChatViewModel,
-    onMediaClick: () -> Unit
-) {
-    var bitmapState by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(message.id) {
-        val bytes = viewModel.getMediaBytes(message.id)
-        if (bytes != null) {
-            bitmapState = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        }
-        isLoading = false
-    }
-
-    DisposableEffect(message.id) {
-        onDispose { bitmapState = null }
-    }
-
-    if (isLoading) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(CharcoalText.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(
-                color = CharcoalText.copy(alpha = 0.3f),
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-    } else {
-        bitmapState?.let { bmp ->
-            androidx.compose.foundation.Image(
-                bitmap = bmp.asImageBitmap(),
-                contentDescription = "Decrypted Image Preview",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 200.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onMediaClick() }
-            )
-        } ?: Text("Failed to decrypt image", color = CharcoalText, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun VideoMessageContent(onMediaClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(160.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(CharcoalText.copy(alpha = 0.1f))
-            .clickable { onMediaClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.PlayCircleFilled,
-            contentDescription = "Play Video",
-            tint = RoseAccent,
-            modifier = Modifier.size(48.dp)
-        )
-        Text(
-            text = "Play Video",
-            color = CharcoalText.copy(alpha = 0.7f),
-            fontSize = 11.sp,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
-        )
-    }
-}
-
-@Composable
-private fun AudioFileMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
-    val activePlayingId by viewModel.activePlayingVoiceMessageId.collectAsState()
-    val isPlaying = activePlayingId == message.id
-    var durationState by remember { mutableStateOf<Int?>(null) }
-
-    LaunchedEffect(message.id) {
-        val bytes = viewModel.getMediaBytes(message.id)
-        if (bytes != null) {
-            try {
-                val mp = android.media.MediaPlayer()
-                val dataSource = MemoryMediaDataSource(bytes)
-                mp.setDataSource(dataSource)
-                mp.prepare()
-                durationState = mp.duration / 1000
-                mp.release()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(CharcoalText.copy(alpha = 0.05f))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        IconButton(
-            onClick = { viewModel.playVoiceMessage(message.id) },
-            modifier = Modifier
-                .size(36.dp)
-                .background(RoseAccent, CircleShape)
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = "Play audio file",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(
-                text = "🎵 Shared Audio",
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                color = CharcoalText
-            )
-            Text(
-                text = durationState?.let { d -> "${d / 60}:${(d % 60).toString().padStart(2, '0')}" } ?: "0:00",
-                fontSize = 10.sp,
-                color = CharcoalText.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun FileMessageContent(onMediaClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(CharcoalText.copy(alpha = 0.05f))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .clickable { onMediaClick() }
-    ) {
-        Icon(
-            imageVector = Icons.Default.InsertDriveFile,
-            contentDescription = "Document",
-            tint = RoseAccent,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "📄 Document",
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = CharcoalText
         )
     }
 }
