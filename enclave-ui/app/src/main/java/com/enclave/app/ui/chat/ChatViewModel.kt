@@ -55,11 +55,18 @@ class ChatViewModel(
     private val myId: String
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Connecting)
-    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+    private val chatSessionManager = com.enclave.app.ui.chat.session.ChatSessionManager(
+        context = context,
+        cryptoManager = cryptoManager,
+        bundleRepository = bundleRepository,
+        signalingClient = signalingClient,
+        database = database,
+        partnerId = partnerId,
+        onMessagePayloadReceived = { receiveMessagePayload(it) }
+    )
 
-    private val _partnerTyping = MutableStateFlow(false)
-    val partnerTyping: StateFlow<Boolean> = _partnerTyping.asStateFlow()
+    val uiState: StateFlow<ChatUiState> = chatSessionManager.uiState
+    val partnerTyping: StateFlow<Boolean> = chatSessionManager.partnerTyping
 
     private val _activePlayingVoiceMessageId = MutableStateFlow<String?>(null)
     val activePlayingVoiceMessageId: StateFlow<String?> = _activePlayingVoiceMessageId.asStateFlow()
@@ -102,7 +109,6 @@ class ChatViewModel(
 
     private val messageDecryptorUseCase = MessageDecryptorUseCase(database, cryptoManager, myId)
 
-    private var typingExpireJob: Job? = null
     private var recordingJob: Job? = null
     private var isChatActive = false
 
@@ -122,8 +128,7 @@ class ChatViewModel(
         )
 
     init {
-        initializeSession()
-        observeWebSocket()
+        chatSessionManager.start(viewModelScope)
         startLiveDisappearingTicker()
     }
 
@@ -140,120 +145,7 @@ class ChatViewModel(
         }
     }
 
-    private fun initializeSession() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Generates identity, pre-keys etc. locally
-                var localKeyRetryDelay = 2_000L
-                while (true) {
-                    try {
-                        cryptoManager.generateLocalKeysIfNecessary()
-                        break
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Local keys generation failed, retrying in ${localKeyRetryDelay}ms", e)
-                        delay(localKeyRetryDelay)
-                        localKeyRetryDelay = minOf(localKeyRetryDelay * 2, 10_000L)
-                    }
-                }
 
-                // Publish local Signal cryptographic key bundle to Supabase registry with retry backoff
-                var uploadRetryDelay = 5_000L
-                while (true) {
-                    try {
-                        _uiState.value = ChatUiState.Connecting
-                        bundleRepository.uploadLocalBundle()
-                        android.util.Log.d("ChatViewModel", "Local bundle uploaded successfully!")
-                        break
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Upload local bundle failed, retrying in ${uploadRetryDelay}ms", e)
-                        _uiState.value = ChatUiState.Connecting
-                        delay(uploadRetryDelay)
-                        uploadRetryDelay = minOf(uploadRetryDelay * 2, 30_000L)
-                    }
-                }
-
-                // Retry fetching partner bundle with backoff until they register
-                var retryDelay = 5_000L
-                while (true) {
-                    _uiState.value = ChatUiState.Handshaking
-                    val result = bundleRepository.fetchPartnerBundleAndBuildSession(partnerId)
-                    if (result.isSuccess) {
-                        _uiState.value = ChatUiState.Secured
-                        initializeSharedVaultKey()
-                        return@launch
-                    } else {
-                        val exception = result.exceptionOrNull()
-                        val msg = exception?.message ?: ""
-                        // If partner simply hasn't registered yet, wait and retry
-                        _uiState.value = ChatUiState.WaitingForPartner
-                        android.util.Log.e("ChatViewModel", "Partner not ready, retrying in ${retryDelay}ms: $msg", exception)
-                        delay(retryDelay)
-                        retryDelay = minOf(retryDelay * 2, 30_000L) // cap at 30s
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "Fatal session initialization error", e)
-                _uiState.value = ChatUiState.Error(e.message ?: "Unknown initialization error")
-            }
-        }
-    }
-
-    private fun observeWebSocket() {
-        viewModelScope.launch {
-            signalingClient.incomingRawMessages.collect { text ->
-                try {
-                    val msg = LenientJson.decodeFromString<SignalMessageWrapper>(text)
-                    if (msg.senderId != partnerId) return@collect
-
-                    when (msg.type) {
-                        "TYPING_STATUS" -> {
-                            val isTyping = msg.payload?.toBoolean() ?: false
-                            _partnerTyping.value = isTyping
-
-                            typingExpireJob?.cancel()
-                            if (isTyping) {
-                                typingExpireJob = viewModelScope.launch {
-                                    delay(5000)
-                                    _partnerTyping.value = false
-                                }
-                            }
-                        }
-                        "READ_RECEIPT" -> {
-                            val messageId = msg.payload
-                            if (messageId != null) {
-                                database.messageDao().updateDeliveryStatus(messageId, "READ")
-                            }
-                        }
-                        "DELIVERY_RECEIPT" -> {
-                            val messageId = msg.payload
-                            if (messageId != null) {
-                                val existing = database.messageDao().getMessageById(messageId)
-                                if (existing != null && existing.deliveryStatus != "READ") {
-                                    database.messageDao().updateDeliveryStatus(messageId, "DELIVERED")
-                                }
-                            }
-                        }
-                        // When partner sends a PROFILE_UPDATE after reconnecting,
-                        // try re-building the Signal session in case their keys rotated.
-                        "PROFILE_UPDATE" -> {
-                            if (_uiState.value is ChatUiState.WaitingForPartner ||
-                                _uiState.value is ChatUiState.Error) {
-                                retryHandshakeNow()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            signalingClient.incomingSignalPayloads.collect { payload ->
-                receiveMessagePayload(payload)
-            }
-        }
-    }
 
     fun markMessageAsRead(messageId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -289,7 +181,7 @@ class ChatViewModel(
             val replyTarget = _replyToMessage.value
             _replyToMessage.value = null // Clear active reply state
             
-            val isSecured = _uiState.value is ChatUiState.Secured
+            val isSecured = uiState.value is ChatUiState.Secured
             
             val result = messageSenderUseCase.sendMessage(text, replyTarget, disappearingMode.value, isSecured)
             if (result != null) {
@@ -394,8 +286,8 @@ class ChatViewModel(
                 // so future messages decrypt correctly.
                 val err = decryptionResult.exceptionOrNull()
                 android.util.Log.w("ChatViewModel", "Decryption failed, will attempt re-handshake: ${err?.message}")
-                if (_uiState.value is ChatUiState.Secured) {
-                    retryHandshakeNow()
+                if (uiState.value is ChatUiState.Secured) {
+                    chatSessionManager.retryHandshakeNow(viewModelScope)
                 }
             }
         }
@@ -419,27 +311,7 @@ class ChatViewModel(
         }
     }
 
-    /**
-     * Re-initiates the X3DH key bundle fetch and Signal session build.
-     * Called when: (a) decryption fails (partner may have re-keyed), or
-     * (b) partner comes online after being in WaitingForPartner/Error state.
-     */
-    private fun retryHandshakeNow() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                android.util.Log.d("ChatViewModel", "Retrying Signal session handshake...")
-                val result = bundleRepository.fetchPartnerBundleAndBuildSession(partnerId)
-                if (result.isSuccess) {
-                    _uiState.value = ChatUiState.Secured
-                    android.util.Log.d("ChatViewModel", "Re-handshake successful — session rebuilt")
-                } else {
-                    android.util.Log.w("ChatViewModel", "Re-handshake failed: ${result.exceptionOrNull()?.message}")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "Re-handshake error", e)
-            }
-        }
-    }
+
 
     fun deleteMessage(messageId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -780,51 +652,6 @@ class ChatViewModel(
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "Secure search failed", e)
             }
-        }
-    }
-
-    private fun initializeSharedVaultKey() {
-        val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-        var vaultKeyBase64 = prefs.getString("vault_key", null)
-        
-        if (vaultKeyBase64 == null) {
-            if (myId < partnerId) {
-                val newKey = com.enclave.app.crypto.VaultCipher.generateKey()
-                vaultKeyBase64 = Base64.encodeToString(newKey, Base64.NO_WRAP)
-                prefs.edit().putString("vault_key", vaultKeyBase64).apply()
-                
-                viewModelScope.launch {
-                    try {
-                        sendVaultKeyToPartner(newKey)
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Failed to send generated vault key", e)
-                    }
-                }
-            }
-        } else {
-            val keyBytes = Base64.decode(vaultKeyBase64, Base64.NO_WRAP)
-            viewModelScope.launch {
-                try {
-                    sendVaultKeyToPartner(keyBytes)
-                } catch (e: Exception) {
-                    android.util.Log.e("ChatViewModel", "Failed to sync existing vault key", e)
-                }
-            }
-        }
-    }
-
-    private suspend fun sendVaultKeyToPartner(keyBytes: ByteArray) {
-        val encryptedResult = cryptoManager.encryptMessage(partnerAddress, keyBytes)
-        if (encryptedResult.isSuccess) {
-            signalingClient.sendEncryptedMessage(
-                targetId = partnerId,
-                ciphertext = encryptedResult.getOrThrow(),
-                contentType = "VAULT_KEY_SYNC",
-                messageId = UUID.randomUUID().toString()
-            )
-            android.util.Log.d("ChatViewModel", "Successfully sent shared E2EE vault key to partner.")
-        } else {
-            android.util.Log.e("ChatViewModel", "Failed to encrypt vault key for partner", encryptedResult.exceptionOrNull())
         }
     }
 
