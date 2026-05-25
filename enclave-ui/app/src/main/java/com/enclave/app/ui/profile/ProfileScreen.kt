@@ -28,17 +28,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.data.local.UserProfileEntity
+import com.enclave.app.ui.profile.components.ProfileHeader
 
 private val BlushBg     = Color(0xFFFFF5F6)
 private val BlushAccent = Color(0xFFE598A7)
 private val BlushCard   = Color(0xFFFCE2E6)
 private val Charcoal    = Color(0xFF2A1B1D)
-
-val MOOD_EMOJIS = listOf("❤️","😊","🥰","😴","🔥","✨","🎵","📚","🍿","🌙","💪","🤫","💋","🥺","😂")
-val STORY_COLORS = listOf(
-    "#FCE2E6","#F8BBD0","#CE93D8","#90CAF9","#A5D6A7",
-    "#FFF176","#FFCC80","#80DEEA","#B0BEC5","#2A1B1D"
-)
 
 @Composable
 fun ProfileScreen(
@@ -137,77 +132,19 @@ fun ProfileScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // ── Header gradient bar ──────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0xFFF5C6CF), Color(0xFFFFF5F6))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Avatar circle
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(listOf(BlushAccent, Color(0xFFF5C6CF)))
-                        )
-                        .clickable {
-                            com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
-                            pickAvatarLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    val bitmap = avatarBitmap
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    } else {
-                        val initials = (editDisplayName.ifBlank { editUsername })
-                            .take(2).uppercase().ifBlank { "ME" }
-                        Text(initials, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                    
-                    // Small overlay to indicate change is possible
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoCamera,
-                            contentDescription = "Change Avatar",
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                // Mood badge overlay
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(x = 36.dp, y = (-8).dp)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .clickable { showMoodPicker = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(selectedMood, fontSize = 16.sp)
-                }
-            }
+            ProfileHeader(
+                avatarBitmap = avatarBitmap,
+                editDisplayName = editDisplayName,
+                editUsername = editUsername,
+                selectedMood = selectedMood,
+                onAvatarClick = {
+                    com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                    pickAvatarLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onMoodClick = { showMoodPicker = true }
+            )
 
             // ── Title ────────────────────────────────────────────────────
             Text(
