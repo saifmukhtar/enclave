@@ -18,6 +18,7 @@ Thumbs.db
 
 # IDEs and Editors (Android Studio, VS Code, etc.)
 .idea/
+.agents/
 .vscode/
 *.iml
 *.ipr
