@@ -42,6 +42,9 @@ interface MediaMetadataDao {
     @Query("SELECT * FROM media_metadata WHERE localEncryptedPath LIKE '%' || :query || '%' ORDER BY mediaId DESC")
     fun searchMedia(query: String): Flow<List<MediaMetadataEntity>>
 
+    @Query("SELECT * FROM media_metadata WHERE mediaId = :mediaId LIMIT 1")
+    suspend fun getMediaByIdSync(mediaId: String): MediaMetadataEntity?
+
     @Query("DELETE FROM media_metadata WHERE mediaId = :mediaId")
     suspend fun deleteById(mediaId: String)
 }

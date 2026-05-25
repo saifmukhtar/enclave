@@ -41,9 +41,21 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
+import org.webrtc.SurfaceViewRenderer
+import org.webrtc.VideoTrack
 
 @Serializable
 data class LoungePoint(val x: Float, val y: Float)
+
+data class ScratchState(
+    val bytes: ByteArray,
+    val isSender: Boolean,
+    val isSeen: Boolean = false,
+    val isDestroyed: Boolean = false
+)
+
+data class DrawingStroke(
+    val points: List<LoungePoint>, val colorHex: String, val brushWidth: Float)
 
 @Serializable
 data class LoungeStroke(val points: List<LoungePoint>, val colorHex: String, val brushWidth: Float)
@@ -107,10 +119,16 @@ class LoungeViewModel(
     private val database: EnclaveDatabase,
     private val partnerId: String,
     val myId: String,
-    private val bundleRepository: BundleRepository? = null
+    private val bundleRepository: BundleRepository? = null,
+    private val vaultRepository: com.enclave.app.data.vault.VaultRepository? = null
 ) : AndroidViewModel(application) {
 
-    private val vibratorManager = application.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+    private val vibratorManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        application.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+    } else {
+        null
+    }
+    private val vibratorLegacy = @Suppress("DEPRECATION") (application.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
     private val prefs = application.getSharedPreferences("enclave_lounge_prefs_${myId}", Context.MODE_PRIVATE)
 
     // --- Profile & Mood States ---
@@ -154,6 +172,9 @@ class LoungeViewModel(
     // --- Daily Letter Capsule States ---
     val decryptedLettersFlow = letterDao.getAllLettersFlow()
 
+    // --- E2EE Shared Notes ---
+    val encryptedNotesFlow = database.encryptedNoteDao().getAllNotesFlow()
+
     // Heartbeat Rate Limiter
     private var lastHeartbeatSentTime = 0L
 
@@ -162,8 +183,8 @@ class LoungeViewModel(
     val isUploading = MutableStateFlow(false)
 
     // --- Scratch-to-reveal Custom Photos ---
-    private val _scratchImageBytes = MutableStateFlow<ByteArray?>(null)
-    val scratchImageBytes: StateFlow<ByteArray?> = _scratchImageBytes.asStateFlow()
+    private val _scratchState = MutableStateFlow<ScratchState?>(null)
+    val scratchState: StateFlow<ScratchState?> = _scratchState.asStateFlow()
 
     // --- Drawings board gallery ---
     val loungeDrawings = MutableStateFlow<List<LoungeDrawing>>(emptyList())
@@ -277,14 +298,25 @@ class LoungeViewModel(
         syncMyStatus()
     }
 
-    fun setScratchImage(bytes: ByteArray?) {
-        _scratchImageBytes.value = bytes
-        if (bytes != null) {
-            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-            sendLoungeMessage("LOUNGE_SCRATCH_UPLOAD", base64)
-        } else {
-            sendLoungeMessage("LOUNGE_SCRATCH_UPLOAD", "")
-        }
+    fun sendScratchImage(bytes: ByteArray) {
+        _scratchState.value = ScratchState(bytes, isSender = true, isSeen = false)
+        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        sendLoungeMessage("LOUNGE_SCRATCH_UPLOAD", base64)
+    }
+
+    fun clearScratchImage() {
+        _scratchState.value = null
+        sendLoungeMessage("LOUNGE_SCRATCH_UPLOAD", "")
+    }
+
+    fun notifyScratchSeen() {
+        _scratchState.value = _scratchState.value?.copy(isSeen = true)
+        sendLoungeMessage("LOUNGE_SCRATCH_SEEN", "")
+    }
+
+    fun notifyScratchDestroyed() {
+        _scratchState.value = _scratchState.value?.copy(isDestroyed = true)
+        sendLoungeMessage("LOUNGE_SCRATCH_DESTROYED", "")
     }
 
     private suspend fun fetchWeatherForCity(city: String): Pair<Double, String>? {
@@ -492,11 +524,16 @@ class LoungeViewModel(
                 val bytes = outputStream.toByteArray()
 
                 val fileName = "drawing_${System.currentTimeMillis()}.png"
-                val url = repo.uploadDrawingFile(fileName, bytes)
-                repo.insertLoungeDrawing(title, url)
-
-                refreshDrawings()
-                sendLoungeMessage("LOUNGE_DRAWINGS_UPDATE", "")
+                
+                if (vaultRepository != null) {
+                    vaultRepository.saveSecureFile(fileName, bytes)
+                    // Optionally alert or toast? handled gracefully.
+                } else {
+                    val url = repo.uploadDrawingFile(fileName, bytes)
+                    repo.insertLoungeDrawing(title, url)
+                    refreshDrawings()
+                    sendLoungeMessage("LOUNGE_DRAWINGS_UPDATE", "")
+                }
             } catch (e: Exception) {
                 android.util.Log.e("LoungeViewModel", "saveCanvasToGallery failed", e)
             } finally {
@@ -711,7 +748,12 @@ class LoungeViewModel(
                     intArrayOf(0, 180, 0, 255),
                     -1
                 )
-                vibratorManager.vibrate(CombinedVibration.createParallel(effect))
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && vibratorManager != null) {
+                    vibratorManager.vibrate(CombinedVibration.createParallel(effect))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibratorLegacy?.vibrate(effect)
+                }
             } catch (_: Exception) {}
         }
     }
@@ -883,6 +925,74 @@ class LoungeViewModel(
         }
     }
 
+    fun deleteLetter(id: String) {
+        viewModelScope.launch {
+            letterDao.deleteLetterById(id)
+        }
+    }
+
+    // --- Encrypted Shared Notes ---
+    @Serializable
+    data class SyncedNotePayload(
+        val id: String,
+        val titlePayloadBase64: String,
+        val contentPayloadBase64: String,
+        val authorId: String
+    )
+
+    fun saveEncryptedNote(id: String = UUID.randomUUID().toString(), title: String, content: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val keyBase64 = getApplication<Application>().getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE).getString("vault_key", null)
+                if (keyBase64 == null) return@launch
+                val keyBytes = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+                
+                val titleEncrypted = com.enclave.app.crypto.VaultCipher.encrypt(title.toByteArray(Charsets.UTF_8), keyBytes)
+                val contentEncrypted = com.enclave.app.crypto.VaultCipher.encrypt(content.toByteArray(Charsets.UTF_8), keyBytes)
+                
+                val entity = com.enclave.app.data.local.EncryptedNoteEntity(
+                    id = id,
+                    titlePayload = titleEncrypted,
+                    contentPayload = contentEncrypted,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    authorId = myId,
+                    isSynced = true
+                )
+                database.encryptedNoteDao().insertNote(entity)
+                
+                val payload = SyncedNotePayload(
+                    id = id,
+                    titlePayloadBase64 = android.util.Base64.encodeToString(titleEncrypted, android.util.Base64.NO_WRAP),
+                    contentPayloadBase64 = android.util.Base64.encodeToString(contentEncrypted, android.util.Base64.NO_WRAP),
+                    authorId = myId
+                )
+                sendLoungeMessage("LOUNGE_NOTE_SYNC", Json.encodeToString(payload))
+            } catch (e: Exception) {
+                android.util.Log.e("LoungeViewModel", "Failed to save encrypted note", e)
+            }
+        }
+    }
+
+    fun deleteEncryptedNote(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.encryptedNoteDao().deleteNote(id)
+            sendLoungeMessage("LOUNGE_NOTE_DELETE", id)
+        }
+    }
+
+    fun decryptNoteField(encryptedBytes: ByteArray): String {
+        return try {
+            val keyBase64 = getApplication<Application>().getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE).getString("vault_key", null)
+                ?: return "Locked"
+            val keyBytes = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+            val decryptedBytes = com.enclave.app.crypto.VaultCipher.decrypt(encryptedBytes, keyBytes)
+            String(decryptedBytes, Charsets.UTF_8)
+        } catch (e: Exception) {
+            "Decryption failed"
+        }
+    }
+
     // --- WebSocket Signaling Handlers ---
     private fun sendLoungeMessage(type: String, payload: String) {
         viewModelScope.launch {
@@ -921,11 +1031,17 @@ class LoungeViewModel(
                             msg.payload?.let { base64 ->
                                 if (base64.isNotEmpty()) {
                                     val bytes = android.util.Base64.decode(base64, android.util.Base64.NO_WRAP)
-                                    _scratchImageBytes.value = bytes
+                                    _scratchState.value = ScratchState(bytes, isSender = false, isSeen = false)
                                 } else {
-                                    _scratchImageBytes.value = null
+                                    _scratchState.value = null
                                 }
                             }
+                        }
+                        "LOUNGE_SCRATCH_SEEN" -> {
+                            _scratchState.value = _scratchState.value?.copy(isSeen = true)
+                        }
+                        "LOUNGE_SCRATCH_DESTROYED" -> {
+                            _scratchState.value = _scratchState.value?.copy(isDestroyed = true)
                         }
                         "LOUNGE_DICE_ROLL" -> {
                             msg.payload?.let {
@@ -998,6 +1114,29 @@ class LoungeViewModel(
                                     isRead = false
                                 )
                                 letterDao.insertLetter(letterEntity)
+                            }
+                        }
+                        "LOUNGE_NOTE_SYNC" -> {
+                            msg.payload?.let {
+                                val payload = LenientJson.decodeFromString<SyncedNotePayload>(it)
+                                val titleBytes = android.util.Base64.decode(payload.titlePayloadBase64, android.util.Base64.NO_WRAP)
+                                val contentBytes = android.util.Base64.decode(payload.contentPayloadBase64, android.util.Base64.NO_WRAP)
+                                
+                                val entity = com.enclave.app.data.local.EncryptedNoteEntity(
+                                    id = payload.id,
+                                    titlePayload = titleBytes,
+                                    contentPayload = contentBytes,
+                                    createdAt = System.currentTimeMillis(),
+                                    updatedAt = System.currentTimeMillis(),
+                                    authorId = payload.authorId,
+                                    isSynced = true
+                                )
+                                database.encryptedNoteDao().insertNote(entity)
+                            }
+                        }
+                        "LOUNGE_NOTE_DELETE" -> {
+                            msg.payload?.let { id ->
+                                database.encryptedNoteDao().deleteNote(id)
                             }
                         }
                         "LOUNGE_PLAYLIST_UPDATE" -> {

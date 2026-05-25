@@ -271,9 +271,9 @@ fun LoginScreen(
                         onClick = {
                             if (isEmailValid && isPasswordValid && isEmailWhitelisted) {
                                 if (isSignUp) {
-                                    onSignUpSuccess(email.trim(), password)
+                                    onSignUpSuccess(email.trim().lowercase(), password)
                                 } else {
-                                    onLoginSuccess(email.trim(), password)
+                                    onLoginSuccess(email.trim().lowercase(), password)
                                 }
                             }
                         },

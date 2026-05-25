@@ -99,20 +99,16 @@ class SignalingClient(
                 }
                 if (parsedHost != null && !parsedHost.replace(".", "").all { it.isDigit() } && parsedHost != "localhost") {
                     val pinner = okhttp3.CertificatePinner.Builder()
-                        .add("*.$parsedHost", "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
-                        .add("*.$parsedHost", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
                         .add("*.$parsedHost", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
-                        .add("*.$parsedHost", "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
-                        .add(parsedHost, "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
-                        .add(parsedHost, "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
                         .add(parsedHost, "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
-                        .add(parsedHost, "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
                         .build()
                     certificatePinner(pinner)
                 }
             }
         }
     }
+
+    private val pendingMessagesQueue = java.util.concurrent.ConcurrentLinkedQueue<SignalMessageWrapper>()
 
     private val _incomingSignalPayloads = MutableSharedFlow<EncryptedSignalPayload>(replay = 100, extraBufferCapacity = 100)
     val incomingSignalPayloads: SharedFlow<EncryptedSignalPayload> = _incomingSignalPayloads.asSharedFlow()
@@ -163,6 +159,18 @@ class SignalingClient(
                         val registerMsg = SignalMessageWrapper(type = "REGISTER", senderId = myId)
                         Log.d("SignalingClient", "Sending REGISTER: $registerMsg")
                         send(Frame.Text(Json.encodeToString(registerMsg)))
+
+                        // Flush client-side pending queue!
+                        while (isActive && _connectionState.value == ConnectionState.CONNECTED) {
+                            val msg = pendingMessagesQueue.poll() ?: break
+                            try {
+                                Log.d("SignalingClient", "Flushing queued pending message: ${msg.type}")
+                                send(Frame.Text(Json.encodeToString(msg)))
+                            } catch (e: Exception) {
+                                pendingMessagesQueue.add(msg)
+                                break
+                            }
+                        }
 
                         // Listen for incoming messages
                         for (frame in incoming) {
@@ -218,8 +226,17 @@ class SignalingClient(
             contentType = contentType,
             messageId = messageId
         )
-        val frameText = Json.encodeToString(msg)
-        session?.send(Frame.Text(frameText)) ?: Log.w("SignalingClient", "Cannot send, session is null")
+        if (isConnected() && session != null) {
+            try {
+                session?.send(Frame.Text(Json.encodeToString(msg)))
+            } catch (e: Exception) {
+                Log.w("SignalingClient", "Failed to send, queueing message: ${e.message}")
+                pendingMessagesQueue.add(msg)
+            }
+        } else {
+            Log.d("SignalingClient", "Session is offline, queueing encrypted message")
+            pendingMessagesQueue.add(msg)
+        }
     }
 
     suspend fun sendWebRtcMessage(targetId: String, type: String, payload: String) {

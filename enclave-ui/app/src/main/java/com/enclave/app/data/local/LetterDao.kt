@@ -16,4 +16,7 @@ interface LetterDao {
 
     @Delete
     suspend fun deleteLetter(letter: LetterEntity)
+
+    @Query("DELETE FROM daily_letters WHERE id = :id")
+    suspend fun deleteLetterById(id: String)
 }

@@ -1,7 +1,7 @@
 package com.enclave.app.ui.kiss
 
 import androidx.compose.runtime.Composable
-import com.enclave.app.ui.chat.KissGestureCanvasOverlay
+import com.enclave.app.ui.chat.components.KissGestureCanvasOverlay
 
 @Composable
 fun KissScreen(

@@ -166,7 +166,7 @@ class MusicSyncController(
             }
 
             // Drift Compensation Interpolation
-            val latency = System.currentTimeMillis() - remoteTimestamp
+            val latency = (System.currentTimeMillis() - remoteTimestamp).coerceIn(0L, 2500L)
             val truePosition = remotePosition + latency
 
             when (action) {
@@ -177,7 +177,7 @@ class MusicSyncController(
                 }
                 "MUSIC_PLAY" -> {
                     val alreadyPlaying = mediaController.isPlaying
-                    val positionClose = Math.abs(mediaController.currentPosition - truePosition) < 1000
+                    val positionClose = Math.abs(mediaController.currentPosition - truePosition) < 1500
                     if (alreadyPlaying && positionClose) {
                         // Echo deflection: already running matching state
                         return
@@ -200,7 +200,7 @@ class MusicSyncController(
                     mediaController.pause()
                 }
                 "MUSIC_SEEK" -> {
-                    val positionClose = Math.abs(mediaController.currentPosition - truePosition) < 1000
+                    val positionClose = Math.abs(mediaController.currentPosition - truePosition) < 1500
                     if (positionClose) {
                         // Echo deflection: already seeked to similar playhead position
                         return

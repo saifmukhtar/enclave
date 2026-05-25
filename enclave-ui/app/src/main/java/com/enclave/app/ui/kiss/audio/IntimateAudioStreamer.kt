@@ -118,10 +118,10 @@ class IntimateAudioStreamer(
             )
         }
 
-        // Configure JavaAudioDeviceModule to strictly bypass hardware AEC and Noise Suppression
+        // Configure JavaAudioDeviceModule to enable hardware AEC and Noise Suppression for clear audio
         val audioDeviceModule = JavaAudioDeviceModule.builder(context)
-            .setUseHardwareAcousticEchoCanceler(false)
-            .setUseHardwareNoiseSuppressor(false)
+            .setUseHardwareAcousticEchoCanceler(true)
+            .setUseHardwareNoiseSuppressor(true)
             .createAudioDeviceModule()
 
         val options = PeerConnectionFactory.Options()
@@ -159,13 +159,12 @@ class IntimateAudioStreamer(
     }
 
     private fun setupLocalAudioTrack() {
-        // Configure MediaConstraints to strictly disable WebRTC software-level noise suppression,
-        // high-pass filtering, automatic gain control, and echo cancellation for pure raw ASMR stream
+        // Configure MediaConstraints to enable WebRTC software-level noise suppression and echo cancellation for clear communication
         val audioConstraints = MediaConstraints().apply {
-            mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression", "false"))
-            mandatory.add(MediaConstraints.KeyValuePair("googHighpassFilter", "false"))
-            mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl", "false"))
-            mandatory.add(MediaConstraints.KeyValuePair("echoCancellation", "false"))
+            mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googHighpassFilter", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("echoCancellation", "true"))
         }
 
         val audioSource = peerConnectionFactory?.createAudioSource(audioConstraints)

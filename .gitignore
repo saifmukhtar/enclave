@@ -29,6 +29,7 @@ Thumbs.db
 *.sublime-workspace
 .directory
 logcat.txt
+bugs.md
 # ------------------------------------------------------------------------------
 # Enclave Client (Android) Ignored Files
 # ------------------------------------------------------------------------------

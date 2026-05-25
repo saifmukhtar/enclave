@@ -52,6 +52,10 @@ class BiometricPromptManager(
             return
         }
         if (_authState.value == AuthState.UNLOCKED) return
+        if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            android.util.Log.d("BiometricPrompt", "Ignoring authenticate request as activity is not resumed")
+            return
+        }
         _authState.value = AuthState.AUTHENTICATING
 
         val executor = ContextCompat.getMainExecutor(activity)

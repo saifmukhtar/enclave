@@ -110,6 +110,7 @@ fun VideoCallScreen(viewModel: CallViewModel) {
                                     CallState.RINGING_OUTGOING -> "Ringing..."
                                     CallState.RINGING_INCOMING -> "Incoming Secure Call"
                                     CallState.CONNECTING -> "Connecting..."
+                                    CallState.ACTIVE -> if (viewModel.isAudioOnly.collectAsState().value) "Secure Audio Call" else "Connecting Video..."
                                     else -> ""
                                 },
                                 fontSize = 24.sp,
@@ -287,23 +288,40 @@ fun VideoRenderer(
     eglBaseContext: EglBase.Context,
     modifier: Modifier = Modifier
 ) {
+    var viewRef by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
+
     AndroidView(
         factory = { ctx ->
             SurfaceViewRenderer(ctx).apply {
                 init(eglBaseContext, null)
                 setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                 setEnableHardwareScaler(true)
+                viewRef = this
             }
         },
-        update = { view ->
-            if (videoTrack != null) {
-                videoTrack.addSink(view)
-            } else {
-                videoTrack?.removeSink(view)
-            }
+        update = {
+            // Track binding and releasing is managed cleanly by the DisposableEffect lifecycle
         },
         modifier = modifier
     )
+
+    DisposableEffect(videoTrack, viewRef) {
+        val view = viewRef
+        if (view != null && videoTrack != null) {
+            videoTrack.addSink(view)
+        }
+        onDispose {
+            if (view != null && videoTrack != null) {
+                videoTrack.removeSink(view)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewRef?.release()
+        }
+    }
 }
 
 private val Color.Companion.white: Color

@@ -23,8 +23,9 @@
     <!-- Notifications — FCM push alerts and kiss invite notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Foreground Services — Screen share capture and music playback -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Foreground Services — Screen share capture, music playback, and background sync -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
@@ -43,10 +44,18 @@
             android:exported="true"
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Deep Link for Cryptographic Invite Pairing -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="enclave" android:host="invite" />
             </intent-filter>
         </activity>
 
@@ -60,19 +69,34 @@
             </intent-filter>
         </service>
 
-        <!-- FCM messaging service — primary handler for silent push wake-ups -->
-        <service
-            android:name=".notifications.MyFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <!-- Screen share foreground service (WebRTC MediaProjection) -->
         <service
             android:name=".webrtc.ScreenShareService"
             android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
+
+        <!-- Ntfy Native WebSocket Listener -->
+        <service
+            android:name=".notifications.NtfyListenerService"
+            android:foregroundServiceType="remoteMessaging"
+            android:exported="false" />
+
+        <!-- Companion Status Widget -->
+        <receiver
+            android:name=".ui.widget.CompanionWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/companion_widget_info" />
+        </receiver>
+
+        <!-- WorkManager foreground service for data sync workers -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
             android:exported="false" />
 
     </application>

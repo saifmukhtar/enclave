@@ -72,6 +72,52 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS outbox_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                targetId TEXT NOT NULL,
+                type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                contentType TEXT,
+                messageId TEXT,
+                timestamp INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS time_capsules (
+                id TEXT NOT NULL PRIMARY KEY,
+                targetId TEXT NOT NULL,
+                payloadText TEXT NOT NULL,
+                sendAt INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS encrypted_notes (
+                id TEXT NOT NULL PRIMARY KEY,
+                titlePayload BLOB NOT NULL,
+                contentPayload BLOB NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                authorId TEXT NOT NULL,
+                isSynced INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+    }
+}
+
 @Database(
     entities = [
         MessageEntity::class,
@@ -79,9 +125,12 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         LetterEntity::class,
         UserProfileEntity::class,
         StatusStoryEntity::class,
-        CallLogEntity::class
+        CallLogEntity::class,
+        OutboxEntity::class,
+        TimeCapsuleEntity::class,
+        EncryptedNoteEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = false
 )
 abstract class EnclaveDatabase : RoomDatabase() {
@@ -91,6 +140,9 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun userProfileDao(): UserProfileDao
     abstract fun statusStoryDao(): StatusStoryDao
     abstract fun callLogDao(): CallLogDao
+    abstract fun outboxDao(): OutboxDao
+    abstract fun timeCapsuleDao(): TimeCapsuleDao
+    abstract fun encryptedNoteDao(): EncryptedNoteDao
 
     companion object {
         @Volatile
@@ -103,7 +155,7 @@ abstract class EnclaveDatabase : RoomDatabase() {
                     EnclaveDatabase::class.java,
                     "enclave_db"
                 )
-                .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

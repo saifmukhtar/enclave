@@ -55,6 +55,9 @@ curl -s http://localhost:8085/healthz > /dev/null && echo -e "${GREEN}✓${NC}" 
 echo -n "  Supabase Studio (port 3000): "
 curl -s http://localhost:3000/ > /dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
 
+echo -n "  Ntfy Push Server (port 2586): "
+curl -s http://localhost:2586/v1/health > /dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
+
 # Setup Android Client
 echo ""
 echo -e "${BLUE}4️⃣  Setting up Android Client...${NC}"

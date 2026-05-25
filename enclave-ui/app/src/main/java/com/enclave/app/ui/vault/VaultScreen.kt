@@ -117,6 +117,8 @@ fun VaultScreen(
                 subtitle = "Confirm fingerprint or PIN to view encrypted files"
             )
             viewModel.clearVaultItems()
+        } else if (authState == BiometricPromptManager.AuthState.UNLOCKED) {
+            viewModel.syncVault()
         }
     }
 

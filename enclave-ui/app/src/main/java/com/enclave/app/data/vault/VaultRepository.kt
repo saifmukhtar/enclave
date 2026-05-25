@@ -28,9 +28,21 @@ sealed class ImportResult {
 }
 
 class VaultRepository(
+    private val context: Context,
     val encryptedFileManager: EncryptedFileManager,
-    val mediaMetadataDao: MediaMetadataDao
+    val mediaMetadataDao: MediaMetadataDao,
+    val bundleRepository: com.enclave.app.network.BundleRepository
 ) {
+
+    private fun getSharedVaultKey(): ByteArray? {
+        val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+        val keyBase64 = prefs.getString("vault_key", null) ?: return null
+        return try {
+            android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private val memoryCache: LruCache<String, Bitmap> by lazy {
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
@@ -64,7 +76,20 @@ class VaultRepository(
     }
 
     suspend fun saveSecureFile(fileName: String, data: ByteArray) = withContext(Dispatchers.IO) {
-        encryptedFileManager.writeSecureFile(fileName, data)
+        val vaultKey = getSharedVaultKey()
+        if (vaultKey != null) {
+            try {
+                val encrypted = com.enclave.app.crypto.VaultCipher.encrypt(data, vaultKey)
+                val rawFile = encryptedFileManager.getRawFile(fileName)
+                if (rawFile.exists()) rawFile.delete()
+                rawFile.writeBytes(encrypted)
+            } catch (e: Exception) {
+                android.util.Log.e("VaultRepository", "VaultCipher encryption failed, falling back to EncryptedFile", e)
+                encryptedFileManager.writeSecureFile(fileName, data)
+            }
+        } else {
+            encryptedFileManager.writeSecureFile(fileName, data)
+        }
     }
 
     suspend fun getDecryptedImageBitmap(fileName: String, reqWidth: Int = 512, reqHeight: Int = 512): Bitmap? = withContext(Dispatchers.IO) {
@@ -75,9 +100,21 @@ class VaultRepository(
                 return@withContext cached
             }
 
-            val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
-            val bytes = stream.readBytes()
-            stream.close()
+            val vaultKey = getSharedVaultKey()
+            val bytes = if (vaultKey != null) {
+                try {
+                    val rawFile = encryptedFileManager.getRawFile(fileName)
+                    val encryptedBytes = rawFile.readBytes()
+                    com.enclave.app.crypto.VaultCipher.decrypt(encryptedBytes, vaultKey)
+                } catch (e: Exception) {
+                    android.util.Log.w("VaultRepository", "VaultCipher decrypt failed, falling back to EncryptedFile", e)
+                    val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+                    stream.use { it.readBytes() }
+                }
+            } else {
+                val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+                stream.use { it.readBytes() }
+            }
 
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
@@ -133,7 +170,20 @@ class VaultRepository(
 
     suspend fun exportToPublic(fileName: String, context: Context): Boolean = withContext(Dispatchers.IO) {
         try {
-            val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+            val vaultKey = getSharedVaultKey()
+            val bytes = if (vaultKey != null) {
+                try {
+                    val rawFile = encryptedFileManager.getRawFile(fileName)
+                    val encryptedBytes = rawFile.readBytes()
+                    com.enclave.app.crypto.VaultCipher.decrypt(encryptedBytes, vaultKey)
+                } catch (e: Exception) {
+                    val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+                    stream.use { it.readBytes() }
+                }
+            } else {
+                val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+                stream.use { it.readBytes() }
+            }
             
             val isVideo = fileName.contains("video") || fileName.endsWith(".mp4") || fileName.endsWith(".mkv")
             val mimeType = if (isVideo) "video/mp4" else "image/jpeg"
@@ -153,16 +203,14 @@ class VaultRepository(
             val uri = context.contentResolver.insert(collection, values)
             if (uri != null) {
                 context.contentResolver.openOutputStream(uri)?.use { os ->
-                    stream.copyTo(os)
+                    os.write(bytes)
                 }
 
                 values.clear()
                 values.put(MediaStore.MediaColumns.IS_PENDING, 0)
                 context.contentResolver.update(uri, values, null, null)
-                stream.close()
                 true
             } else {
-                stream.close()
                 false
             }
         } catch (e: Exception) {
@@ -232,6 +280,31 @@ class VaultRepository(
                     )
                     mediaMetadataDao.insertMedia(entity)
                     urisToDelete.add(uri)
+
+                    // 4. E2EE Collaborative Cloud Vault sync
+                    val vaultKey = getSharedVaultKey()
+                    if (vaultKey != null) {
+                        try {
+                            val mainBytes = encryptedFileManager.getRawFile(fileName).readBytes()
+                            bundleRepository.uploadVaultFile(fileName, mainBytes)
+
+                            if (thumbnailPath.isNotEmpty()) {
+                                val thumbBytes = encryptedFileManager.getRawFile(thumbnailPath).readBytes()
+                                bundleRepository.uploadVaultFile(thumbnailPath, thumbBytes)
+                            }
+
+                            bundleRepository.insertVaultMetadata(
+                                mediaId = mediaId,
+                                localPath = fileName,
+                                mimeType = mimeType,
+                                sizeBytes = finalBytes.size.toLong(),
+                                folderName = folderName,
+                                thumbnailPath = thumbnailPath
+                            )
+                        } catch (ex: Exception) {
+                            android.util.Log.e("VaultRepository", "Cooperative Cloud Vault sync failed for $fileName", ex)
+                        }
+                    }
                 }
             }
 
@@ -265,6 +338,56 @@ class VaultRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             ImportResult.Error(e)
+        }
+    }
+
+    suspend fun syncSharedVault() = withContext(Dispatchers.IO) {
+        getSharedVaultKey() ?: return@withContext
+        try {
+            val remoteMetaList = bundleRepository.fetchRemoteVaultMetadata()
+            for (meta in remoteMetaList) {
+                val localEntity = mediaMetadataDao.getMediaByIdSync(meta.media_id)
+                if (localEntity == null) {
+                    // Download and register locally
+                    try {
+                        val mainPath = "${meta.uploaded_by}/${meta.local_encrypted_path}"
+                        val mainBytes = bundleRepository.downloadVaultFile(mainPath)
+
+                        // Save main file raw encrypted bytes directly to disk
+                        val rawFile = encryptedFileManager.getRawFile(meta.local_encrypted_path)
+                        if (rawFile.exists()) rawFile.delete()
+                        rawFile.writeBytes(mainBytes)
+
+                        // Download thumbnail if present
+                        if (meta.thumbnail_path.isNotEmpty()) {
+                            val thumbPath = "${meta.uploaded_by}/${meta.thumbnail_path}"
+                            val thumbBytes = bundleRepository.downloadVaultFile(thumbPath)
+                            val rawThumbFile = encryptedFileManager.getRawFile(meta.thumbnail_path)
+                            if (rawThumbFile.exists()) rawThumbFile.delete()
+                            rawThumbFile.writeBytes(thumbBytes)
+                        }
+
+                        // Insert local Room Database Record
+                        val entity = MediaMetadataEntity(
+                            mediaId = meta.media_id,
+                            messageId = "",
+                            localEncryptedPath = meta.local_encrypted_path,
+                            mimeType = meta.mime_type,
+                            sizeBytes = meta.size_bytes,
+                            isEphemeral = false,
+                            expiresAt = null,
+                            folderName = meta.folder_name,
+                            thumbnailPath = meta.thumbnail_path
+                        )
+                        mediaMetadataDao.insertMedia(entity)
+                        android.util.Log.d("VaultRepository", "Synced remote vault file: ${meta.local_encrypted_path}")
+                    } catch (e: Exception) {
+                        android.util.Log.e("VaultRepository", "Failed to download remote file: ${meta.local_encrypted_path}", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VaultRepository", "syncSharedVault failed", e)
         }
     }
 }

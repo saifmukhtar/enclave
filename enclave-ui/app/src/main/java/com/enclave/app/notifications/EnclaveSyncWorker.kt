@@ -11,6 +11,9 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.SessionStatus
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.realtime.Realtime
 import kotlinx.coroutines.flow.first
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -23,8 +26,11 @@ import com.enclave.app.data.local.MIGRATION_8_9
 import com.enclave.app.data.local.MessageEntity
 import com.enclave.app.data.vault.EncryptedFileManager
 import com.enclave.app.data.vault.VaultRepository
+import com.enclave.app.network.BundleRepository
 import com.enclave.app.webrtc.SignalingClient
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import org.signal.libsignal.protocol.SignalProtocolAddress
 
 class EnclaveSyncWorker(
@@ -60,7 +66,6 @@ class EnclaveSyncWorker(
         val database = EnclaveDatabase.getInstance(applicationContext)
 
         val encryptedFileManager = EncryptedFileManager(applicationContext)
-        val vaultRepository = VaultRepository(encryptedFileManager, database.mediaMetadataDao())
 
         // Initialize Supabase Auth to fetch cached user session tokens for signaling authentication
         val supabase = createSupabaseClient(
@@ -69,6 +74,9 @@ class EnclaveSyncWorker(
         ) {
             httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
                  config {
+                    connectTimeout(java.time.Duration.ofMinutes(5))
+                    readTimeout(java.time.Duration.ofMinutes(5))
+                    writeTimeout(java.time.Duration.ofMinutes(5))
                     val parsedHost = try {
                         java.net.URI(BuildConfig.SUPABASE_URL).host
                     } catch (e: Exception) {
@@ -76,24 +84,32 @@ class EnclaveSyncWorker(
                     }
                     if (parsedHost != null && !parsedHost.replace(".", "").all { it.isDigit() } && parsedHost != "localhost") {
                         val pinner = okhttp3.CertificatePinner.Builder()
-                            .add("*.$parsedHost", "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
-                            .add("*.$parsedHost", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
                             .add("*.$parsedHost", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
-                            .add("*.$parsedHost", "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
-                            .add(parsedHost, "sha256/6FEdwbfevj7DPz32xWe5r22KS2UuPuPPoW169l3io0g=")
-                            .add(parsedHost, "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=")
                             .add(parsedHost, "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
-                            .add(parsedHost, "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=")
                             .build()
                         certificatePinner(pinner)
                     }
                 }
             }
             install(Auth)
+            install(Postgrest)
+            install(Storage)
+            install(Realtime)
+            
+            defaultSerializer = io.github.jan.supabase.serializer.KotlinXSerializer(
+                kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                    isLenient         = true
+                    coerceInputValues = true
+                }
+            )
         }
 
         // Wait for session status flow to finish initial load of cached session
         supabase.auth.sessionStatus.first { it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated }
+
+        val bundleRepository = BundleRepository(supabase, cryptoManager.signalStore, cryptoManager)
+        val vaultRepository = VaultRepository(applicationContext, encryptedFileManager, database.mediaMetadataDao(), bundleRepository)
 
         val signalingClient = SignalingClient(
             url = BuildConfig.SIGNALING_SERVER_URL,
@@ -104,6 +120,54 @@ class EnclaveSyncWorker(
 
         try {
             withTimeoutOrNull<Unit>(5000) {
+                coroutineScope {
+                    launch {
+                    signalingClient.incomingRawMessages.collect { raw ->
+                        try {
+                            val msg = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.webrtc.SignalMessageWrapper>(raw)
+                            if (msg.senderId != partnerId) return@collect
+                            when (msg.type) {
+                                "STORY_SHARE" -> {
+                                    msg.payload?.let { payload ->
+                                        try {
+                                            val story = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.profile.StorySharePayload>(payload)
+                                            val encryptedBytes = android.util.Base64.decode(story.encryptedContent, android.util.Base64.NO_WRAP)
+                                            val decryptedResult = cryptoManager.decryptMessage(partnerAddress, encryptedBytes)
+                                            if (decryptedResult.isSuccess) {
+                                                val decryptedBytes = decryptedResult.getOrThrow()
+                                                val reEncrypted = cryptoManager.encryptLocal(decryptedBytes)
+                                                database.statusStoryDao().upsertStory(
+                                                    com.enclave.app.data.local.StatusStoryEntity(
+                                                        id = story.storyId,
+                                                        authorId = partnerId,
+                                                        contentType = story.contentType,
+                                                        encryptedPayload = reEncrypted,
+                                                        backgroundColor = story.backgroundColor,
+                                                        expiresAt = story.expiresAt,
+                                                        createdAt = story.createdAt,
+                                                        isFromMe = false
+                                                    )
+                                                )
+                                                showDecryptedNotification("New Status Story from Partner")
+                                            }
+                                            Unit
+                                        } catch (e: Exception) {
+                                            Log.e("EnclaveSyncWorker", "Error parsing incoming story share", e)
+                                        }
+                                    }
+                                }
+                                "STORY_VIEWED" -> {
+                                    msg.payload?.let { payload ->
+                                        database.statusStoryDao().markViewed(payload, System.currentTimeMillis())
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("EnclaveSyncWorker", "Failed parsing raw message", e)
+                        }
+                    }
+                }
+                
                 signalingClient.incomingSignalPayloads.collect { payload ->
                     val decryptionResult = cryptoManager.decryptMessage(partnerAddress, payload.ciphertext)
                     if (decryptionResult.isSuccess) {
@@ -133,12 +197,76 @@ class EnclaveSyncWorker(
                             return@collect
                         }
 
-                        val localEncrypted = if (baseType == "MEDIA" || baseType == "VOICE") {
-                            val fileName = if (baseType == "MEDIA") {
-                                "received_${System.currentTimeMillis()}.jpg"
-                            } else {
-                                "received_${System.currentTimeMillis()}.m4a"
+                        if (baseType == "VAULT_KEY_SYNC") {
+                            val keyBase64 = android.util.Base64.encodeToString(decryptedBytes, android.util.Base64.NO_WRAP)
+                            applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+                                .edit().putString("vault_key", keyBase64).apply()
+                            Log.d("EnclaveSyncWorker", "Successfully received and saved shared E2EE vault key from partner.")
+                            return@collect
+                        }
+
+                        if (baseType.startsWith("LOUNGE_")) {
+                            if (baseType == "LOUNGE_NOTE_SYNC") {
+                                try {
+                                    val text = String(decryptedBytes, Charsets.UTF_8)
+                                    val payloadObj = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.lounge.LoungeViewModel.SyncedNotePayload>(text)
+                                    val entity = com.enclave.app.data.local.EncryptedNoteEntity(
+                                        id = payloadObj.id,
+                                        titlePayload = android.util.Base64.decode(payloadObj.titlePayloadBase64, android.util.Base64.NO_WRAP),
+                                        contentPayload = android.util.Base64.decode(payloadObj.contentPayloadBase64, android.util.Base64.NO_WRAP),
+                                        createdAt = System.currentTimeMillis(),
+                                        updatedAt = System.currentTimeMillis(),
+                                        authorId = partnerId,
+                                        isSynced = true
+                                    )
+                                    database.encryptedNoteDao().insertNote(entity)
+                                    showDecryptedNotification("New Shared Note Received")
+                                } catch (e: Exception) {
+                                    Log.e("EnclaveSyncWorker", "Failed to parse LOUNGE_NOTE_SYNC", e)
+                                }
+                            } else if (baseType == "LOUNGE_NOTE_DELETE") {
+                                val id = String(decryptedBytes, Charsets.UTF_8)
+                                database.encryptedNoteDao().deleteNote(id)
+                            } else if (baseType == "LOUNGE_DAILY_LETTER") {
+                                try {
+                                    val text = String(decryptedBytes, Charsets.UTF_8)
+                                    val payloadObj = com.enclave.app.webrtc.LenientJson.decodeFromString<com.enclave.app.ui.lounge.SyncedLetterPayload>(text)
+                                    val cal = java.util.Calendar.getInstance()
+                                    val dateStr = "${cal.get(java.util.Calendar.YEAR)}-${cal.get(java.util.Calendar.MONTH) + 1}-${cal.get(java.util.Calendar.DAY_OF_MONTH)}"
+                                    val enc = cryptoManager.encryptLocal(payloadObj.plainContent.toByteArray(Charsets.UTF_8))
+                                    val entity = com.enclave.app.data.local.LetterEntity(
+                                        id = java.util.UUID.randomUUID().toString(),
+                                        senderId = payloadObj.senderId,
+                                        ciphertext = enc,
+                                        createdAt = System.currentTimeMillis(),
+                                        isRead = false
+                                    )
+                                    database.letterDao().insertLetter(entity)
+                                    showDecryptedNotification("Daily Letter Received")
+                                } catch (e: Exception) {
+                                    Log.e("EnclaveSyncWorker", "Failed to parse LOUNGE_DAILY_LETTER", e)
+                                }
                             }
+                            return@collect
+                        }
+
+                        val localEncrypted = if (baseType == "MEDIA" || baseType == "MEDIA_IMAGE" || baseType == "MEDIA_VIDEO" || baseType == "MEDIA_AUDIO" || baseType == "MEDIA_FILE" || baseType == "VOICE") {
+                            val ext = when (baseType) {
+                                "MEDIA", "MEDIA_IMAGE" -> "jpg"
+                                "MEDIA_VIDEO" -> "mp4"
+                                "MEDIA_AUDIO" -> "mp3"
+                                "MEDIA_FILE" -> {
+                                    var parsedExt = "bin"
+                                    parts.forEach { part ->
+                                        if (part.startsWith("ext=")) {
+                                            parsedExt = part.substringAfter("ext=")
+                                        }
+                                    }
+                                    parsedExt
+                                }
+                                else -> "m4a"
+                            }
+                            val fileName = "received_${System.currentTimeMillis()}.$ext"
                             vaultRepository.saveSecureFile(fileName, decryptedBytes)
                             cryptoManager.encryptLocal(fileName.toByteArray(Charsets.UTF_8))
                         } else {
@@ -146,8 +274,13 @@ class EnclaveSyncWorker(
                         }
 
                         val plaintext = when (baseType) {
-                            "MEDIA" -> "🔒 Encrypted Image Received"
+                            "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
+                            "MEDIA_VIDEO" -> "🎥 Video"
+                            "MEDIA_AUDIO" -> "🎵 Audio File"
+                            "MEDIA_FILE" -> "📄 Document"
                             "VOICE" -> "🎤 Voice Memo"
+                            "RECORDED_KISS" -> "Kiss Impression"
+                            "HAPTIC" -> "📳 Haptic"
                             else -> String(decryptedBytes, Charsets.UTF_8)
                         }
 
@@ -169,6 +302,24 @@ class EnclaveSyncWorker(
                         showDecryptedNotification(plaintext)
                     }
                 }
+                }
+            }
+            // Also sync partner profile for the Companion Widget
+            try {
+                val partnerProfile = bundleRepository.fetchPartnerProfile(partnerId)
+                if (partnerProfile != null) {
+                    database.userProfileDao().upsertProfilePreservingLocal(partnerProfile)
+                    
+                    // Force widget update
+                    val intent = android.content.Intent(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java)
+                    intent.action = android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    val ids = android.appwidget.AppWidgetManager.getInstance(applicationContext)
+                        .getAppWidgetIds(android.content.ComponentName(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java))
+                    intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                    applicationContext.sendBroadcast(intent)
+                }
+            } catch (e: Exception) {
+                Log.e("EnclaveSyncWorker", "Failed to sync partner profile for widget", e)
             }
         } catch (e: Exception) {
             Log.e("EnclaveSyncWorker", "Sync failed", e)
@@ -188,7 +339,11 @@ class EnclaveSyncWorker(
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setColor(0xFFFCE2E6.toInt()) // Blush Soft Pink Accent Styling
             .build()
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun showDecryptedNotification(text: String) {

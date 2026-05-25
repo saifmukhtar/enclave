@@ -18,18 +18,27 @@ services:
         paths:
           - /rest/v1/
 
-  - name: realtime-v1
-    url: http://realtime:4000
+  - name: realtime-v1-ws
+    url: http://realtime:4000/socket
     routes:
-      - name: realtime-v1-all
+      - name: realtime-v1-ws-all
         strip_path: true
         paths:
           - /realtime/v1/
         protocols:
           - http
           - https
-          - ws
-          - wss
+
+  - name: realtime-v1-rest
+    url: http://realtime:4000/api
+    routes:
+      - name: realtime-v1-rest-all
+        strip_path: true
+        paths:
+          - /realtime/v1/api/
+        protocols:
+          - http
+          - https
 
   - name: storage-v1
     url: http://storage:5000
@@ -62,6 +71,7 @@ plugins:
       headers:
         - Accept
         - Accept-Version
+        - apikey
         - Authorization
         - Content-Length
         - Content-MD5

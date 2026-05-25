@@ -52,6 +52,9 @@ ssh enclave "bash -s" << 'EOF'
     echo "⚡ Executing App Migration: $(basename "$sql_file")..."
     docker exec -i supabase-db psql -U postgres -d postgres < "$sql_file"
   done
+  
+  echo "⚡ Running Supabase Realtime database release migrations..."
+  docker exec -i supabase-realtime /app/bin/realtime eval 'Realtime.Release.migrate' || echo "Realtime migrations eval failed or already executed."
 EOF
 
 echo ""

@@ -18,6 +18,8 @@ import org.signal.libsignal.protocol.SignalProtocolAddress
 import org.signal.libsignal.protocol.state.PreKeyBundle
 import org.signal.libsignal.protocol.IdentityKey
 import org.signal.libsignal.protocol.ecc.Curve
+import io.github.jan.supabase.gotrue.SessionStatus
+import kotlinx.coroutines.flow.first
 
 @Serializable
 data class SignedPreKeyUpload(val id: Int, val key: String, val signature: String)
@@ -111,11 +113,14 @@ class BundleRepository(
 ) {
 
     private suspend fun awaitAuth() {
-        while (supabase.auth.currentUserOrNull() == null) {
-            android.util.Log.d("BundleRepository", "Waiting for Supabase auth to be ready...")
-            delay(1000)
+        android.util.Log.d("BundleRepository", "Resolving Supabase session status...")
+        val status = supabase.auth.sessionStatus.first {
+            it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated
         }
-        android.util.Log.d("BundleRepository", "Supabase auth is ready!")
+        if (status is SessionStatus.NotAuthenticated) {
+            throw IllegalStateException("Supabase is not authenticated")
+        }
+        android.util.Log.d("BundleRepository", "Supabase auth is ready! Status: $status")
     }
 
     /**
@@ -180,22 +185,29 @@ class BundleRepository(
                 PreKeyBundle(0, 1, -1, null, spkRecord.id, spkPubKey, spkSignature, identityKey)
             }
             
-            val partnerAddress = SignalProtocolAddress(partnerId, 1)
-            cryptoManager.buildSession(partnerAddress, preKeyBundle)
+            val partnerAddress1 = SignalProtocolAddress(partnerId, 1)
+            val res1 = cryptoManager.buildSession(partnerAddress1, preKeyBundle)
+            if (res1.isFailure) return@withContext Result.failure(res1.exceptionOrNull() ?: Exception("Failed to build session 1"))
+
+            val partnerAddress2 = SignalProtocolAddress(partnerId, 2)
+            val res2 = cryptoManager.buildSession(partnerAddress2, preKeyBundle)
+            if (res2.isFailure) return@withContext Result.failure(res2.exceptionOrNull() ?: Exception("Failed to build session 2"))
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+
     /**
-     * Synchronizes the dynamic Firebase Cloud Messaging token into the Profiles table.
+     * Synchronizes the Ntfy WebSocket topic URL into the Profiles table.
      */
-    suspend fun syncFcmToken(fcmToken: String) = withContext(Dispatchers.IO) {
+    suspend fun syncNtfyPushToken(topicUrl: String) = withContext(Dispatchers.IO) {
         val currentUser = supabase.auth.currentUserOrNull() ?: return@withContext
         val profile = UserProfile(
             id = currentUser.id,
-            push_token = fcmToken,
-            fcm_token = fcmToken
+            push_token = topicUrl
         )
         supabase.postgrest["profiles"].upsert(profile)
     }
@@ -240,7 +252,9 @@ class BundleRepository(
                     bio = it.bio ?: "",
                     avatarUrl = it.avatar_url ?: "",
                     isOnline = it.is_online ?: false,
-                    isMe = false
+                    isMe = false,
+                    loveLanguage = it.love_language ?: "",
+                    locationCity = it.location_city ?: ""
                 )
             }
         } catch (e: Exception) {
@@ -266,7 +280,9 @@ class BundleRepository(
                     bio = it.bio ?: "",
                     avatarUrl = it.avatar_url ?: "",
                     isOnline = true,
-                    isMe = true
+                    isMe = true,
+                    loveLanguage = it.love_language ?: "",
+                    locationCity = it.location_city ?: ""
                 )
             }
         } catch (e: Exception) {
@@ -520,5 +536,91 @@ class BundleRepository(
             android.util.Log.e("BundleRepository", "updateLocationCity failed", e)
         }
     }
+
+    // ─── Collaborative Zero-Knowledge E2EE Vault API ───────────────────────────
+
+    suspend fun uploadVaultFile(fileName: String, fileBytes: ByteArray): String = withContext(Dispatchers.IO) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+            ?: error("Not authenticated — cannot upload vault file")
+        val path = "$myId/$fileName"
+        supabase.storage.from("vault").upload(path, fileBytes, upsert = true)
+        supabase.storage.from("vault").publicUrl(path)
+    }
+
+    suspend fun insertVaultMetadata(
+        mediaId: String,
+        localPath: String,
+        mimeType: String,
+        sizeBytes: Long,
+        folderName: String,
+        thumbnailPath: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
+            val meta = lounge_vault_metadata_upload(
+                media_id = mediaId,
+                local_encrypted_path = localPath,
+                mime_type = mimeType,
+                size_bytes = sizeBytes,
+                folder_name = folderName,
+                thumbnail_path = thumbnailPath,
+                uploaded_by = myId
+            )
+            supabase.postgrest["lounge_vault_metadata"].insert(meta)
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "insertVaultMetadata failed", e)
+        }
+    }
+
+    suspend fun fetchRemoteVaultMetadata(): List<lounge_vault_metadata_upload> = withContext(Dispatchers.IO) {
+        try {
+            awaitAuth()
+            supabase.postgrest["lounge_vault_metadata"]
+                .select()
+                .decodeList<lounge_vault_metadata_upload>()
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "fetchRemoteVaultMetadata failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun downloadVaultFile(path: String): ByteArray = withContext(Dispatchers.IO) {
+        supabase.storage.from("vault").downloadPublic(path)
+    }
+
+    suspend fun uploadBackupFile(fileName: String, fileBytes: ByteArray) = withContext(Dispatchers.IO) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+            ?: error("Not authenticated — cannot upload backup file")
+        val path = "$myId/$fileName"
+        supabase.storage.from("backups").upload(path, fileBytes, upsert = true)
+    }
+
+    suspend fun cleanOldBackups() = withContext(Dispatchers.IO) {
+        val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
+        try {
+            val list = supabase.storage.from("backups").list(myId)
+            if (list.size > 7) {
+                val sorted = list.sortedBy { it.name }
+                val toDelete = sorted.take(list.size - 7)
+                toDelete.forEach { item ->
+                    supabase.storage.from("backups").delete("$myId/${item.name}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "Failed to clean old backups", e)
+        }
+    }
 }
+
+@Serializable
+data class lounge_vault_metadata_upload(
+    val media_id: String,
+    val local_encrypted_path: String,
+    val mime_type: String,
+    val size_bytes: Long,
+    val folder_name: String,
+    val thumbnail_path: String,
+    val uploaded_by: String,
+    val created_at: String? = null
+)
 

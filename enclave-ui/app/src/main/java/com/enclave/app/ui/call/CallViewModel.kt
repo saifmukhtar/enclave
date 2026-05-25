@@ -122,8 +122,11 @@ class CallViewModel(
     }
 
     fun startScreenCapture(intent: Intent) {
-        webRtcManager?.startScreenCapture(intent)
-        _isScreenSharing.value = true
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(300) // Ensure foreground service starts before getMediaProjection (Android 14)
+            webRtcManager?.startScreenCapture(intent)
+            _isScreenSharing.value = true
+        }
     }
 
     private fun observeSignaling() {
@@ -336,8 +339,8 @@ class CallViewModel(
     private fun createPeerConnectionObserver() = object : PeerConnection.Observer {
         override fun onSignalingChange(p0: PeerConnection.SignalingState?) {}
         override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
-            if (state == PeerConnection.IceConnectionState.DISCONNECTED ||
-                state == PeerConnection.IceConnectionState.FAILED) {
+            if (state == PeerConnection.IceConnectionState.FAILED ||
+                state == PeerConnection.IceConnectionState.CLOSED) {
                 viewModelScope.launch { cleanup("CONNECTED") }
             }
         }

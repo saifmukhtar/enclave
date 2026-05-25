@@ -11,8 +11,11 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY timestamp ASC")
     fun getAllMessages(): Flow<List<MessageEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMessage(message: MessageEntity)
+    @Query("SELECT * FROM messages WHERE messageType IN ('MEDIA', 'MEDIA_IMAGE', 'MEDIA_VIDEO') ORDER BY timestamp DESC")
+    fun getMediaMessages(): Flow<List<MessageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMessage(message: MessageEntity): Long
 
     @Query("UPDATE messages SET isRead = 1 WHERE id = :messageId")
     suspend fun markAsRead(messageId: String)

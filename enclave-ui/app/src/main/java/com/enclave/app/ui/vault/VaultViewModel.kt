@@ -103,6 +103,12 @@ class VaultViewModel(val vaultRepository: VaultRepository) : ViewModel() {
         }
     }
 
+    fun syncVault() {
+        viewModelScope.launch {
+            vaultRepository.syncSharedVault()
+        }
+    }
+
     fun clearPendingPermissionIntent() {
         _pendingPermissionIntent.value = null
     }

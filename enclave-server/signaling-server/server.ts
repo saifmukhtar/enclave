@@ -424,6 +424,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         message.type === 'WEBRTC_OFFER' ||
         message.type === 'OFFER' ||
         message.type === 'READ_RECEIPT' ||
+        message.type === 'DELIVERY_RECEIPT' ||
         message.type === 'PROFILE_UPDATE' ||
         message.type === 'STORY_SHARE' ||
         message.type === 'STORY_VIEWED' ||

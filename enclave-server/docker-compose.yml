@@ -162,6 +162,22 @@ services:
     networks:
       - supabase-network
 
+  ntfy:
+    container_name: enclave-ntfy
+    image: binwiederhier/ntfy:latest
+    restart: unless-stopped
+    command: serve
+    environment:
+      - TZ=UTC
+      - NTFY_AUTH_FILE=/var/lib/ntfy/user.db
+      - NTFY_AUTH_DEFAULT_ACCESS=deny-all
+    volumes:
+      - ./volumes/ntfy:/var/lib/ntfy
+    ports:
+      - "2586:80"
+    networks:
+      - supabase-network
+
 networks:
   supabase-network:
     driver: bridge
@@ -169,3 +185,4 @@ networks:
 volumes:
   db_data:
   storage_data:
+

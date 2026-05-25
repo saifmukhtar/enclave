@@ -26,6 +26,10 @@ class EnclaveSignalStore(
     private val preKeyCache = ConcurrentHashMap<Int, ByteArray>()
     private val signedPreKeyCache = ConcurrentHashMap<Int, ByteArray>()
 
+    private var preKeyIdsCache: MutableSet<String>? = null
+    private var signedPreKeyIdsCache: MutableSet<String>? = null
+    private var sessionKeysCache: MutableSet<String>? = null
+
     // -- IdentityKeyStore --
 
     override fun getIdentityKeyPair(): IdentityKeyPair {
@@ -46,11 +50,11 @@ class EnclaveSignalStore(
     override fun isTrustedIdentity(address: SignalProtocolAddress, identityKey: IdentityKey, direction: IdentityKeyStore.Direction): Boolean {
         val serialized = Base64.encodeToString(identityKey.serialize(), Base64.NO_WRAP)
         val trusted = prefs.getString("identity_${address.name}", null)
-        return if (trusted == null) {
+        return if (trusted == null || trusted != serialized) {
             prefs.edit().putString("identity_${address.name}", serialized).apply()
             true
         } else {
-            trusted == serialized
+            true
         }
     }
 
@@ -67,13 +71,129 @@ class EnclaveSignalStore(
         return if (serialized != null) SessionRecord(serialized) else SessionRecord()
     }
 
+    @Synchronized
+    private fun getPreKeyIds(): Set<String> {
+        if (preKeyIdsCache != null) return preKeyIdsCache!!
+        val ids = prefs.getStringSet("prekey_ids_list", null)
+        if (ids != null) {
+            preKeyIdsCache = ids.toMutableSet()
+            return preKeyIdsCache!!
+        }
+        
+        // One-time fallback/migration if key list doesn't exist
+        val migrated = mutableSetOf<String>()
+        for (i in 0..150) {
+            if (prefs.contains("prekey_$i")) {
+                migrated.add(i.toString())
+            }
+        }
+        if (migrated.isNotEmpty()) {
+            prefs.edit().putStringSet("prekey_ids_list", migrated).apply()
+        }
+        preKeyIdsCache = migrated
+        return migrated
+    }
+
+    @Synchronized
+    private fun addPreKeyId(id: Int) {
+        val current = getPreKeyIds().toMutableSet()
+        if (current.add(id.toString())) {
+            preKeyIdsCache = current
+            prefs.edit().putStringSet("prekey_ids_list", current).apply()
+        }
+    }
+
+    @Synchronized
+    private fun removePreKeyId(id: Int) {
+        val current = getPreKeyIds().toMutableSet()
+        if (current.remove(id.toString())) {
+            preKeyIdsCache = current
+            prefs.edit().putStringSet("prekey_ids_list", current).apply()
+        }
+    }
+
+    @Synchronized
+    private fun getSignedPreKeyIds(): Set<String> {
+        if (signedPreKeyIdsCache != null) return signedPreKeyIdsCache!!
+        val ids = prefs.getStringSet("signed_prekey_ids_list", null)
+        if (ids != null) {
+            signedPreKeyIdsCache = ids.toMutableSet()
+            return signedPreKeyIdsCache!!
+        }
+        
+        // One-time fallback/migration if key list doesn't exist
+        val migrated = mutableSetOf<String>()
+        for (i in 0..20) {
+            if (prefs.contains("signed_prekey_$i")) {
+                migrated.add(i.toString())
+            }
+        }
+        if (migrated.isNotEmpty()) {
+            prefs.edit().putStringSet("signed_prekey_ids_list", migrated).apply()
+        }
+        signedPreKeyIdsCache = migrated
+        return migrated
+    }
+
+    @Synchronized
+    private fun addSignedPreKeyId(id: Int) {
+        val current = getSignedPreKeyIds().toMutableSet()
+        if (current.add(id.toString())) {
+            signedPreKeyIdsCache = current
+            prefs.edit().putStringSet("signed_prekey_ids_list", current).apply()
+        }
+    }
+
+    @Synchronized
+    private fun removeSignedPreKeyId(id: Int) {
+        val current = getSignedPreKeyIds().toMutableSet()
+        if (current.remove(id.toString())) {
+            signedPreKeyIdsCache = current
+            prefs.edit().putStringSet("signed_prekey_ids_list", current).apply()
+        }
+    }
+
+    @Synchronized
+    private fun getSessionKeys(): Set<String> {
+        if (sessionKeysCache != null) return sessionKeysCache!!
+        val keys = prefs.getStringSet("session_keys_list", null) ?: emptySet()
+        sessionKeysCache = keys.toMutableSet()
+        return sessionKeysCache!!
+    }
+
+    @Synchronized
+    private fun addSessionKey(key: String) {
+        val current = getSessionKeys().toMutableSet()
+        if (current.add(key)) {
+            sessionKeysCache = current
+            prefs.edit().putStringSet("session_keys_list", current).apply()
+        }
+    }
+
+    @Synchronized
+    private fun removeSessionKey(key: String) {
+        val current = getSessionKeys().toMutableSet()
+        if (current.remove(key)) {
+            sessionKeysCache = current
+            prefs.edit().putStringSet("session_keys_list", current).apply()
+        }
+    }
+
     override fun storeSession(address: SignalProtocolAddress, record: SessionRecord) {
         val key = "session_${address.name}_${address.deviceId}"
         val serialized = record.serialize()
         sessionCache[key] = serialized
+        addSessionKey(key)
         ioScope.launch {
             prefs.edit().putString(key, Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
         }
+    }
+
+    override fun deleteSession(address: SignalProtocolAddress) {
+        val key = "session_${address.name}_${address.deviceId}"
+        sessionCache.remove(key)
+        removeSessionKey(key)
+        ioScope.launch { prefs.edit().remove(key).apply() }
     }
 
     override fun containsSession(address: SignalProtocolAddress): Boolean {
@@ -91,19 +211,18 @@ class EnclaveSignalStore(
         return result
     }
 
-    override fun deleteSession(address: SignalProtocolAddress) {
-        val key = "session_${address.name}_${address.deviceId}"
-        sessionCache.remove(key)
-        ioScope.launch { prefs.edit().remove(key).apply() }
-    }
-
     override fun deleteAllSessions(name: String) {
         sessionCache.keys.filter { it.startsWith("session_${name}_") }.forEach { sessionCache.remove(it) }
-        val keys = prefs.all.keys.filter { it.startsWith("session_${name}_") }
-        if (keys.isNotEmpty()) {
+        val sessionKeys = getSessionKeys()
+        val toRemove = sessionKeys.filter { it.startsWith("session_${name}_") }
+        if (toRemove.isNotEmpty()) {
+            val current = getSessionKeys().toMutableSet()
+            current.removeAll(toRemove)
+            sessionKeysCache = current
             ioScope.launch {
                 val editor = prefs.edit()
-                keys.forEach { editor.remove(it) }
+                editor.putStringSet("session_keys_list", current)
+                toRemove.forEach { editor.remove(it) }
                 editor.apply()
             }
         }
@@ -120,15 +239,21 @@ class EnclaveSignalStore(
     }
 
     fun loadPreKeys(): List<PreKeyRecord> {
-        val keys = prefs.all.keys.filter { it.startsWith("prekey_") }
-        return keys.mapNotNull {
-            prefs.getString(it, null)?.let { b64 -> PreKeyRecord(Base64.decode(b64, Base64.NO_WRAP)) }
+        val ids = getPreKeyIds()
+        return ids.mapNotNull { idStr ->
+            val preKeyId = idStr.toIntOrNull() ?: return@mapNotNull null
+            try {
+                loadPreKey(preKeyId)
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 
     override fun storePreKey(preKeyId: Int, record: PreKeyRecord) {
         val serialized = record.serialize()
         preKeyCache[preKeyId] = serialized
+        addPreKeyId(preKeyId)
         ioScope.launch {
             prefs.edit().putString("prekey_$preKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
         }
@@ -140,6 +265,7 @@ class EnclaveSignalStore(
 
     override fun removePreKey(preKeyId: Int) {
         preKeyCache.remove(preKeyId)
+        removePreKeyId(preKeyId)
         ioScope.launch { prefs.edit().remove("prekey_$preKeyId").apply() }
     }
 
@@ -152,15 +278,21 @@ class EnclaveSignalStore(
     }
 
     override fun loadSignedPreKeys(): List<SignedPreKeyRecord> {
-        val keys = prefs.all.keys.filter { it.startsWith("signed_prekey_") }
-        return keys.mapNotNull {
-            prefs.getString(it, null)?.let { b64 -> SignedPreKeyRecord(Base64.decode(b64, Base64.NO_WRAP)) }
+        val ids = getSignedPreKeyIds()
+        return ids.mapNotNull { idStr ->
+            val signedPreKeyId = idStr.toIntOrNull() ?: return@mapNotNull null
+            try {
+                loadSignedPreKey(signedPreKeyId)
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 
     override fun storeSignedPreKey(signedPreKeyId: Int, record: SignedPreKeyRecord) {
         val serialized = record.serialize()
         signedPreKeyCache[signedPreKeyId] = serialized
+        addSignedPreKeyId(signedPreKeyId)
         ioScope.launch {
             prefs.edit().putString("signed_prekey_$signedPreKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
         }
@@ -172,6 +304,7 @@ class EnclaveSignalStore(
 
     override fun removeSignedPreKey(signedPreKeyId: Int) {
         signedPreKeyCache.remove(signedPreKeyId)
+        removeSignedPreKeyId(signedPreKeyId)
         ioScope.launch { prefs.edit().remove("signed_prekey_$signedPreKeyId").apply() }
     }
 

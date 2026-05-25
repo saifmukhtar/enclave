@@ -1,6 +1,7 @@
 package com.enclave.app.ui.chat
 
 import android.content.Context
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
@@ -195,6 +196,32 @@ class ChatViewModel(
             initialValue = emptyList()
         )
 
+    val mediaMessages: StateFlow<List<ChatMessage>> = database.messageDao().getMediaMessages()
+        .map { entities ->
+            entities.map { entity ->
+                ChatMessage(
+                    id = entity.id,
+                    text = "Media",
+                    isFromMe = entity.senderId == myId,
+                    timestamp = entity.timestamp,
+                    deliveryStatus = entity.deliveryStatus,
+                    disappearingDuration = entity.disappearingDuration,
+                    expiresAt = entity.expiresAt,
+                    reaction = entity.reaction,
+                    messageType = entity.messageType,
+                    quotedMsgId = null,
+                    quotedMsgText = null,
+                    quotedMsgSender = null
+                )
+            }
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         initializeSession()
         observeWebSocket()
@@ -253,6 +280,7 @@ class ChatViewModel(
                     val result = bundleRepository.fetchPartnerBundleAndBuildSession(partnerId)
                     if (result.isSuccess) {
                         _uiState.value = ChatUiState.Secured
+                        initializeSharedVaultKey()
                         return@launch
                     } else {
                         val exception = result.exceptionOrNull()
@@ -354,10 +382,9 @@ class ChatViewModel(
     }
 
     fun sendMessage(text: String) {
-        // Only allow sending when the E2EE session is fully established (Secured).
-        // Sending in WaitingForPartner would use insecure fallback encryption that
-        // the partner cannot decrypt once their Signal session is built.
-        if (text.isBlank() || _uiState.value !is ChatUiState.Secured) return
+        if (text.isBlank()) return
+        val hasSession = try { signalStore.containsSession(partnerAddress) } catch (e: Exception) { false }
+        if (!hasSession && _uiState.value !is ChatUiState.Secured) return
         
         viewModelScope.launch(Dispatchers.IO) {
             val replyTarget = _replyToMessage.value
@@ -385,7 +412,23 @@ class ChatViewModel(
                 val currentExpire = disappearingMode.value
                 val contentTypeHeader = if (currentExpire > 0) "TEXT;expire=$currentExpire" else "TEXT"
                 
-                signalingClient.sendEncryptedMessage(partnerId, ciphertext, contentType = contentTypeHeader, messageId = messageId)
+                val isConnected = signalingClient.isConnected()
+                if (isConnected) {
+                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, contentType = contentTypeHeader, messageId = messageId)
+                } else {
+                    val outbox = com.enclave.app.data.local.OutboxEntity(
+                        targetId = partnerId,
+                        type = "SIGNAL_PAYLOAD",
+                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
+                        contentType = contentTypeHeader,
+                        messageId = messageId
+                    )
+                    database.outboxDao().insert(outbox)
+                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
+                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                        .build()
+                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
+                }
                 
                 decryptedMessagesCache[messageId] = plainTextToSend
                 
@@ -398,12 +441,41 @@ class ChatViewModel(
                     timestamp = System.currentTimeMillis(),
                     isRead = true,
                     messageType = "TEXT",
-                    deliveryStatus = "SENT",
+                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
                     disappearingDuration = currentExpire,
                     expiresAt = 0L
                 )
                 database.messageDao().insertMessage(entity)
             }
+        }
+    }
+
+    fun sendTimeCapsuleMessage(text: String, sendAt: Long) {
+        if (text.isBlank()) return
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            val messageId = UUID.randomUUID().toString()
+            val messageBytes = text.toByteArray(Charsets.UTF_8)
+            val localEncrypted = cryptoManager.encryptLocal(messageBytes)
+            
+            val capsule = com.enclave.app.data.local.TimeCapsuleEntity(
+                id = messageId,
+                targetId = partnerId,
+                payloadText = localEncrypted,
+                sendAt = sendAt,
+                createdAt = System.currentTimeMillis()
+            )
+            
+            database.timeCapsuleDao().insert(capsule)
+            
+            val delayMs = sendAt - System.currentTimeMillis()
+            val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.TimeCapsuleWorker>()
+                .setInputData(androidx.work.workDataOf("CAPSULE_ID" to messageId))
+                .setInitialDelay(java.util.concurrent.TimeUnit.MILLISECONDS.toMillis(delayMs), java.util.concurrent.TimeUnit.MILLISECONDS)
+                .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                .build()
+            
+            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("capsule_$messageId", androidx.work.ExistingWorkPolicy.REPLACE, req)
         }
     }
 
@@ -415,12 +487,24 @@ class ChatViewModel(
                 val messageId = payload.messageId ?: UUID.randomUUID().toString()
                 
                 var parsedDuration = 0L
+                var parsedExt = "bin"
                 val parts = payload.contentType.split(";")
                 val baseType = parts.firstOrNull() ?: "TEXT"
                 parts.forEach { part ->
                     if (part.startsWith("expire=")) {
                         parsedDuration = part.substringAfter("expire=").toLongOrNull() ?: 0L
                     }
+                    if (part.startsWith("ext=")) {
+                        parsedExt = part.substringAfter("ext=")
+                    }
+                }
+
+                if (baseType == "VAULT_KEY_SYNC") {
+                    val keyBase64 = Base64.encodeToString(decryptedBytes, Base64.NO_WRAP)
+                    context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+                        .edit().putString("vault_key", keyBase64).apply()
+                    android.util.Log.d("ChatViewModel", "Successfully received and saved shared E2EE vault key from partner.")
+                    return@launch
                 }
 
                 if (baseType == "REACTION") {
@@ -433,11 +517,12 @@ class ChatViewModel(
                     return@launch
                 }
 
-                val localEncrypted = if (baseType == "MEDIA" || baseType == "MEDIA_IMAGE" || baseType == "MEDIA_VIDEO" || baseType == "MEDIA_AUDIO" || baseType == "VOICE") {
+                val localEncrypted = if (baseType == "MEDIA" || baseType == "MEDIA_IMAGE" || baseType == "MEDIA_VIDEO" || baseType == "MEDIA_AUDIO" || baseType == "MEDIA_FILE" || baseType == "VOICE") {
                     val ext = when (baseType) {
                         "MEDIA", "MEDIA_IMAGE" -> "jpg"
                         "MEDIA_VIDEO" -> "mp4"
                         "MEDIA_AUDIO" -> "mp3"
+                        "MEDIA_FILE" -> parsedExt
                         else -> "m4a"
                     }
                     val fileName = "received_${System.currentTimeMillis()}.$ext"
@@ -451,8 +536,14 @@ class ChatViewModel(
                     "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
                     "MEDIA_VIDEO" -> "🎥 Video"
                     "MEDIA_AUDIO" -> "🎵 Audio File"
+                    "MEDIA_FILE" -> "📄 Document ($parsedExt)"
                     "VOICE" -> "🎤 Voice Memo"
                     "RECORDED_KISS" -> "Kiss Impression"
+                    "HAPTIC" -> {
+                        val patternName = String(decryptedBytes, Charsets.UTF_8)
+                        triggerHapticPattern(patternName)
+                        "📳 Haptic: $patternName"
+                    }
                     else -> String(decryptedBytes, Charsets.UTF_8)
                 }
 
@@ -538,7 +629,23 @@ class ChatViewModel(
                 val ciphertext = encryptionResult.getOrThrow()
                 val messageId = UUID.randomUUID().toString()
                 
-                signalingClient.sendEncryptedMessage(partnerId, ciphertext, "VOICE", messageId = messageId)
+                val isConnected = signalingClient.isConnected()
+                if (isConnected) {
+                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, "VOICE", messageId = messageId)
+                } else {
+                    val outbox = com.enclave.app.data.local.OutboxEntity(
+                        targetId = partnerId,
+                        type = "SIGNAL_PAYLOAD",
+                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
+                        contentType = "VOICE",
+                        messageId = messageId
+                    )
+                    database.outboxDao().insert(outbox)
+                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
+                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                        .build()
+                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
+                }
                 
                 decryptedMessagesCache[messageId] = "🎤 Voice Memo"
                 
@@ -554,7 +661,7 @@ class ChatViewModel(
                     timestamp = System.currentTimeMillis(),
                     isRead = true,
                     messageType = "VOICE",
-                    deliveryStatus = "SENT",
+                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
                     disappearingDuration = 0L,
                     expiresAt = 0L
                 )
@@ -575,26 +682,56 @@ class ChatViewModel(
                 "MEDIA_VIDEO"
             } else if (mimeType.startsWith("audio/") || mimeType.startsWith("music/")) {
                 "MEDIA_AUDIO"
-            } else {
+            } else if (mimeType.startsWith("image/")) {
                 "MEDIA_IMAGE"
+            } else {
+                "MEDIA_FILE"
             }
             
             val ext = when (baseType) {
                 "MEDIA_VIDEO" -> "mp4"
                 "MEDIA_AUDIO" -> "mp3"
-                else -> "jpg"
+                "MEDIA_IMAGE" -> "jpg"
+                else -> {
+                    when (mimeType) {
+                        "application/pdf" -> "pdf"
+                        "text/markdown" -> "md"
+                        "application/msword" -> "doc"
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+                        else -> "bin"
+                    }
+                }
             }
+
+            val contentTypeHeader = if (baseType == "MEDIA_FILE") "$baseType;ext=$ext" else baseType
 
             val encryptionResult = cryptoManager.encryptMessage(partnerAddress, mediaBytes)
             if (encryptionResult.isSuccess) {
                 val ciphertext = encryptionResult.getOrThrow()
                 val messageId = UUID.randomUUID().toString()
                 
-                signalingClient.sendEncryptedMessage(partnerId, ciphertext, baseType, messageId = messageId)
+                val isConnected = signalingClient.isConnected()
+                if (isConnected) {
+                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, contentTypeHeader, messageId = messageId)
+                } else {
+                    val outbox = com.enclave.app.data.local.OutboxEntity(
+                        targetId = partnerId,
+                        type = "SIGNAL_PAYLOAD",
+                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
+                        contentType = contentTypeHeader,
+                        messageId = messageId
+                    )
+                    database.outboxDao().insert(outbox)
+                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
+                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                        .build()
+                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
+                }
                 
                 val displayMsg = when (baseType) {
                     "MEDIA_VIDEO" -> "🎥 Video"
                     "MEDIA_AUDIO" -> "🎵 Audio File"
+                    "MEDIA_FILE" -> "📄 Document ($ext)"
                     else -> "📸 Photo"
                 }
                 decryptedMessagesCache[messageId] = displayMsg
@@ -611,7 +748,7 @@ class ChatViewModel(
                     timestamp = System.currentTimeMillis(),
                     isRead = true,
                     messageType = baseType,
-                    deliveryStatus = "SENT",
+                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
                     disappearingDuration = 0L,
                     expiresAt = 0L
                 )
@@ -627,7 +764,23 @@ class ChatViewModel(
             if (encryptionResult.isSuccess) {
                 val ciphertext = encryptionResult.getOrThrow()
                 val messageId = UUID.randomUUID().toString()
-                signalingClient.sendEncryptedMessage(partnerId, ciphertext, "RECORDED_KISS", messageId = messageId)
+                val isConnected = signalingClient.isConnected()
+                if (isConnected) {
+                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, "RECORDED_KISS", messageId = messageId)
+                } else {
+                    val outbox = com.enclave.app.data.local.OutboxEntity(
+                        targetId = partnerId,
+                        type = "SIGNAL_PAYLOAD",
+                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
+                        contentType = "RECORDED_KISS",
+                        messageId = messageId
+                    )
+                    database.outboxDao().insert(outbox)
+                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
+                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                        .build()
+                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
+                }
                 
                 decryptedMessagesCache[messageId] = "Kiss Impression"
                 val localEncrypted = cryptoManager.encryptLocal(messageBytes)
@@ -639,7 +792,7 @@ class ChatViewModel(
                     timestamp = System.currentTimeMillis(),
                     isRead = true,
                     messageType = "RECORDED_KISS",
-                    deliveryStatus = "SENT",
+                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
                     disappearingDuration = 0L,
                     expiresAt = 0L
                 )
@@ -816,6 +969,126 @@ class ChatViewModel(
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "Secure search failed", e)
             }
+        }
+    }
+
+    private fun initializeSharedVaultKey() {
+        val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+        var vaultKeyBase64 = prefs.getString("vault_key", null)
+        
+        if (vaultKeyBase64 == null) {
+            if (myId < partnerId) {
+                val newKey = com.enclave.app.crypto.VaultCipher.generateKey()
+                vaultKeyBase64 = Base64.encodeToString(newKey, Base64.NO_WRAP)
+                prefs.edit().putString("vault_key", vaultKeyBase64).apply()
+                
+                viewModelScope.launch {
+                    try {
+                        sendVaultKeyToPartner(newKey)
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatViewModel", "Failed to send generated vault key", e)
+                    }
+                }
+            }
+        } else {
+            val keyBytes = Base64.decode(vaultKeyBase64, Base64.NO_WRAP)
+            viewModelScope.launch {
+                try {
+                    sendVaultKeyToPartner(keyBytes)
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatViewModel", "Failed to sync existing vault key", e)
+                }
+            }
+        }
+    }
+
+    private suspend fun sendVaultKeyToPartner(keyBytes: ByteArray) {
+        val encryptedResult = cryptoManager.encryptMessage(partnerAddress, keyBytes)
+        if (encryptedResult.isSuccess) {
+            signalingClient.sendEncryptedMessage(
+                targetId = partnerId,
+                ciphertext = encryptedResult.getOrThrow(),
+                contentType = "VAULT_KEY_SYNC",
+                messageId = UUID.randomUUID().toString()
+            )
+            android.util.Log.d("ChatViewModel", "Successfully sent shared E2EE vault key to partner.")
+        } else {
+            android.util.Log.e("ChatViewModel", "Failed to encrypt vault key for partner", encryptedResult.exceptionOrNull())
+        }
+    }
+
+    fun sendHapticMessage(patternName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val messageBytes = patternName.toByteArray(Charsets.UTF_8)
+            val encryptionResult = cryptoManager.encryptMessage(partnerAddress, messageBytes)
+            
+            if (encryptionResult.isSuccess) {
+                val ciphertext = encryptionResult.getOrThrow()
+                val messageId = UUID.randomUUID().toString()
+                
+                val isConnected = signalingClient.isConnected()
+                if (isConnected) {
+                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, contentType = "HAPTIC", messageId = messageId)
+                } else {
+                    val outbox = com.enclave.app.data.local.OutboxEntity(
+                        targetId = partnerId,
+                        type = "SIGNAL_PAYLOAD",
+                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
+                        contentType = "HAPTIC",
+                        messageId = messageId
+                    )
+                    database.outboxDao().insert(outbox)
+                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
+                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+                        .build()
+                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
+                }
+                
+                decryptedMessagesCache[messageId] = "📳 Haptic: $patternName"
+                
+                val localEncrypted = cryptoManager.encryptLocal(messageBytes)
+                val entity = MessageEntity(
+                    id = messageId,
+                    senderId = myId,
+                    receiverId = partnerId,
+                    encryptedPayload = localEncrypted,
+                    timestamp = System.currentTimeMillis(),
+                    isRead = true,
+                    messageType = "HAPTIC",
+                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
+                    disappearingDuration = 0L,
+                    expiresAt = 0L
+                )
+                database.messageDao().insertMessage(entity)
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun triggerHapticPattern(patternName: String) {
+        val vibrator = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+            ?: return
+        val defaultVibrator = vibrator.defaultVibrator
+        if (!defaultVibrator.hasVibrator()) return
+
+        val timings = when (patternName) {
+            "Heartbeat" -> longArrayOf(0, 150, 100, 150, 600, 150, 100, 150)
+            "Purr" -> longArrayOf(0, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50)
+            "Rapid" -> longArrayOf(0, 20, 20, 20, 20, 20, 20, 20, 20, 20)
+            else -> longArrayOf(0, 500)
+        }
+        val amplitudes = when (patternName) {
+            "Heartbeat" -> intArrayOf(0, 255, 0, 255, 0, 255, 0, 255)
+            "Purr" -> intArrayOf(0, 100, 0, 100, 0, 100, 0, 100, 0, 100, 0)
+            "Rapid" -> intArrayOf(0, 255, 0, 255, 0, 255, 0, 255, 0, 255)
+            else -> intArrayOf(0, 255)
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val effect = android.os.VibrationEffect.createWaveform(timings, amplitudes, -1)
+            defaultVibrator.vibrate(effect)
+        } else {
+            defaultVibrator.vibrate(timings, -1)
         }
     }
 }

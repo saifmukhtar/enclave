@@ -34,13 +34,35 @@ class MediaExportUseCase(
      */
     suspend fun exportToPhone(mediaMetadata: MediaMetadataEntity, plaintextData: ByteArray) {
         val resolver = context.contentResolver
+        val extension = when {
+            mediaMetadata.mimeType.startsWith("image/") -> ".jpg"
+            mediaMetadata.mimeType.startsWith("video/") -> ".mp4"
+            mediaMetadata.mimeType.startsWith("audio/") -> ".m4a"
+            mediaMetadata.mimeType == "application/pdf" -> ".pdf"
+            else -> ".bin"
+        }
+        
+        val directory = when {
+            mediaMetadata.mimeType.startsWith("image/") -> Environment.DIRECTORY_PICTURES
+            mediaMetadata.mimeType.startsWith("video/") -> Environment.DIRECTORY_MOVIES
+            mediaMetadata.mimeType.startsWith("audio/") -> Environment.DIRECTORY_MUSIC
+            mediaMetadata.mimeType == "application/pdf" -> Environment.DIRECTORY_DOCUMENTS
+            else -> Environment.DIRECTORY_DOWNLOADS
+        }
+        
         val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "EnclaveExport_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "EnclaveExport_${System.currentTimeMillis()}$extension")
             put(MediaStore.MediaColumns.MIME_TYPE, mediaMetadata.mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Enclave")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "$directory/Enclave")
         }
 
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        val uri = resolver.insert(
+            if (mediaMetadata.mimeType.startsWith("video/")) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            else if (mediaMetadata.mimeType.startsWith("audio/")) MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            else if (mediaMetadata.mimeType.startsWith("image/")) MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            else MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            contentValues
+        )
         uri?.let {
             resolver.openOutputStream(it)?.use { outputStream ->
                 outputStream.write(plaintextData)

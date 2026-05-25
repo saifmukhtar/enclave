@@ -5,7 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
     id("com.google.devtools.ksp")
-    id("com.google.gms.google-services")
 }
 
 val properties = Properties()
@@ -19,8 +18,8 @@ fun getOrThrow(key: String): String {
     if (value.isNullOrBlank()) {
         throw GradleException(
             "CRITICAL CONFIGURATION ERROR: The parameter '$key' is missing from 'local.properties'. " +
-            "For full security and FOSS sanitization, all sensitive coordinates (SIGNALING_SERVER_URL, " +
-            "TURN_SERVER_URL, TURN_USERNAME, TURN_PASSWORD, SUPABASE_URL, SUPABASE_KEY) " +
+            "FOR full security and FOSS sanitization, all sensitive coordinates (SIGNALING_SERVER_URL, " +
+            "TURN_SERVER_URL, TURN_USERNAME, TURN_PASSWORD, SUPABASE_URL, SUPABASE_KEY, NTFY_SERVER_URL) " +
             "must be explicitly defined in 'local.properties' and cannot fall back to hardcoded defaults."
         )
     }
@@ -33,6 +32,9 @@ val turnPass = getOrThrow("TURN_PASSWORD")
 val signalingUrl = getOrThrow("SIGNALING_SERVER_URL")
 val supabaseUrl = getOrThrow("SUPABASE_URL")
 val supabaseKey = getOrThrow("SUPABASE_KEY")
+val ntfyServerUrl = getOrThrow("NTFY_SERVER_URL")
+val ntfyUsername = getOrThrow("NTFY_USERNAME")
+val ntfyPassword = getOrThrow("NTFY_PASSWORD")
 
 android {
     namespace = "com.enclave.app"
@@ -67,6 +69,9 @@ android {
         buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
         buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
         buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
+        buildConfigField("String", "NTFY_SERVER_URL", "\"$ntfyServerUrl\"")
+        buildConfigField("String", "NTFY_USERNAME", "\"$ntfyUsername\"")
+        buildConfigField("String", "NTFY_PASSWORD", "\"$ntfyPassword\"")
     }
 
     buildTypes {
@@ -131,7 +136,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // QR Code Generation (ZXing)
+    // QR Code Generation
     implementation("com.google.zxing:core:3.5.3")
 
     // Room
@@ -150,9 +155,8 @@ dependencies {
     implementation("io.getstream:stream-webrtc-android:1.1.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // WorkManager & Firebase Push Notifications
+    // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("com.google.firebase:firebase-messaging-ktx:24.0.0")
 
     // Media3 (ExoPlayer & Session)
     val media3Version = "1.3.1"

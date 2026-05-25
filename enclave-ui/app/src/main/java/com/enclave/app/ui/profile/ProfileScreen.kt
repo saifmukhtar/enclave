@@ -72,6 +72,7 @@ fun ProfileScreen(
         mutableStateOf(bioText)
     }
     var showMoodPicker  by remember { mutableStateOf(false) }
+    var showInviteDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     var pendingAvatarBytes by remember { mutableStateOf<ByteArray?>(null) }
@@ -105,10 +106,18 @@ fun ProfileScreen(
                 if (originalBytes != null) {
                     val bitmap = android.graphics.BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
                     if (bitmap != null) {
-                        val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(bitmap, 512, 512, true)
+                        val size = minOf(bitmap.width, bitmap.height)
+                        val x = (bitmap.width - size) / 2
+                        val y = (bitmap.height - size) / 2
+                        val croppedBitmap = android.graphics.Bitmap.createBitmap(bitmap, x, y, size, size)
+                        val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(croppedBitmap, 512, 512, true)
                         val outputStream = java.io.ByteArrayOutputStream()
-                        scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 98, outputStream)
+                        scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, outputStream)
                         pendingAvatarBytes = outputStream.toByteArray()
+                        
+                        // Clean up
+                        if (bitmap != croppedBitmap) bitmap.recycle()
+                        if (croppedBitmap != scaledBitmap) croppedBitmap.recycle()
                     }
                 }
             } catch (e: Exception) {
@@ -319,6 +328,22 @@ fun ProfileScreen(
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+                
+                OutlinedButton(
+                    onClick = { showInviteDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BlushAccent),
+                    border = BorderStroke(1.dp, BlushAccent)
+                ) {
+                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Invite Partner", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -362,6 +387,13 @@ fun ProfileScreen(
                     }
                 },
                 containerColor = BlushBg
+            )
+        }
+
+        if (showInviteDialog && myProfile?.userId != null) {
+            InvitePartnerDialog(
+                myId = myProfile!!.userId,
+                onDismiss = { showInviteDialog = false }
             )
         }
 
@@ -660,6 +692,104 @@ fun E2eeAvatar(
                             modifier = Modifier.size(24.dp)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InvitePartnerDialog(
+    myId: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val inviteLink = "enclave://invite?token=$myId"
+    
+    val qrBitmap = remember(inviteLink) {
+        try {
+            val writer = com.google.zxing.qrcode.QRCodeWriter()
+            val bitMatrix = writer.encode(inviteLink, com.google.zxing.BarcodeFormat.QR_CODE, 512, 512)
+            val width = bitMatrix.width
+            val height = bitMatrix.height
+            val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565)
+            for (x in 0 until width) {
+                for (y in 0 until height) {
+                    bmp.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                }
+            }
+            bmp.asImageBitmap()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Invite Partner",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Charcoal
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Scan this QR code from their device, or share the secure invite link.",
+                    fontSize = 13.sp,
+                    color = Charcoal.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap,
+                        contentDescription = "QR Code",
+                        modifier = Modifier.size(200.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .background(BlushCard, RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("QR Generation Failed", color = BlushAccent)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Button(
+                    onClick = {
+                        val sendIntent: android.content.Intent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            putExtra(android.content.Intent.EXTRA_TEXT, "Connect with me on Enclave! Tap the link: $inviteLink")
+                            type = "text/plain"
+                        }
+                        val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Invite Link")
+                        context.startActivity(shareIntent)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BlushAccent),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Share Invite Link", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
