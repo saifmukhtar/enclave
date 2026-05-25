@@ -42,36 +42,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-sealed class ChatUiState {
-    object Connecting : ChatUiState()
-    object Handshaking : ChatUiState()
-    object WaitingForPartner : ChatUiState()
-    object Secured : ChatUiState()
-    data class Error(val message: String) : ChatUiState()
-}
-
-@Serializable
-data class ReplyPayload(
-    val body: String,
-    val quotedMsgId: String,
-    val quotedMsgText: String,
-    val quotedMsgSender: String
-)
-
-data class ChatMessage(
-    val id: String = UUID.randomUUID().toString(),
-    val text: String,
-    val isFromMe: Boolean,
-    val timestamp: Long = System.currentTimeMillis(),
-    val deliveryStatus: String = "SENT",
-    val disappearingDuration: Long = 0L,
-    val expiresAt: Long = 0L,
-    val reaction: String = "",
-    val messageType: String = "TEXT",
-    val quotedMsgId: String? = null,
-    val quotedMsgText: String? = null,
-    val quotedMsgSender: String? = null
-)
 
 class ChatViewModel(
     private val context: Context,
@@ -130,92 +100,21 @@ class ChatViewModel(
 
     private val partnerAddress = SignalProtocolAddress(partnerId, 1)
 
-    private val decryptedMessagesCache = ConcurrentHashMap<String, String>()
+    private val messageDecryptorUseCase = MessageDecryptorUseCase(database, cryptoManager, myId)
+
     private var typingExpireJob: Job? = null
     private var recordingJob: Job? = null
     private var isChatActive = false
 
     // Decrypt messages strictly on background thread, reusing local cache hits for 60fps performance
-    val messages: StateFlow<List<ChatMessage>> = database.messageDao().getAllMessages()
-        .map { entities ->
-            entities.map { entity ->
-                val decryptedText = decryptedMessagesCache.getOrPut(entity.id) {
-                    try {
-                        val decryptedBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
-                        when (entity.messageType) {
-                            "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
-                            "MEDIA_VIDEO" -> "🎥 Video"
-                            "MEDIA_AUDIO" -> "🎵 Audio File"
-                            "VOICE" -> "🎤 Voice Memo"
-                            "RECORDED_KISS" -> "Kiss Impression"
-                            else -> String(decryptedBytes, Charsets.UTF_8)
-                        }
-                    } catch (e: Exception) {
-                        "🔒 Decryption failed"
-                    }
-                }
-
-                // High-performance background parsing of quoted JSON to prevent 60fps UI stuttering
-                var parsedText = decryptedText
-                var qId: String? = null
-                var qText: String? = null
-                var qSender: String? = null
-
-                if (decryptedText.startsWith("{\"body\":")) {
-                    try {
-                        val reply = LenientJson.decodeFromString<ReplyPayload>(decryptedText)
-                        parsedText = reply.body
-                        qId = reply.quotedMsgId
-                        qText = reply.quotedMsgText
-                        qSender = reply.quotedMsgSender
-                    } catch (e: Exception) {
-                        // Not a valid JSON payload, keep standard plaintext
-                    }
-                }
-
-                ChatMessage(
-                    id = entity.id,
-                    text = parsedText,
-                    isFromMe = entity.senderId == myId,
-                    timestamp = entity.timestamp,
-                    deliveryStatus = entity.deliveryStatus,
-                    disappearingDuration = entity.disappearingDuration,
-                    expiresAt = entity.expiresAt,
-                    reaction = entity.reaction,
-                    messageType = entity.messageType,
-                    quotedMsgId = qId,
-                    quotedMsgText = qText,
-                    quotedMsgSender = qSender
-                )
-            }
-        }
-        .flowOn(Dispatchers.IO)
+    val messages: StateFlow<List<ChatMessage>> = messageDecryptorUseCase.getDecryptedMessagesFlow()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    val mediaMessages: StateFlow<List<ChatMessage>> = database.messageDao().getMediaMessages()
-        .map { entities ->
-            entities.map { entity ->
-                ChatMessage(
-                    id = entity.id,
-                    text = "Media",
-                    isFromMe = entity.senderId == myId,
-                    timestamp = entity.timestamp,
-                    deliveryStatus = entity.deliveryStatus,
-                    disappearingDuration = entity.disappearingDuration,
-                    expiresAt = entity.expiresAt,
-                    reaction = entity.reaction,
-                    messageType = entity.messageType,
-                    quotedMsgId = null,
-                    quotedMsgText = null,
-                    quotedMsgSender = null
-                )
-            }
-        }
-        .flowOn(Dispatchers.IO)
+    val mediaMessages: StateFlow<List<ChatMessage>> = messageDecryptorUseCase.getDecryptedMediaMessagesFlow()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -381,101 +280,27 @@ class ChatViewModel(
         _disappearingMode.value = duration
     }
 
+    private val messageSenderUseCase = MessageSenderUseCase(
+        context, cryptoManager, signalStore, signalingClient, database, myId, partnerId
+    )
+
     fun sendMessage(text: String) {
-        if (text.isBlank()) return
-        val hasSession = try { signalStore.containsSession(partnerAddress) } catch (e: Exception) { false }
-        if (!hasSession && _uiState.value !is ChatUiState.Secured) return
-        
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val replyTarget = _replyToMessage.value
-            val plainTextToSend = if (replyTarget != null) {
-                val payload = ReplyPayload(
-                    body = text,
-                    quotedMsgId = replyTarget.id,
-                    quotedMsgText = replyTarget.text,
-                    quotedMsgSender = if (replyTarget.isFromMe) "You" else "Partner"
-                )
-                Json.encodeToString(payload)
-            } else {
-                text
-            }
-            
             _replyToMessage.value = null // Clear active reply state
             
-            val messageBytes = plainTextToSend.toByteArray(Charsets.UTF_8)
-            val encryptionResult = cryptoManager.encryptMessage(partnerAddress, messageBytes)
+            val isSecured = _uiState.value is ChatUiState.Secured
             
-            if (encryptionResult.isSuccess) {
-                val ciphertext = encryptionResult.getOrThrow()
-                val messageId = UUID.randomUUID().toString()
-                
-                val currentExpire = disappearingMode.value
-                val contentTypeHeader = if (currentExpire > 0) "TEXT;expire=$currentExpire" else "TEXT"
-                
-                val isConnected = signalingClient.isConnected()
-                if (isConnected) {
-                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, contentType = contentTypeHeader, messageId = messageId)
-                } else {
-                    val outbox = com.enclave.app.data.local.OutboxEntity(
-                        targetId = partnerId,
-                        type = "SIGNAL_PAYLOAD",
-                        payload = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP),
-                        contentType = contentTypeHeader,
-                        messageId = messageId
-                    )
-                    database.outboxDao().insert(outbox)
-                    val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.OutboxSyncWorker>()
-                        .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
-                        .build()
-                    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
-                }
-                
-                decryptedMessagesCache[messageId] = plainTextToSend
-                
-                val localEncrypted = cryptoManager.encryptLocal(messageBytes)
-                val entity = MessageEntity(
-                    id = messageId,
-                    senderId = myId,
-                    receiverId = partnerId,
-                    encryptedPayload = localEncrypted,
-                    timestamp = System.currentTimeMillis(),
-                    isRead = true,
-                    messageType = "TEXT",
-                    deliveryStatus = if (isConnected) "SENT" else "QUEUED",
-                    disappearingDuration = currentExpire,
-                    expiresAt = 0L
-                )
-                database.messageDao().insertMessage(entity)
+            val result = messageSenderUseCase.sendMessage(text, replyTarget, disappearingMode.value, isSecured)
+            if (result != null) {
+                messageDecryptorUseCase.injectCache(result.first, result.second)
             }
         }
     }
 
     fun sendTimeCapsuleMessage(text: String, sendAt: Long) {
-        if (text.isBlank()) return
-        
-        viewModelScope.launch(Dispatchers.IO) {
-            val messageId = UUID.randomUUID().toString()
-            val messageBytes = text.toByteArray(Charsets.UTF_8)
-            val localEncrypted = cryptoManager.encryptLocal(messageBytes)
-            
-            val capsule = com.enclave.app.data.local.TimeCapsuleEntity(
-                id = messageId,
-                targetId = partnerId,
-                payloadText = localEncrypted,
-                sendAt = sendAt,
-                createdAt = System.currentTimeMillis()
-            )
-            
-            database.timeCapsuleDao().insert(capsule)
-            
-            val delayMs = sendAt - System.currentTimeMillis()
-            val req = androidx.work.OneTimeWorkRequestBuilder<com.enclave.app.worker.TimeCapsuleWorker>()
-                .setInputData(androidx.work.workDataOf("CAPSULE_ID" to messageId))
-                .setInitialDelay(java.util.concurrent.TimeUnit.MILLISECONDS.toMillis(delayMs), java.util.concurrent.TimeUnit.MILLISECONDS)
-                .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
-                .build()
-            
-            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("capsule_$messageId", androidx.work.ExistingWorkPolicy.REPLACE, req)
+        viewModelScope.launch {
+            messageSenderUseCase.sendTimeCapsuleMessage(text, sendAt)
         }
     }
 
@@ -547,7 +372,7 @@ class ChatViewModel(
                     else -> String(decryptedBytes, Charsets.UTF_8)
                 }
 
-                decryptedMessagesCache[messageId] = plaintext
+                messageDecryptorUseCase.injectCache(messageId, plaintext)
 
                 val entity = MessageEntity(
                     id = messageId,
@@ -647,7 +472,7 @@ class ChatViewModel(
                     androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
                 }
                 
-                decryptedMessagesCache[messageId] = "🎤 Voice Memo"
+                messageDecryptorUseCase.injectCache(messageId, "🎤 Voice Memo")
                 
                 val fileName = "sent_${System.currentTimeMillis()}.m4a"
                 vaultRepository.saveSecureFile(fileName, memoBytes)
@@ -734,7 +559,7 @@ class ChatViewModel(
                     "MEDIA_FILE" -> "📄 Document ($ext)"
                     else -> "📸 Photo"
                 }
-                decryptedMessagesCache[messageId] = displayMsg
+                messageDecryptorUseCase.injectCache(messageId, displayMsg)
                 
                 val fileName = "sent_${System.currentTimeMillis()}.$ext"
                 vaultRepository.saveSecureFile(fileName, mediaBytes)
@@ -782,7 +607,7 @@ class ChatViewModel(
                     androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
                 }
                 
-                decryptedMessagesCache[messageId] = "Kiss Impression"
+                messageDecryptorUseCase.injectCache(messageId, "Kiss Impression")
                 val localEncrypted = cryptoManager.encryptLocal(messageBytes)
                 val entity = MessageEntity(
                     id = messageId,
@@ -914,21 +739,7 @@ class ChatViewModel(
                 // Fetch last 1000 messages
                 val entities = database.messageDao().getLastMessages(1000)
                 val matches = entities.mapNotNull { entity ->
-                    val decryptedText = decryptedMessagesCache.getOrPut(entity.id) {
-                        try {
-                            val decryptedBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
-                            when (entity.messageType) {
-                                "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
-                                "MEDIA_VIDEO" -> "🎥 Video"
-                                "MEDIA_AUDIO" -> "🎵 Audio File"
-                                "VOICE" -> "🎤 Voice Memo"
-                                "RECORDED_KISS" -> "Kiss Impression"
-                                else -> String(decryptedBytes, Charsets.UTF_8)
-                            }
-                        } catch (e: Exception) {
-                            "🔒 Decryption failed"
-                        }
-                    }
+                    val decryptedText = messageDecryptorUseCase.getDecryptedText(entity)
 
                     var parsedText = decryptedText
                     var qId: String? = null
@@ -1044,7 +855,7 @@ class ChatViewModel(
                     androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("outbox_sync", androidx.work.ExistingWorkPolicy.REPLACE, req)
                 }
                 
-                decryptedMessagesCache[messageId] = "📳 Haptic: $patternName"
+                messageDecryptorUseCase.injectCache(messageId, "📳 Haptic: $patternName")
                 
                 val localEncrypted = cryptoManager.encryptLocal(messageBytes)
                 val entity = MessageEntity(
