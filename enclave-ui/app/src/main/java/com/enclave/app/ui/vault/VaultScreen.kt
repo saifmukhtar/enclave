@@ -41,12 +41,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.data.local.MediaMetadataEntity
 import com.enclave.app.data.vault.VaultRepository
-import com.enclave.app.media.EncryptedFileDataSource
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.IntentSenderRequest
+import androidx.activity.compose.BackHandler
+import com.enclave.app.ui.vault.components.VaultGrid
+import com.enclave.app.ui.vault.components.FullscreenMediaPager
 
 val InterFont = FontFamily.Default
 val OutfitFont = FontFamily.Default
@@ -85,30 +84,12 @@ fun VaultScreen(
         }
     }
 
-    val pickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            viewModel.importPublicMedia(uris, context)
-        }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.clearPendingPermissionIntent()
-            viewModel.importPublicMedia(emptyList(), context) // Trigger reload
-        }
-    }
-
     val pendingPermission by viewModel.pendingPermissionIntent.collectAsState()
-    LaunchedEffect(pendingPermission) {
-        pendingPermission?.let { intentSender ->
-            val request = IntentSenderRequest.Builder(intentSender).build()
-            permissionLauncher.launch(request)
-        }
-    }
+    val mediaHandler = rememberVaultMediaHandler(
+        viewModel = viewModel,
+        context = context,
+        pendingPermission = pendingPermission
+    )
 
     LaunchedEffect(authState) {
         if (authState == BiometricPromptManager.AuthState.LOCKED) {
@@ -304,9 +285,9 @@ fun VaultScreen(
                 FloatingActionButton(
                     onClick = {
                         com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
-                        pickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                        )
+                    mediaHandler.pickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                    )
                     },
                     containerColor = Color(0xFFFCE2E6),
                     contentColor = Color(0xFFE598A7),
@@ -407,320 +388,4 @@ fun VaultScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun VaultGrid(
-    viewModel: VaultViewModel,
-    vaultRepository: VaultRepository,
-    isUnlocked: Boolean,
-    isSelectionMode: Boolean,
-    selectedItems: MutableList<MediaMetadataEntity>,
-    onItemClick: (Int) -> Unit,
-    onToggleSelectionMode: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val vaultItems by viewModel.vaultItems.collectAsState()
-    val context = LocalContext.current
 
-    val displayItems = if (isUnlocked) vaultItems else List(12) {
-        MediaMetadataEntity("mock_$it", "", "", "image/jpeg", 0, false, null)
-    }
-
-    if (isUnlocked && displayItems.isEmpty()) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Secure Vault is empty.\nTap + to import E2EE media.",
-                fontFamily = InterFont,
-                color = Color.Gray,
-                textAlign = TextAlign.Center,
-                fontSize = 16.sp
-            )
-        }
-    } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(8.dp),
-            modifier = modifier.fillMaxSize()
-        ) {
-            items(displayItems.size) { index ->
-                val entity = displayItems[index]
-                val fileName = entity.localEncryptedPath
-                var expandedMenu by remember { mutableStateOf(false) }
-
-                val isSelected = selectedItems.contains(entity)
-
-                Box(
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFFCE2E6))
-                        .combinedClickable(
-                            onClick = {
-                                if (isUnlocked) {
-                                    if (isSelectionMode) {
-                                        if (isSelected) selectedItems.remove(entity)
-                                        else selectedItems.add(entity)
-                                    } else {
-                                        onItemClick(index)
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                if (isUnlocked) {
-                                    if (!isSelectionMode) {
-                                        onToggleSelectionMode(true)
-                                        selectedItems.add(entity)
-                                    } else {
-                                        expandedMenu = true
-                                    }
-                                }
-                            }
-                        )
-                ) {
-                    if (isUnlocked && !fileName.startsWith("mock_") && fileName.isNotEmpty()) {
-                        val isVideo = entity.mimeType.startsWith("video/")
-                        val imagePath = if (isVideo && entity.thumbnailPath.isNotEmpty()) {
-                            entity.thumbnailPath
-                        } else {
-                            fileName
-                        }
-
-                        if (isVideo && entity.thumbnailPath.isEmpty()) {
-                            // Fallback video player card
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Video",
-                                    tint = Color(0xFFE598A7),
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                        } else {
-                            val bitmapState = produceState<Bitmap?>(initialValue = null, imagePath) {
-                                value = vaultRepository.getDecryptedImageBitmap(imagePath, 512, 512)
-                            }
-                            bitmapState.value?.let { bmp ->
-                                Image(
-                                    bitmap = bmp.asImageBitmap(),
-                                    contentDescription = fileName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                            if (isVideo) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Video",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isSelectionMode && isUnlocked) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    if (isSelected) Color(0xFFE598A7).copy(alpha = 0.4f)
-                                    else Color.Transparent
-                                )
-                        ) {
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(8.dp)
-                                        .size(20.dp)
-                                        .background(Color(0xFFE598A7), CircleShape)
-                                        .align(Alignment.TopStart),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = expandedMenu,
-                        onDismissRequest = { expandedMenu = false },
-                        modifier = Modifier.background(Color(0xFFFFF5F6))
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Export to Public Gallery", color = Color(0xFF2A1B1D)) },
-                            onClick = {
-                                expandedMenu = false
-                                viewModel.exportToPublic(fileName, context)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Securely Shred File", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                expandedMenu = false
-                                viewModel.shredFile(fileName)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun FullscreenMediaPager(
-    items: List<MediaMetadataEntity>,
-    initialIndex: Int,
-    repository: VaultRepository,
-    onClose: () -> Unit
-) {
-    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { items.size })
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val entity = items[page]
-            val fileName = entity.localEncryptedPath
-            val isVideo = entity.mimeType.startsWith("video/")
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isVideo) {
-                    SecureVideoPlayer(
-                        fileName = fileName,
-                        repository = repository,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    ZoomableImage(
-                        fileName = fileName,
-                        repository = repository
-                    )
-                }
-            }
-        }
-
-        // Close Trigger Button overlay
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .padding(24.dp)
-                .align(Alignment.TopEnd)
-                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close Pager",
-                tint = Color.White
-            )
-        }
-    }
-}
-
-@Composable
-fun ZoomableImage(
-    fileName: String,
-    repository: VaultRepository
-) {
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    val bitmapState = produceState<Bitmap?>(initialValue = null, fileName) {
-        value = repository.getDecryptedImageBitmap(fileName, 0, 0)
-    }
-
-    bitmapState.value?.let { bmp ->
-        Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = fileName,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
-                        if (scale > 1f) {
-                            offset += pan
-                        } else {
-                            offset = Offset.Zero
-                        }
-                    }
-                }
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
-                )
-        )
-    }
-}
-
-@Composable
-fun SecureVideoPlayer(
-    fileName: String,
-    repository: VaultRepository,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-
-    val exoPlayer = remember(fileName) {
-        val fileDataSource = EncryptedFileDataSource(repository.encryptedFileManager, fileName)
-        val dataSourceFactory = androidx.media3.datasource.DataSource.Factory { fileDataSource }
-        val mediaSource = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(androidx.media3.common.MediaItem.fromUri(Uri.parse("secure://vault/$fileName")))
-
-        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
-            setMediaSource(mediaSource)
-            prepare()
-            playWhenReady = true
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            exoPlayer.release()
-        }
-    }
-
-    androidx.compose.ui.viewinterop.AndroidView(
-        factory = { ctx ->
-            androidx.media3.ui.PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = true
-            }
-        },
-        modifier = modifier.fillMaxSize()
-    )
-}
