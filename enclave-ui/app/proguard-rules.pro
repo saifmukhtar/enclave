@@ -17,3 +17,4 @@
 # Preserve Supabase Gotrue / Postgrest Network models
 -keep class io.github.jan.supabase.** { *; }
 -keepclassmembers class io.github.jan.supabase.** { *; }
+-dontwarn org.slf4j.impl.StaticLoggerBinder

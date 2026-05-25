@@ -4,28 +4,23 @@
 # for the absolute most critical, highly-used screens.
 
 # 1. Main Entry & Navigation Setup
-HPLcom/enclave/app/ui/main/MainActivity;
-HPLcom/enclave/app/ui/main/EnclaveAppKt;
-HPLcom/enclave/app/ui/main/EnclaveAppKt$*
+Lcom/enclave/app/ui/main/MainActivity;
+Lcom/enclave/app/ui/main/EnclaveAppKt;
 
 # 2. Critical UI: The Chat Screen (Primary Use Case)
-HPLcom/enclave/app/ui/chat/ChatScreenKt;
-HPLcom/enclave/app/ui/chat/ChatScreenKt$*
-HPLcom/enclave/app/ui/chat/components/MessageBubbleKt;
-HPLcom/enclave/app/ui/chat/components/MessageBubbleKt$*
-HPLcom/enclave/app/ui/chat/ChatViewModel;
-HPLcom/enclave/app/ui/chat/ChatViewModel$*
+Lcom/enclave/app/ui/chat/ChatScreenKt;
+Lcom/enclave/app/ui/chat/components/MessageBubbleKt;
+Lcom/enclave/app/ui/chat/ChatViewModel;
 
 # 3. Critical UI: The Lounge (Interactive Features)
-HPLcom/enclave/app/ui/lounge/LoungeScreenKt;
-HPLcom/enclave/app/ui/lounge/LoungeScreenKt$*
-HPLcom/enclave/app/ui/lounge/LoungeViewModel;
+Lcom/enclave/app/ui/lounge/LoungeScreenKt;
+Lcom/enclave/app/ui/lounge/LoungeViewModel;
 
 # 4. Critical Logic: WebRTC & Crypto Initialization
-HPLcom/enclave/app/webrtc/SignalingClient;
-HPLcom/enclave/app/crypto/SignalCryptoManager;
-HPLcom/enclave/app/data/local/EnclaveDatabase;
+Lcom/enclave/app/webrtc/SignalingClient;
+Lcom/enclave/app/crypto/SignalCryptoManager;
+Lcom/enclave/app/data/local/EnclaveDatabase;
 
 # 5. Physics & Heavy Canvas Loaders
-HPLcom/enclave/app/ui/kiss/physics/LipPhysicsEngine;
-HPLcom/enclave/app/ui/chat/components/KissCanvasOverlayKt;
+Lcom/enclave/app/ui/kiss/physics/LipPhysicsEngine;
+Lcom/enclave/app/ui/chat/components/KissCanvasOverlayKt;
