@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.enclave.app.ui.profile.components.E2eeAvatar
 import com.enclave.app.ui.chat.ChatUiState
 import com.enclave.app.ui.theme.CharcoalText
 import com.enclave.app.ui.theme.InterFont
@@ -131,7 +132,7 @@ fun GlassmorphicTopBar(
                     Box(
                         modifier = Modifier.scale(pulseScale)
                     ) {
-                        com.enclave.app.ui.profile.E2eeAvatar(
+                        E2eeAvatar(
                             avatarBase64 = partnerAvatarUrl,
                             isMe = false,
                             profileViewModel = profileViewModel,
