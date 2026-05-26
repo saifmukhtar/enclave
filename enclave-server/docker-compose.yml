@@ -82,6 +82,9 @@ services:
     container_name: supabase-realtime
     image: supabase/realtime:v2.28.31
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     command: /bin/sh -lc 'export APP_NAME="${APP_NAME:-realtime}"; exec /app/bin/server'
     environment:
       - APP_NAME=realtime
@@ -99,6 +102,7 @@ services:
       - REPLICATION_POLL_INTERVAL=100
       - SEED_SELF_HOST=true
       - DNS_NODES=''
+      - DB_ENC_KEY=supabaserealtime
     networks:
       - supabase-network
 
@@ -106,6 +110,9 @@ services:
     container_name: supabase-storage
     image: supabase/storage-api:v1.10.1
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
@@ -161,6 +168,12 @@ services:
       - ./volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:Z
     networks:
       - supabase-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   ntfy:
     container_name: enclave-ntfy
@@ -171,6 +184,11 @@ services:
       - TZ=UTC
       - NTFY_AUTH_FILE=/var/lib/ntfy/user.db
       - NTFY_AUTH_DEFAULT_ACCESS=deny-all
+      # Raise rate limits to prevent 429 errors from WebSocket reconnect storms
+      # Default burst is 60/visitor — raised to 1000 to handle two-device session reconnects
+      - NTFY_VISITOR_REQUEST_LIMIT_BURST=1000
+      - NTFY_VISITOR_REQUEST_LIMIT_REPLENISH=1s
+      - NTFY_VISITOR_SUBSCRIPTION_LIMIT=30
     volumes:
       - ./volumes/ntfy:/var/lib/ntfy
     ports:

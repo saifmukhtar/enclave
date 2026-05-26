@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.data.local.LetterEntity
 import com.enclave.app.media.MusicSyncController
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +81,6 @@ fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Fac
     val viewModel: com.enclave.app.ui.lounge.LoungeMediaViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = loungeMediaFactory)
     val letters by viewModel.decryptedLettersFlow.collectAsState(initial = emptyList())
     var newLetterText by remember { mutableStateOf("") }
-    
 
     Column(modifier = Modifier.fillMaxSize()) {
         Card(
@@ -87,26 +88,47 @@ fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Fac
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F2)),
+            border = BorderStroke(1.dp, Color(0xFFFFE4E8)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Write New Daily Capsule Letter", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(8.dp))
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Create,
+                        contentDescription = null,
+                        tint = com.enclave.app.ui.theme.RoseDeep,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Write Daily Capsule Letter",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = com.enclave.app.ui.theme.CharcoalText,
+                        fontSize = 16.sp,
+                        fontFamily = PlayfairFont
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = newLetterText,
                     onValueChange = { newLetterText = it },
                     placeholder = { Text("Type something intimate, sweet or hidden...") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(100.dp),
+                        .height(120.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFE598A7),
-                        unfocusedBorderColor = Color(0xFFFCE2E6)
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = com.enclave.app.ui.theme.RoseAccent,
+                        unfocusedBorderColor = Color(0xFFFFE4E8)
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
                         if (newLetterText.isNotBlank()) {
@@ -114,66 +136,133 @@ fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Fac
                             newLetterText = ""
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.enclave.app.ui.theme.RoseDeep),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Secure Capsule and Send", color = Color.White)
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Secure Capsule and Send", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(letters, key = { it.id }) { letter ->
                 var isDecrypted by remember(letter.id) { mutableStateOf(false) }
                 var letterText by remember(letter.id) { mutableStateOf("🔒 Securely Encrypted Daily Capsule") }
-                
+
+                val rotation = remember { Animatable(0f) }
+                val coroutineScope = rememberCoroutineScope()
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFFFE4E8)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (letter.senderId == viewModel.myId) "You Sent" else "Received Partner",
-                                fontSize = 10.sp,
-                                color = Color.Gray,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = letterText,
-                                fontSize = 13.sp,
-                                color = Color(0xFF2A1B1D)
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { viewModel.deleteLetter(letter.id) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Gray)
-                            }
-                            if (!isDecrypted) {
-                                IconButton(
-                                    onClick = {
-                                        letterText = viewModel.decryptLetter(letter.ciphertext)
-                                        isDecrypted = true
-                                        viewModel.markLetterAsRead(letter.id)
-                                    }
-                                ) {
-                                    Icon(Icons.Default.Lock, contentDescription = "Decrypt", tint = Color(0xFFE598A7))
-                                }
+                        // Left accent strip indicating sender state
+                        val accentStripBrush = Brush.verticalGradient(
+                            colors = if (letter.senderId == viewModel.myId) {
+                                listOf(com.enclave.app.ui.theme.RoseAccent, com.enclave.app.ui.theme.RoseDeep)
                             } else {
-                                Icon(Icons.Default.LockOpen, contentDescription = "Decrypted", tint = Color(0xFF4CAF50), modifier = Modifier.padding(12.dp))
+                                listOf(Color(0xFFB5A8E0), Color(0xFF8B7CC8))
+                            }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(6.dp)
+                                .height(96.dp)
+                                .background(accentStripBrush)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (letter.senderId == viewModel.myId) "From You" else "From Partner",
+                                    fontSize = 12.sp,
+                                    color = com.enclave.app.ui.theme.RoseDeep,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlayfairFont,
+                                    modifier = Modifier.graphicsLayer(alpha = 0.8f)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                AnimatedContent(
+                                    targetState = letterText,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(220, delayMillis = 90)) togetherWith
+                                        fadeOut(animationSpec = tween(90))
+                                    },
+                                    label = "decrypt_text"
+                                ) { targetText ->
+                                    Text(
+                                        text = targetText,
+                                        fontSize = 15.sp,
+                                        color = com.enclave.app.ui.theme.CharcoalText,
+                                        fontFamily = if (isDecrypted) PlayfairFont else InterFont
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(onClick = { viewModel.deleteLetter(letter.id) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Gray)
+                                }
+                                if (!isDecrypted) {
+                                    IconButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                rotation.animateTo(
+                                                    targetValue = 360f,
+                                                    animationSpec = tween(
+                                                        durationMillis = 600,
+                                                        easing = FastOutSlowInEasing
+                                                    )
+                                                )
+                                                letterText = viewModel.decryptLetter(letter.ciphertext)
+                                                isDecrypted = true
+                                                viewModel.markLetterAsRead(letter.id)
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Decrypt",
+                                            tint = com.enclave.app.ui.theme.RoseDeep,
+                                            modifier = Modifier.graphicsLayer(rotationZ = rotation.value)
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.LockOpen,
+                                        contentDescription = "Decrypted",
+                                        tint = Color(0xFF52B788),
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
                             }
                         }
                     }

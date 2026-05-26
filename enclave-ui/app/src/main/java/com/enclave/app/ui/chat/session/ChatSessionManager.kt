@@ -38,6 +38,11 @@ class ChatSessionManager(
     private var typingExpireJob: Job? = null
 
     fun start(scope: CoroutineScope) {
+        if (partnerId.isBlank()) {
+            android.util.Log.d("ChatSessionManager", "Skipping initialization: partnerId is blank")
+            _uiState.value = ChatUiState.Connecting
+            return
+        }
         initializeSession(scope)
         observeWebSocket(scope)
     }
@@ -80,6 +85,11 @@ class ChatSessionManager(
                     _uiState.value = ChatUiState.Handshaking
                     val result = bundleRepository.fetchPartnerBundleAndBuildSession(partnerId)
                     if (result.isSuccess) {
+                        // Settling delay: when both devices boot simultaneously, each uploads a fresh bundle
+                        // and immediately tries to handshake. Without this delay, early messages are
+                        // encrypted against a session that the partner hasn't established yet, causing
+                        // 'protobuf encoding was invalid' decryption failures on first exchange.
+                        delay(1_500L)
                         _uiState.value = ChatUiState.Secured
                         initializeSharedVaultKey(scope)
                         return@launch
@@ -103,20 +113,34 @@ class ChatSessionManager(
     private fun initializeSharedVaultKey(scope: CoroutineScope) {
         val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
         if (!prefs.contains("vault_key")) {
-            val keyBytes = ByteArray(32)
-            java.security.SecureRandom().nextBytes(keyBytes)
-            val keyBase64 = Base64.encodeToString(keyBytes, Base64.NO_WRAP)
-            prefs.edit().putString("vault_key", keyBase64).apply()
-            
-            // Sync it with partner via signaling (the encryption/sending happens here, but since this is infrastructure,
-            // we will let the sender encrypt and send it)
-            scope.launch(Dispatchers.IO) {
-                val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
-                val encryptionResult = cryptoManager.encryptMessage(partnerAddress, keyBytes)
-                if (encryptionResult.isSuccess) {
-                    val ciphertext = encryptionResult.getOrThrow()
-                    signalingClient.sendEncryptedMessage(partnerId, ciphertext, "VAULT_KEY_SYNC")
+            // BUG-11 Fix: Both devices find vault_key missing on first pair and each generate their
+            // own key simultaneously. The last VAULT_KEY_SYNC to arrive silently overwrites the first,
+            // making the earlier device's encrypted vault files permanently unreadable.
+            //
+            // Fix: Use lexicographic UUID ordering to deterministically assign key-generator role.
+            // The device whose UUID sorts earlier is the "owner" and generates+sends the key.
+            // The other device simply waits — it will receive VAULT_KEY_SYNC from its partner.
+            val myId = prefs.getString("my_id", null) ?: return
+            val amIKeyOwner = myId < partnerId  // lexicographic: exactly one side is always true
+
+            if (amIKeyOwner) {
+                val keyBytes = ByteArray(32)
+                java.security.SecureRandom().nextBytes(keyBytes)
+                val keyBase64 = Base64.encodeToString(keyBytes, Base64.NO_WRAP)
+                prefs.edit().putString("vault_key", keyBase64).apply()
+                android.util.Log.d("ChatSessionManager", "Vault key owner: generating and syncing key to partner")
+
+                scope.launch(Dispatchers.IO) {
+                    val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
+                    val encryptionResult = cryptoManager.encryptMessage(partnerAddress, keyBytes)
+                    if (encryptionResult.isSuccess) {
+                        val ciphertext = encryptionResult.getOrThrow()
+                        signalingClient.sendEncryptedMessage(partnerId, ciphertext, "VAULT_KEY_SYNC")
+                    }
                 }
+            } else {
+                android.util.Log.d("ChatSessionManager", "Vault key non-owner: waiting for partner to send VAULT_KEY_SYNC")
+                // Partner (key-owner) will send VAULT_KEY_SYNC — received and saved by ChatViewModel/EnclaveSyncWorker
             }
         }
     }
@@ -177,9 +201,29 @@ class ChatSessionManager(
     }
 
     fun retryHandshakeNow(scope: CoroutineScope) {
+        if (partnerId.isBlank()) return
         scope.launch(Dispatchers.IO) {
             try {
                 android.util.Log.d("ChatSessionManager", "Retrying Signal session handshake...")
+                // Re-upload our own bundle first — partner may have reinstalled and needs fresh keys
+                try { bundleRepository.uploadLocalBundle() } catch (e: Exception) {
+                    android.util.Log.w("ChatSessionManager", "Bundle re-upload failed (non-fatal): ${e.message}")
+                }
+
+                // Handle UntrustedIdentityException: when the partner rotates keys (reinstall / key rotation),
+                // the cached identity no longer matches. Force-trust the new key so handshake can proceed.
+                // This mirrors how Signal Protocol handles key rotation in official clients.
+                try {
+                    val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
+                    if (cryptoManager.signalStore.containsSession(partnerAddress)) {
+                        // Delete stale session to allow fresh handshake with partner's new keys
+                        android.util.Log.d("ChatSessionManager", "Clearing stale session for partner to allow fresh key trust")
+                        cryptoManager.signalStore.deleteSession(partnerAddress)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ChatSessionManager", "Identity pre-clear failed (non-fatal): ${e.message}")
+                }
+
                 val result = bundleRepository.fetchPartnerBundleAndBuildSession(partnerId)
                 if (result.isSuccess) {
                     _uiState.value = ChatUiState.Secured

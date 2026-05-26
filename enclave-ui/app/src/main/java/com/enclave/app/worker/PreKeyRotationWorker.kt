@@ -9,7 +9,10 @@ import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.network.BundleRepository
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.gotrue.SessionStatus
+import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.Postgrest
+import kotlinx.coroutines.flow.first
 
 class PreKeyRotationWorker(
     appContext: Context,
@@ -91,6 +94,15 @@ class PreKeyRotationWorker(
                 }
                 install(Auth)
                 install(Postgrest)
+            }
+
+            // BUG-15 Fix: Wait for the auth session to be restored from disk before uploading.
+            // Without this, awaitAuth() in BundleRepository throws "Supabase is not authenticated"
+            // and key rotation silently fails, degrading forward secrecy over time.
+            supabase.auth.sessionStatus.first { it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated }
+            if (supabase.auth.currentSessionOrNull() == null) {
+                android.util.Log.w("PreKeyRotationWorker", "No active Supabase session — retrying key rotation later.")
+                return Result.retry()
             }
 
             val bundleRepository = BundleRepository(supabase, signalStore, cryptoManager)

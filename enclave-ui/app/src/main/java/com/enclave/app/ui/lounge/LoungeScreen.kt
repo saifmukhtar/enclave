@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -75,6 +76,7 @@ import androidx.compose.foundation.BorderStroke
 import java.io.File
 
 
+@OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 @Composable
 fun LoungeScreen(
     viewModel: LoungeViewModel,
@@ -86,103 +88,279 @@ fun LoungeScreen(
     loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory,
     loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory
 ) {
-    var activeTab by remember { mutableStateOf("profiles") }
+    var activeTab by remember { mutableStateOf("hub") }
 
-    BackHandler(enabled = activeTab != "profiles") {
-        activeTab = "profiles"
+    BackHandler(enabled = activeTab != "hub") {
+        activeTab = "hub"
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFFF5F6)) // Minimalist Blush palette canvas
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Elegant Glowing Header (Blend with theme, no hard boundary)
+    AnimatedContent(
+        targetState = activeTab,
+        transitionSpec = {
+            if (targetState == "hub") {
+                (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
+            } else {
+                (slideInVertically { -it } + fadeIn()).togetherWith(slideOutVertically { it } + fadeOut())
+            }
+        },
+        label = "LoungeNavigation"
+    ) { currentView ->
+        if (currentView == "hub") {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .background(Color(0xFFFFF5F6))
             ) {
-                Text(
-                    text = "💋 Enclave Shared Lounge",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2A1B1D),
-                    fontFamily = PlayfairFont
-                )
-            }
-
-            // Minimalist Category Chips Category Row (Scrollable)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val tabs = listOf(
-                    Triple("profiles", "✨ Profiles", Icons.Default.Person),
-                    Triple("notes", "📝 Notes", Icons.Default.EditNote),
-                    Triple("letters", "💌 Letters", Icons.Default.Mail),
-                    Triple("dice", "🎲 Games", Icons.Default.Casino),
-                    Triple("canvas", "🖌️ Live Draw", Icons.Default.Edit),
-                    Triple("secret", "🫣 Reveal", Icons.Default.VisibilityOff),
-                    Triple("quiz", "❤️ Quiz", Icons.Default.Favorite),
-                    Triple("scrapbook", "📸 Scrapbook", Icons.Default.PhotoLibrary),
-                    Triple("timeline", "📅 Timeline", Icons.Default.History),
-                    Triple("music", "🎵 Music", Icons.Default.MusicNote)
-                )
-
-                tabs.forEach { (id, label, icon) ->
-                    val isSelected = activeTab == id
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Header Wave Canvas Banner
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (isSelected) Color(0xFFE598A7) else Color(0xFFFCE2E6))
-                            .clickable { activeTab = id }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .height(130.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label,
-                                tint = if (isSelected) Color.White else Color(0xFF2A1B1D),
-                                modifier = Modifier.size(16.dp)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val path = Path().apply {
+                                moveTo(0f, 0f)
+                                lineTo(size.width, 0f)
+                                lineTo(size.width, size.height * 0.75f)
+                                cubicTo(
+                                    size.width * 0.75f, size.height * 0.95f,
+                                    size.width * 0.25f, size.height * 0.55f,
+                                    0f, size.height * 0.85f
+                                )
+                                close()
+                            }
+                            drawPath(
+                                path = path,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(Color(0xFFF7C5D1), Color(0xFFFFF5F6))
+                                )
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Enclave Lounge",
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = com.enclave.app.ui.theme.CharcoalText,
+                                    fontFamily = PlayfairFont
+                                )
+                                
+                                val infiniteTransition = rememberInfiniteTransition(label = "pulse_heart")
+                                val heartScale by infiniteTransition.animateFloat(
+                                    initialValue = 1.0f,
+                                    targetValue = 1.15f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(900, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "heart"
+                                )
+                                Text(
+                                    text = "❤️",
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.scale(heartScale)
+                                )
+                            }
                             Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontFamily = InterFont,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) Color.White else Color(0xFF2A1B1D)
+                                text = "Your intimate shared companion spaces",
+                                color = com.enclave.app.ui.theme.CharcoalText.copy(alpha = 0.6f),
+                                fontSize = 13.sp,
+                                fontFamily = PlayfairFont,
+                                fontWeight = FontWeight.Normal
                             )
+                        }
+                    }
+
+                    val tabs = listOf(
+                        Triple("profiles", "Profiles", "E2EE Data") to (Icons.Default.Person to (Color(0xFFE598A7) to Color(0xFFD4607A))),
+                        Triple("notes", "Notes", "Shared Ideas") to (Icons.Default.EditNote to (Color(0xFFB5A8E0) to Color(0xFF8B7CC8))),
+                        Triple("letters", "Letters", "Daily Capsules") to (Icons.Default.Mail to (Color(0xFFF4A261) to Color(0xFFE76F51))),
+                        Triple("dice", "Games", "Play Together") to (Icons.Default.Casino to (Color(0xFF52B788) to Color(0xFF2D6A4F))),
+                        Triple("canvas", "Live Draw", "Shared Canvas") to (Icons.Default.Edit to (Color(0xFF4ECDC4) to Color(0xFF2AA8A0))),
+                        Triple("secret", "Reveal", "Secret Photos") to (Icons.Default.VisibilityOff to (Color(0xFF9B5DE5) to Color(0xFF7B2FBE))),
+                        Triple("quiz", "Quiz", "Love Language") to (Icons.Default.Favorite to (Color(0xFFF15BB5) to Color(0xFFC2185B))),
+                        Triple("scrapbook", "Scrapbook", "Photo Albums") to (Icons.Default.PhotoLibrary to (Color(0xFFFFA600) to Color(0xFFE68200))),
+                        Triple("timeline", "Timeline", "Memory Lane") to (Icons.Default.History to (Color(0xFF6495ED) to Color(0xFF4169E1))),
+                        Triple("music", "Music", "Listen Together") to (Icons.Default.MusicNote to (Color(0xFFFF6B6B) to Color(0xFFD63031)))
+                    )
+
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                        contentPadding = PaddingValues(20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(tabs.size) { index ->
+                            val (info, data) = tabs[index]
+                            val (id, title, subtitle) = info
+                            val (icon, gradientColors) = data
+                            val (gStart, gEnd) = gradientColors
+
+                            val isCardPressed = remember { mutableStateOf(false) }
+                            val cardScale by animateFloatAsState(
+                                targetValue = if (isCardPressed.value) 0.94f else 1.0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                ),
+                                label = "card_lounge_scale"
+                            )
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1.0f)
+                                    .graphicsLayer(scaleX = cardScale, scaleY = cardScale)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isCardPressed.value = true
+                                                try {
+                                                    awaitRelease()
+                                                } finally {
+                                                    isCardPressed.value = false
+                                                }
+                                            },
+                                            onTap = { activeTab = id }
+                                        )
+                                    },
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.White
+                                ),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.8f)),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(gStart, gEnd)
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = title,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = title,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = com.enclave.app.ui.theme.CharcoalText,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontFamily = PlayfairFont
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = subtitle,
+                                        fontSize = 12.sp,
+                                        color = com.enclave.app.ui.theme.CharcoalText.copy(alpha = 0.55f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-
-            // Primary Screen Content Viewports
-            Box(
+        } else {
+            // Detail View
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(16.dp)
+                    .fillMaxSize()
+                    .background(Color(0xFFFFF5F6))
             ) {
-                when (activeTab) {
-                    "profiles" -> ProfileCardsTab(viewModel, profileViewModel)
-                    "notes" -> E2EENotesTab(loungeMediaFactory)
-                    "letters" -> DailyLettersTab(loungeMediaFactory)
-                    "dice" -> DiceAndIntimacyTab(loungeGamesFactory)
-                    "canvas" -> LiveSharedCanvasTab(loungeDrawingFactory)
-                    "secret" -> ScratchToRevealTab(loungeGamesFactory)
-                    "quiz" -> LoveLanguageQuizTab(loungeGamesFactory)
-                    "scrapbook" -> ScrapbookTab(loungeMediaFactory)
-                    "timeline" -> MemoryTimelineTab(chatViewModel)
-                    "music" -> MusicLoungeTab(musicSyncController, loungeMusicFactory)
+                // Top App Bar for Detail View
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(1.dp, Color(0xFFFFE4E8), CircleShape)
+                            .clickable { activeTab = "hub" },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = com.enclave.app.ui.theme.CharcoalText)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    
+                    val formattedTitle = when (activeTab) {
+                        "profiles" -> "Partner Profiles"
+                        "notes" -> "Shared Notes"
+                        "letters" -> "Daily Letters"
+                        "dice" -> "Intimate Games"
+                        "canvas" -> "Shared Canvas"
+                        "secret" -> "Secret Photos"
+                        "quiz" -> "Love Language"
+                        "scrapbook" -> "Scrapbook Albums"
+                        "timeline" -> "Memory Timeline"
+                        "music" -> "Music Together"
+                        else -> activeTab.replaceFirstChar { it.uppercase() }
+                    }
+
+                    Text(
+                        text = formattedTitle,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = PlayfairFont,
+                        color = com.enclave.app.ui.theme.CharcoalText
+                    )
+                }
+
+                HorizontalDivider(color = Color(0xFFFFE4E8), thickness = 1.dp, modifier = Modifier.padding(horizontal = 16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    when (currentView) {
+                        "profiles" -> ProfileCardsTab(viewModel, profileViewModel)
+                        "notes" -> E2EENotesTab(loungeMediaFactory)
+                        "letters" -> DailyLettersTab(loungeMediaFactory)
+                        "dice" -> DiceAndIntimacyTab(loungeGamesFactory)
+                        "canvas" -> LiveSharedCanvasTab(loungeDrawingFactory)
+                        "secret" -> ScratchToRevealTab(loungeGamesFactory)
+                        "quiz" -> LoveLanguageQuizTab(loungeGamesFactory)
+                        "scrapbook" -> ScrapbookTab(loungeMediaFactory)
+                        "timeline" -> MemoryTimelineTab(chatViewModel)
+                        "music" -> MusicLoungeTab(musicSyncController, loungeMusicFactory)
+                    }
                 }
             }
         }

@@ -2,6 +2,9 @@
 package com.enclave.app.ui.chat
 
 import android.widget.Toast
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -156,11 +160,42 @@ fun ChatScreen(
         ).show()
     }
 
+    val driftTransition = rememberInfiniteTransition(label = "drifting_bg")
+    val driftAnim by driftTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(25000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "drift"
+    )
+
+    var listLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(messages.size) {
+        listLoaded = true
+    }
+
     // ── Scaffold ──────────────────────────────────────────────────────────────
     Box(modifier = Modifier.fillMaxSize()) {
+        // Organic slow-drifting custom canvas gradient backdrop
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val xOffset = (Math.cos(Math.toRadians(driftAnim.toDouble())) * (width * 0.12f)).toFloat()
+            val yOffset = (Math.sin(Math.toRadians(driftAnim.toDouble())) * (height * 0.12f)).toFloat()
+            drawRect(
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(Color(0xFFFFF0F2), Color(0xFFFFF5F6)),
+                    start = androidx.compose.ui.geometry.Offset(xOffset, yOffset),
+                    end = androidx.compose.ui.geometry.Offset(width + xOffset, height + yOffset)
+                )
+            )
+        }
+
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = BlushBackground,
+            containerColor = Color.Transparent, // Make Scaffold transparent to reveal dynamic canvas backdrop
             topBar = {
                 GlassmorphicTopBar(
                     uiState = uiState,
@@ -228,20 +263,44 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
-                    items(displayMessages.reversed()) { message ->
-                        SwipeToReplyMessageBubble(
-                            message = message,
-                            viewModel = viewModel,
-                            searchQuery = if (isSearchActive) searchQuery else "",
-                            onMediaClick = {
-                                if (message.messageType == "MEDIA" ||
-                                    message.messageType == "MEDIA_IMAGE" ||
-                                    message.messageType == "MEDIA_VIDEO"
-                                ) {
-                                    lightboxMessage = message
-                                }
-                            }
+                    itemsIndexed(displayMessages.reversed()) { index, message ->
+                        val delay = (index * 40).coerceAtMost(300)
+                        val slideOffset by animateDpAsState(
+                            targetValue = if (listLoaded) 0.dp else 40.dp,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            ),
+                            label = "item_slide"
                         )
+                        val itemAlpha by animateFloatAsState(
+                            targetValue = if (listLoaded) 1.0f else 0.0f,
+                            animationSpec = tween(
+                                durationMillis = 300,
+                                delayMillis = delay
+                            ),
+                            label = "item_alpha"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .offset(y = slideOffset)
+                                .graphicsLayer(alpha = itemAlpha)
+                        ) {
+                            SwipeToReplyMessageBubble(
+                                message = message,
+                                viewModel = viewModel,
+                                searchQuery = if (isSearchActive) searchQuery else "",
+                                onMediaClick = {
+                                    if (message.messageType == "MEDIA" ||
+                                        message.messageType == "MEDIA_IMAGE" ||
+                                        message.messageType == "MEDIA_VIDEO"
+                                    ) {
+                                        lightboxMessage = message
+                                    }
+                                }
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }

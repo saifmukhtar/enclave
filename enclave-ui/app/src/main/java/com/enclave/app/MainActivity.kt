@@ -39,6 +39,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         
         if (intent?.getBooleanExtra("AUTO_LAUNCH_KISS", false) == true) {
             autoLaunchKissState.value = true
@@ -74,7 +75,7 @@ class MainActivity : FragmentActivity() {
         )
         
         setContent {
-            MaterialTheme {
+            com.enclave.app.ui.theme.EnclaveTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

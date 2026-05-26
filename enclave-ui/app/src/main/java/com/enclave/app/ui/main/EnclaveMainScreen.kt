@@ -29,7 +29,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import com.enclave.app.ui.theme.RoseDeep
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.vault.VaultRepository
 import com.enclave.app.media.MusicSyncController
@@ -175,55 +181,95 @@ fun EnclaveMainScreen(
         }
 
         Scaffold(
+            modifier = Modifier.fillMaxSize().systemBarsPadding(),
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    NavigationBarItem(
-                        selected = currentTab == "chat",
-                        onClick = { currentTab = "chat" },
-                        icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Chat") },
-                        label = { Text("Chat") }
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == "calls",
-                        onClick = { currentTab = "calls" },
-                        icon = { Icon(Icons.Default.Call, contentDescription = "Calls") },
-                        label = { Text("Calls") }
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == "stories",
-                        onClick = { currentTab = "stories" },
-                        icon = {
-                            val unviewed by storyViewModel.unviewedCount.collectAsState()
-                            BadgedBox(badge = {
-                                if (unviewed > 0) Badge { Text(unviewed.toString()) }
-                            }) {
-                                Icon(Icons.Default.AutoStories, contentDescription = "Stories")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+                        border = BorderStroke(1.dp, Color(0xFFFFE4E8)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val tabs = listOf(
+                                "chat" to (Icons.AutoMirrored.Filled.Send to "Chat"),
+                                "calls" to (Icons.Default.Call to "Calls"),
+                                "stories" to (Icons.Default.AutoStories to "Status"),
+                                "music" to (Icons.Default.MusicNote to "Music"),
+                                "vault" to (Icons.Default.Lock to "Vault"),
+                                "lounge" to (Icons.Default.Casino to "Lounge")
+                            )
+                            tabs.forEach { (tabId, pair) ->
+                                val (icon, label) = pair
+                                val isSelected = currentTab == tabId
+                                val animScale by androidx.compose.animation.core.animateFloatAsState(
+                                    targetValue = if (isSelected) 1.15f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    )
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) { currentTab = tabId }
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.graphicsLayer(scaleX = animScale, scaleY = animScale)
+                                    ) {
+                                        if (tabId == "stories") {
+                                            val unviewed by storyViewModel.unviewedCount.collectAsState()
+                                            BadgedBox(badge = {
+                                                if (unviewed > 0) Badge(containerColor = RoseDeep) { Text(unviewed.toString(), color = Color.White) }
+                                            }) {
+                                                Icon(
+                                                    icon,
+                                                    contentDescription = label,
+                                                    tint = if (isSelected) com.enclave.app.ui.theme.RoseDeep else Color(0xFF7A6A6C)
+                                                )
+                                            }
+                                        } else {
+                                            Icon(
+                                                icon,
+                                                contentDescription = label,
+                                                tint = if (isSelected) com.enclave.app.ui.theme.RoseDeep else Color(0xFF7A6A6C)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) com.enclave.app.ui.theme.RoseDeep else Color(0xFF7A6A6C)
+                                            )
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        label = { Text("Status") }
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == "music",
-                        onClick = { currentTab = "music" },
-                        icon = { Icon(Icons.Default.MusicNote, contentDescription = "Music") },
-                        label = { Text("Music") }
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == "vault",
-                        onClick = { currentTab = "vault" },
-                        icon = { Icon(Icons.Default.Lock, contentDescription = "Vault") },
-                        label = { Text("Vault") }
-                    )
-                    NavigationBarItem(
-                        selected = currentTab == "lounge",
-                        onClick = { currentTab = "lounge" },
-                        icon = { Icon(Icons.Default.Casino, contentDescription = "Lounge") },
-                        label = { Text("Lounge") }
-                    )
+                        }
+                    }
                 }
             }
         ) { paddingValues ->
-            Box(modifier = Modifier.padding(paddingValues)) {
+            Box(modifier = Modifier.padding(paddingValues).consumeWindowInsets(paddingValues).imePadding()) {
                 when (currentTab) {
                     "chat" -> ChatScreen(
                         viewModel = chatViewModel,

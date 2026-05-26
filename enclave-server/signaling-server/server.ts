@@ -212,6 +212,7 @@ function parseInboundMessage(raw: RawData): any {
     targetId: parsed.targetId.trim(),
     payload: parsed.payload,
     contentType: parsed.contentType,
+    messageId: parsed.messageId ?? null,  // FIX BUG-9: forward messageId so delivery receipts work
   };
 }
 
@@ -397,11 +398,12 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         });
       }
 
-      // Messages that should be queued for offline delivery
+      // Messages that should be queued for offline delivery.
+      // NOTE: WEBRTC_OFFER/ANSWER/ICE_CANDIDATE are intentionally excluded —
+      // SDP offers are time-sensitive. Replaying a stale offer breaks ICE negotiation.
+      // The caller is responsible for retrying call setup.
       const shouldQueue =
         message.type === 'SIGNAL_PAYLOAD' ||
-        message.type === 'WEBRTC_OFFER' ||
-        message.type === 'OFFER' ||
         message.type === 'READ_RECEIPT' ||
         message.type === 'DELIVERY_RECEIPT' ||
         message.type === 'PROFILE_UPDATE' ||
@@ -431,8 +433,8 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           console.warn(`[offline-queue] Queue full for target ${message.targetId}, dropping message`);
         }
 
-        // Push notification only for E2EE signal payloads (not status/profile updates)
-        if (message.type === 'SIGNAL_PAYLOAD' || message.type === 'WEBRTC_OFFER' || message.type === 'OFFER') {
+        // Push notification only for E2EE signal payloads (calls are handled by call UI directly)
+        if (message.type === 'SIGNAL_PAYLOAD') {
           fetchTargetPushToken(message.targetId).then(token => {
             if (token) {
               sendPushNotification(token, { action: 'sync', type: message.type });

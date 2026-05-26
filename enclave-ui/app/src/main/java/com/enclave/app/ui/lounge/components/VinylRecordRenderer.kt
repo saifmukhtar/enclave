@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -23,23 +26,34 @@ fun VinylRecordRenderer(
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Infinite rotation transition for the vinyl record
-    val infiniteTransition = rememberInfiniteTransition(label = "vinyl_infinite")
-    val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
+    var currentRotation by remember { mutableStateOf(0f) }
+    val targetSpeed = if (isPlaying) 2.2f else 0f
+    val speed by animateFloatAsState(
+        targetValue = targetSpeed,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessVeryLow
         ),
-        label = "vinyl_angle"
+        label = "vinyl_speed"
     )
-    val vinylAngle = if (isPlaying) rotationAngle else 0f
 
-    // Pivoting tonearm needle angle animation
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (speed > 0.01f) {
+                currentRotation = (currentRotation + speed) % 360f
+            }
+            kotlinx.coroutines.delay(16)
+        }
+    }
+    val vinylAngle = currentRotation
+
+    // Pivoting tonearm needle angle animation with spring bounce landing!
     val tonearmAngle by animateFloatAsState(
-        targetValue = if (isPlaying) 25f else 0f,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        targetValue = if (isPlaying) 24f else 0f,
+        animationSpec = spring(
+            dampingRatio = 0.55f, // Tactile bouncy pivot
+            stiffness = Spring.StiffnessLow
+        ),
         label = "tonearm_angle"
     )
 

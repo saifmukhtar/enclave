@@ -33,11 +33,14 @@ class NtfyListenerService : Service() {
         private const val TAG = "NtfyListenerService"
         private const val CHANNEL_ID = "ntfy_background_sync"
         private const val NOTIFICATION_ID = 2586
+        private const val INITIAL_BACKOFF_MS = 5_000L
+        private const val MAX_BACKOFF_MS = 300_000L // 5 minutes max
     }
 
     private lateinit var okHttpClient: OkHttpClient
     private var webSocket: WebSocket? = null
     private var isConnected = false
+    private var currentBackoffMs = INITIAL_BACKOFF_MS
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +78,7 @@ class NtfyListenerService : Service() {
         // Convert http/https to ws/wss
         val wsUrl = serverUrl.replaceFirst("http", "ws") + "/$topic/ws"
 
-        Log.d(TAG, "Connecting to ntfy WebSocket: $wsUrl")
+        Log.d(TAG, "Connecting to ntfy WebSocket: $wsUrl (backoff=${currentBackoffMs}ms)")
 
         val credentials = Credentials.basic(BuildConfig.NTFY_USERNAME, BuildConfig.NTFY_PASSWORD)
         val request = Request.Builder()
@@ -87,6 +90,7 @@ class NtfyListenerService : Service() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "ntfy WebSocket connected")
                 isConnected = true
+                currentBackoffMs = INITIAL_BACKOFF_MS // Reset backoff on success
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -97,18 +101,41 @@ class NtfyListenerService : Service() {
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "ntfy WebSocket closed: $reason")
                 isConnected = false
+                // Normal closure — retry with backoff
+                scheduleReconnect(topic)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "ntfy WebSocket failure", t)
+                val statusCode = response?.code ?: -1
+                Log.e(TAG, "ntfy WebSocket failure (HTTP $statusCode)", t)
                 isConnected = false
-                // Reconnect logic
-                CoroutineScope(Dispatchers.IO).launch {
-                    delay(5000) // Simple backoff
-                    connectWebSocket(topic)
+
+                when (statusCode) {
+                    401, 403 -> {
+                        // Auth failure — retrying won't help until credentials change.
+                        // Stop the reconnect loop to avoid hammering the server.
+                        Log.e(TAG, "ntfy auth failure ($statusCode) — stopping reconnect loop. Restart service to retry.")
+                        stopSelf()
+                    }
+                    else -> {
+                        // Network/server error — retry with exponential backoff
+                        scheduleReconnect(topic)
+                    }
                 }
             }
         })
+    }
+
+    private fun scheduleReconnect(topic: String) {
+        val backoff = currentBackoffMs
+        Log.d(TAG, "ntfy WebSocket will reconnect in ${backoff}ms")
+        // Exponential backoff: double each time, cap at MAX_BACKOFF_MS
+        currentBackoffMs = minOf(currentBackoffMs * 2, MAX_BACKOFF_MS)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(backoff)
+            connectWebSocket(topic)
+        }
     }
 
     private fun triggerSync() {

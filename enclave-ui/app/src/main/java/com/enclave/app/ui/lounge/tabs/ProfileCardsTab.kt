@@ -100,6 +100,9 @@ fun ProfileCardsTab(
         }
     }
 
+    var showPairDialog by remember { mutableStateOf(false) }
+    var pairInput by remember { mutableStateOf("") }
+
     var showCountdownDialog by remember { mutableStateOf(false) }
     var countdownLabelInput by remember { mutableStateOf("Our Next Visit ✈️") }
     var countdownDaysInput by remember { mutableStateOf("7") }
@@ -252,17 +255,35 @@ fun ProfileCardsTab(
         }
 
         // Set Status Button
-        Button(
-            onClick = { showEditDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Icon(Icons.Default.Edit, contentDescription = "Edit Status", tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Update My Presence Status", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { showEditDialog = true },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE598A7)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit Status", tint = Color.White, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Update Presence", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            
+            val isUnlinked = partnerProfile?.username == "unlinked" || partnerStatus.statusText == "Waiting to Link..."
+            if (isUnlinked) {
+                Button(
+                    onClick = { showPairDialog = true },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Link, contentDescription = "Pair", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pair Partner", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
         }
 
         // Shared visit countdown clock widget
@@ -340,6 +361,45 @@ fun ProfileCardsTab(
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (showPairDialog) {
+        AlertDialog(
+            onDismissRequest = { showPairDialog = false },
+            title = { Text("Link Partner") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter your partner's exact Enclave UUID to pair securely.", color = Color.Gray, fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = pairInput,
+                        onValueChange = { pairInput = it },
+                        label = { Text("Partner UUID") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pairInput.length > 20) {
+                            val prefs = context.getSharedPreferences("enclave_prefs", android.content.Context.MODE_PRIVATE)
+                            prefs.edit().putString("partner_id", pairInput.trim()).commit() // MUST use commit() before killProcess
+                            showPairDialog = false
+                            Toast.makeText(context, "Partner Linked! Restarting...", Toast.LENGTH_SHORT).show()
+                            android.os.Process.killProcess(android.os.Process.myPid())
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1B1D))
+                ) {
+                    Text("Pair & Restart", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPairDialog = false }) {
                     Text("Cancel", color = Color.Gray)
                 }
             }

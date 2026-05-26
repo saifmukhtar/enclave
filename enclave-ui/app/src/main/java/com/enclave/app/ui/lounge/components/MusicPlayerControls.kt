@@ -36,20 +36,28 @@ fun MusicPlayerControls(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFE4E8))
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(Color(0xFFFFFBFC), Color(0xFFFFF5F6))
+                    )
+                )
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
                 text = if (currentTrackName.isNotEmpty()) currentTrackName else "Select a Track",
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF2A1B1D),
+                fontFamily = com.enclave.app.ui.theme.PlayfairFont,
+                color = com.enclave.app.ui.theme.CharcoalText,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -64,9 +72,9 @@ fun MusicPlayerControls(
                         musicSyncController.seekTo(targetMs)
                     },
                     colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFE598A7),
-                        activeTrackColor = Color(0xFFE598A7),
-                        inactiveTrackColor = Color(0xFFFCE2E6)
+                        thumbColor = com.enclave.app.ui.theme.RoseDeep,
+                        activeTrackColor = com.enclave.app.ui.theme.RoseDeep,
+                        inactiveTrackColor = Color(0xFFFFE4E8)
                     )
                 )
 
@@ -92,7 +100,7 @@ fun MusicPlayerControls(
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "Shuffle",
-                        tint = if (shuffleEnabled) Color(0xFFE598A7) else Color.LightGray,
+                        tint = if (shuffleEnabled) com.enclave.app.ui.theme.RoseDeep else Color.LightGray,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -104,24 +112,36 @@ fun MusicPlayerControls(
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
-                        tint = Color(0xFFE598A7),
+                        tint = com.enclave.app.ui.theme.RoseDeep,
                         modifier = Modifier.size(28.dp)
                     )
                 }
 
-                // Play/Pause Button
-                IconButton(
+                // Play/Pause Button - Elevated Gradient
+                Card(
                     onClick = { musicSyncController.togglePlayPause() },
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(Color(0xFFFFF5F6), CircleShape)
+                    shape = CircleShape,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    modifier = Modifier.size(64.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color(0xFFE598A7),
-                        modifier = Modifier.size(32.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                androidx.compose.ui.graphics.Brush.linearGradient(
+                                    colors = listOf(com.enclave.app.ui.theme.RoseAccent, com.enclave.app.ui.theme.RoseDeep)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
 
                 // Next Button
@@ -131,7 +151,7 @@ fun MusicPlayerControls(
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
-                        tint = Color(0xFFE598A7),
+                        tint = com.enclave.app.ui.theme.RoseDeep,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -144,7 +164,7 @@ fun MusicPlayerControls(
                         Icon(
                             imageVector = Icons.Default.Timer,
                             contentDescription = "Sleep Timer",
-                            tint = if (sleepTimerRemaining > 0) Color(0xFFE598A7) else Color.LightGray,
+                            tint = if (sleepTimerRemaining > 0) com.enclave.app.ui.theme.RoseDeep else Color.LightGray,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -208,11 +228,11 @@ fun MusicPlayerControls(
                     label = {
                         Text(
                             text = String.format("Sleep in %02d:%02d 😴", timerMinutes, timerSeconds),
-                            color = Color(0xFFE598A7)
+                            color = com.enclave.app.ui.theme.RoseDeep
                         )
                     },
                     colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = Color(0xFFFFF5F6)
+                        containerColor = Color(0xFFFFF0F2)
                     )
                 )
             }

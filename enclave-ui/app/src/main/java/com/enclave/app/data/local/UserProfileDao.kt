@@ -18,13 +18,14 @@ interface UserProfileDao {
     @androidx.room.Transaction
     suspend fun upsertProfilePreservingLocal(entity: UserProfileEntity) {
         val existing = getProfileSync(entity.userId) ?: return upsertProfile(entity)
-        // Merge: never overwrite locally-set fields with blank/zero values from server
+        // If existing values are generic placeholders/stubs, overwrite them with server data.
+        val isStub = existing.displayName == "Partner" || existing.displayName == "Me" || existing.username.startsWith("partner_") || existing.username.startsWith("me_")
         val merged = entity.copy(
-            username        = entity.username.ifBlank        { existing.username },
-            displayName     = entity.displayName.ifBlank     { existing.displayName },
-            bio             = entity.bio.ifBlank             { existing.bio },
-            avatarUrl       = entity.avatarUrl.ifBlank       { existing.avatarUrl },
-            avatarLocalPath = entity.avatarLocalPath.ifBlank { existing.avatarLocalPath },
+            username        = if (entity.username.isNotBlank()) entity.username else existing.username,
+            displayName     = if (entity.displayName.isNotBlank() && (!isStub || entity.displayName != "Partner")) entity.displayName else existing.displayName,
+            bio             = if (entity.bio.isNotBlank()) entity.bio else existing.bio,
+            avatarUrl       = if (entity.avatarUrl.isNotBlank()) entity.avatarUrl else existing.avatarUrl,
+            avatarLocalPath = existing.avatarLocalPath.ifBlank { entity.avatarLocalPath },
             lastSeen        = if (entity.lastSeen == 0L) existing.lastSeen else entity.lastSeen
         )
         upsertProfile(merged)
@@ -39,7 +40,7 @@ interface UserProfileDao {
     @Query("SELECT * FROM user_profiles WHERE isMe = 1 LIMIT 1")
     fun getMyProfile(): Flow<UserProfileEntity?>
 
-    @Query("SELECT * FROM user_profiles WHERE isMe = 0 LIMIT 1")
+    @Query("SELECT * FROM user_profiles WHERE isMe = 0 AND userId != '' AND userId IS NOT NULL LIMIT 1")
     fun getPartnerProfile(): Flow<UserProfileEntity?>
 
     @Query("UPDATE user_profiles SET lastSeen = :timestamp, isOnline = 0 WHERE userId = :userId")

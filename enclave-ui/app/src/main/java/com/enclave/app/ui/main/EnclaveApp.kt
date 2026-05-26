@@ -23,6 +23,7 @@ import com.enclave.app.media.MusicSyncController
 import com.enclave.app.network.BundleRepository
 import com.enclave.app.ui.auth.AppLockScreen
 import com.enclave.app.ui.auth.LoginScreen
+import com.enclave.app.ui.auth.NoPartnerLinkedContent
 import com.enclave.app.ui.call.CallViewModel
 import com.enclave.app.ui.chat.ChatViewModel
 import com.enclave.app.ui.kiss.KissViewModel
@@ -221,17 +222,12 @@ fun EnclaveApp(
     }
 
     val bundleRepository = remember { BundleRepository(supabase, cryptoManager.signalStore, cryptoManager) }
-    val myId = resolvedMyId.ifBlank { "11111111-1111-1111-1111-111111111111" }
+    // myId is guaranteed non-blank here — we are past the isLoggedIn gate
+    val myId = resolvedMyId
     val prefs = remember { context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE) }
+    // partnerId: read from prefs only — NO hardcoded fallback UUIDs
     var partnerId by remember(myId) {
-        val saved = prefs.getString("partner_id", "") ?: ""
-        mutableStateOf(saved.ifBlank {
-            if (myId == "11111111-1111-1111-1111-111111111111") {
-                "00000000-0000-0000-0000-000000000000"
-            } else {
-                "11111111-1111-1111-1111-111111111111"
-            }
-        })
+        mutableStateOf(prefs.getString("partner_id", "") ?: "")
     }
 
     LaunchedEffect(isLoggedIn, resolvedMyId) {
@@ -251,9 +247,12 @@ fun EnclaveApp(
                 }
 
                 val savedPartner = prefs.getString("partner_id", "")
-                if (savedPartner.isNullOrBlank() || savedPartner == "11111111-1111-1111-1111-111111111111" || savedPartner == "00000000-0000-0000-0000-000000000000") {
-                    // Intentionally empty. Partner ID must be resolved via secure invite link.
-                    // Fallback to auto-discovery was removed for privacy.
+                if (savedPartner.isNullOrBlank()) {
+                    val resolved = bundleRepository.autoResolvePartnerId()
+                    if (!resolved.isNullOrBlank()) {
+                        prefs.edit().putString("partner_id", resolved).apply()
+                        partnerId = resolved
+                    }
                 }
             } catch (e: Exception) {
                 // handle
@@ -436,7 +435,7 @@ fun EnclaveApp(
     }
 
     LaunchedEffect(resolvedMyId) {
-        if (resolvedMyId.isNotBlank() && resolvedMyId != "11111111-1111-1111-1111-111111111111") {
+        if (resolvedMyId.isNotBlank()) {
             try {
                 val topic = resolvedMyId
                 prefs.edit().putString("ntfy_topic", topic).apply()
@@ -454,6 +453,30 @@ fun EnclaveApp(
                 // handle
             }
         }
+    }
+
+    // ── No-partner guard ─────────────────────────────────────────────────────
+    // If no real partner ID is saved yet, show pairing instructions instead of
+    // initialising the entire DI graph with dummy UUIDs (which poisoned every ViewModel).
+    if (partnerId.isBlank()) {
+        NoPartnerLinkedContent(
+            myId = myId,
+            onPartnerLinked = { newPartnerId ->
+                prefs.edit().putString("partner_id", newPartnerId).apply()
+                partnerId = newPartnerId
+            },
+            onLogout = {
+                scope.launch {
+                    try {
+                        supabase.auth.signOut()
+                        prefs.edit().remove("my_id").remove("partner_id").apply()
+                        resolvedMyId = ""
+                        isLoggedIn = false
+                    } catch (e: Exception) { /* handle */ }
+                }
+            }
+        )
+        return
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -495,9 +518,7 @@ fun EnclaveApp(
                             prefs.edit().remove("my_id").remove("partner_id").apply()
                             resolvedMyId = ""
                             isLoggedIn = false
-                        } catch (e: Exception) {
-                            // handle
-                        }
+                        } catch (e: Exception) { /* handle */ }
                     }
                 }
             )

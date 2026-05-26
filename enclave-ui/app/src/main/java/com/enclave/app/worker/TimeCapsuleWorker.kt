@@ -3,13 +3,20 @@ package com.enclave.app.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.enclave.app.BuildConfig
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.local.MessageEntity
 import com.enclave.app.webrtc.SignalingClient
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.gotrue.SessionStatus
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.delay
 import android.util.Base64
 import java.util.UUID
+import kotlinx.coroutines.flow.first
 import org.signal.libsignal.protocol.SignalProtocolAddress
 
 class TimeCapsuleWorker(
@@ -25,12 +32,24 @@ class TimeCapsuleWorker(
 
         val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
         val myId = prefs.getString("my_id", null) ?: return Result.failure()
-        val serverUrl = prefs.getString("server_url", "wss://api.enclave.app/ws") ?: return Result.failure()
+
+        // BUG-8 Fix: Use BuildConfig server URL (not a SharedPreferences fallback that was never written)
+        // Initialize Supabase to fetch live auth token for signaling authentication
+        val supabase = createSupabaseClient(
+            supabaseUrl = BuildConfig.SUPABASE_URL,
+            supabaseKey = BuildConfig.SUPABASE_KEY
+        ) {
+            install(Auth)
+            install(Postgrest)
+        }
+        supabase.auth.sessionStatus.first { it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated }
+        val token = supabase.auth.currentSessionOrNull()?.accessToken
 
         // Wait up to 5 mins if offline? Actually, WorkManager handles constraints like NetworkType.CONNECTED.
         val signalingClient = SignalingClient(
-            url = serverUrl,
-            myId = myId
+            url = BuildConfig.SIGNALING_SERVER_URL,
+            myId = myId,
+            tokenProvider = { token }
         )
 
         signalingClient.connect()

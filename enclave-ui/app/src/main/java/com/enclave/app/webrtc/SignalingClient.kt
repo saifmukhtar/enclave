@@ -247,7 +247,17 @@ class SignalingClient(
             payload = payload
         )
         val frameText = Json.encodeToString(msg)
-        session?.send(Frame.Text(frameText)) ?: Log.w("SignalingClient", "Cannot send WebRTC message, session is null")
+        if (isConnected() && session != null) {
+            try {
+                session?.send(Frame.Text(frameText))
+            } catch (e: Exception) {
+                Log.w("SignalingClient", "Failed to send WebRTC message $type, queueing: ${e.message}")
+                pendingMessagesQueue.add(msg)
+            }
+        } else {
+            Log.d("SignalingClient", "Session offline, queueing WebRTC message: $type")
+            pendingMessagesQueue.add(msg)
+        }
     }
 
     suspend fun sendRawMessage(message: String) {

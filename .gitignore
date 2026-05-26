@@ -88,3 +88,10 @@ obj/
 *.jar
 !enclave-ui/gradle/wrapper/gradle-wrapper.jar
 *.class
+
+# Test outputs
+testing/*/
+*.db
+*.db-shm
+*.db-wal
+testing/

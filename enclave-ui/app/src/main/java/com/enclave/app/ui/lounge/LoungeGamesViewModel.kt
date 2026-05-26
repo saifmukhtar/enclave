@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class LoungeGamesViewModel(
@@ -73,8 +75,13 @@ class LoungeGamesViewModel(
     )
 
     // --- User profile states for Love Language quiz side-by-side display ---
-    val myProfile = MutableStateFlow<UserProfileEntity?>(null)
-    val partnerProfile = MutableStateFlow<UserProfileEntity?>(null)
+    val myProfile: StateFlow<UserProfileEntity?> = database.userProfileDao()
+        .getMyProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val partnerProfile: StateFlow<UserProfileEntity?> = database.userProfileDao()
+        .getPartnerProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         viewModelScope.launch {
@@ -110,12 +117,7 @@ class LoungeGamesViewModel(
     }
 
     private fun refreshProfiles() {
-        viewModelScope.launch {
-            val me = database.userProfileDao().getMyProfile().firstOrNull()
-            myProfile.value = me
-            val partner = database.userProfileDao().getPartnerProfile().firstOrNull()
-            partnerProfile.value = partner
-        }
+        // Automatically handled by database flows.
     }
 
     fun sendLoungeMessage(type: String, payload: String) {

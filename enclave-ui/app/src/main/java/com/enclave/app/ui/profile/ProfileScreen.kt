@@ -33,10 +33,7 @@ import com.enclave.app.ui.profile.components.EnclaveTextField
 import com.enclave.app.ui.profile.components.E2eeAvatar
 import com.enclave.app.ui.profile.components.InvitePartnerDialog
 
-private val BlushBg     = Color(0xFFFFF5F6)
-private val BlushAccent = Color(0xFFE598A7)
-private val BlushCard   = Color(0xFFFCE2E6)
-private val Charcoal    = Color(0xFF2A1B1D)
+// Hardcoded colors removed in favor of MaterialTheme.colorScheme
 
 @Composable
 fun ProfileScreen(
@@ -127,7 +124,7 @@ fun ProfileScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BlushBg)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -159,14 +156,14 @@ fun ProfileScreen(
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Serif,
-                color = Charcoal
+                color = MaterialTheme.colorScheme.onBackground
             )
             Text(
                 text = "Visible only inside Enclave · E2EE",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
                 fontSize = 11.sp,
-                color = Charcoal.copy(alpha = 0.45f)
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
             )
 
             Spacer(Modifier.height(24.dp))
@@ -210,18 +207,18 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(BlushCard)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                         .clickable { showMoodPicker = true }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Mood, contentDescription = null, tint = BlushAccent, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Mood, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Current Mood", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Charcoal)
-                            Text("Tap to change", fontSize = 11.sp, color = Charcoal.copy(alpha = 0.5f))
+                            Text("Current Mood", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                            Text("Tap to change", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
                         }
                     }
                     Text(selectedMood, fontSize = 28.sp)
@@ -257,7 +254,7 @@ fun ProfileScreen(
                         .fillMaxWidth()
                         .height(54.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BlushAccent)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -276,8 +273,8 @@ fun ProfileScreen(
                         .fillMaxWidth()
                         .height(54.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BlushAccent),
-                    border = BorderStroke(1.dp, BlushAccent)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -306,7 +303,7 @@ fun ProfileScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(CircleShape)
-                                            .background(if (emoji == selectedMood) BlushAccent else BlushCard)
+                                            .background(if (emoji == selectedMood) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer)
                                             .clickable {
                                                 selectedMood = emoji
                                                 showMoodPicker = false
@@ -323,10 +320,10 @@ fun ProfileScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showMoodPicker = false }) {
-                        Text("Done", color = BlushAccent)
+                        Text("Done", color = MaterialTheme.colorScheme.primary)
                     }
                 },
-                containerColor = BlushBg
+                containerColor = MaterialTheme.colorScheme.background
             )
         }
 
@@ -345,10 +342,10 @@ fun ProfileScreen(
                 .statusBarsPadding()
                 .padding(16.dp)
                 .size(40.dp)
-                .background(Color.White.copy(alpha = 0.8f), CircleShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
                 .zIndex(2f)
         ) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Charcoal)
+            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

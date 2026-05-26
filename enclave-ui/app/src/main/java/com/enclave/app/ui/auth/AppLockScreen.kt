@@ -2,6 +2,7 @@ package com.enclave.app.ui.auth
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,12 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.ui.vault.BiometricPromptManager
+import androidx.compose.ui.input.pointer.pointerInput
 
-private val BlushBackground  = Color(0xFFFFF5F6)
-private val BlushSent        = Color(0xFFFCE2E6)
-private val BlushAccent      = Color(0xFFE598A7)
-private val CharcoalText     = Color(0xFF2A1B1D)
-private val DeepRose         = Color(0xFFD4607A)
+// Hardcoded colors removed in favor of MaterialTheme.colorScheme
 
 @Composable
 fun AppLockScreen(
@@ -50,16 +48,66 @@ fun AppLockScreen(
         label = "pulse_scale"
     )
 
+    val driftTransition = rememberInfiniteTransition(label = "lock_bg")
+    val rotation by driftTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(30000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotate_bg"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFFFF0F2), Color(0xFFFCE2E6), Color(0xFFF5C6CF))
-                )
-            ),
+            .pointerInput(Unit) {
+                // Consume all touch events so they don't pass through to the screen below
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
+        // Slow rotating ambient fluid blurred orbs
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val rad = size.minDimension * 0.6f
+
+            // Rose accent orb
+            val pinkX = centerX + (Math.cos(Math.toRadians(rotation.toDouble())) * (width * 0.25f)).toFloat()
+            val pinkY = centerY + (Math.sin(Math.toRadians(rotation.toDouble())) * (height * 0.25f)).toFloat()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFFFD1DC), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(pinkX, pinkY),
+                    radius = rad
+                ),
+                radius = rad * 1.5f,
+                center = androidx.compose.ui.geometry.Offset(pinkX, pinkY)
+            )
+
+            // Soft white/peach orb
+            val peachX = centerX - (Math.cos(Math.toRadians(rotation.toDouble() + 180.0)) * (width * 0.25f)).toFloat()
+            val peachY = centerY - (Math.sin(Math.toRadians(rotation.toDouble() + 180.0)) * (height * 0.25f)).toFloat()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFFFF0F2), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(peachX, peachY),
+                    radius = rad
+                ),
+                radius = rad * 1.5f,
+                center = androidx.compose.ui.geometry.Offset(peachX, peachY)
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -69,24 +117,26 @@ fun AppLockScreen(
             // Elegant Lock Badge
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(108.dp)
                     .scale(pulseScale)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.5f)),
+                    .background(Color.White.copy(alpha = 0.4f))
+                    .border(1.dp, Color(0xFFFFE4E8), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(80.dp)
                         .clip(CircleShape)
-                        .background(Color.White),
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFFFD1DC), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (authState == BiometricPromptManager.AuthState.ERROR) Icons.Default.Lock else Icons.Default.Fingerprint,
                         contentDescription = "Encrypted Lock",
-                        tint = if (authState == BiometricPromptManager.AuthState.ERROR) DeepRose else BlushAccent,
-                        modifier = Modifier.size(40.dp)
+                        tint = if (authState == BiometricPromptManager.AuthState.ERROR) MaterialTheme.colorScheme.error else com.enclave.app.ui.theme.RoseDeep,
+                        modifier = Modifier.size(44.dp)
                     )
                 }
             }
@@ -98,14 +148,14 @@ fun AppLockScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = PlayfairFont,
-                color = CharcoalText,
+                color = com.enclave.app.ui.theme.CharcoalText,
                 letterSpacing = 1.5.sp
             )
             
             Text(
                 text = "Tap to unlock your private space",
                 fontSize = 13.sp,
-                color = CharcoalText.copy(alpha = 0.6f),
+                color = com.enclave.app.ui.theme.CharcoalText.copy(alpha = 0.6f),
                 fontFamily = InterFont,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp)
@@ -117,8 +167,9 @@ fun AppLockScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.6f))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color.White.copy(alpha = 0.8f))
+                    .border(1.dp, Color(0xFFFFE4E8), RoundedCornerShape(28.dp))
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,9 +178,9 @@ fun AppLockScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BlushAccent,
+                            containerColor = com.enclave.app.ui.theme.RoseDeep,
                             contentColor   = Color.White
                         )
                     ) {
@@ -144,7 +195,7 @@ fun AppLockScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = "Authentication failed. Try again.",
-                            color = DeepRose,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -156,7 +207,7 @@ fun AppLockScreen(
                     TextButton(
                         onClick = onLogout,
                         colors = ButtonDefaults.textButtonColors(
-                            contentColor = CharcoalText.copy(alpha = 0.6f)
+                            contentColor = com.enclave.app.ui.theme.CharcoalText.copy(alpha = 0.6f)
                         )
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -181,7 +232,7 @@ fun AppLockScreen(
             Text(
                 text = "🔒 Secure local storage protected by device Keystore",
                 fontSize = 11.sp,
-                color = CharcoalText.copy(alpha = 0.45f),
+                color = com.enclave.app.ui.theme.CharcoalText.copy(alpha = 0.45f),
                 textAlign = TextAlign.Center
             )
         }

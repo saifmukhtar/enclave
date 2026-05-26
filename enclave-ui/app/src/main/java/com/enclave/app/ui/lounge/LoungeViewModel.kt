@@ -13,6 +13,8 @@ import com.enclave.app.webrtc.SignalMessageWrapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -33,7 +35,9 @@ class LoungeViewModel(
     private val _myStatus = MutableStateFlow(ProfileStatus("❤️", "Online inside Enclave", 100, "Nothing playing", "12:00 PM"))
     val myStatus: StateFlow<ProfileStatus> = _myStatus.asStateFlow()
 
-    private val _partnerStatus = MutableStateFlow(ProfileStatus("❤️", "Resting...", 100, "Offline", "12:00 PM"))
+    private val _partnerStatus = MutableStateFlow(
+        ProfileStatus("❤️", "Resting...", 100, "Offline", "12:00 PM")
+    )
     val partnerStatus: StateFlow<ProfileStatus> = _partnerStatus.asStateFlow()
 
     private val _myBattery = MutableStateFlow("")
@@ -58,8 +62,13 @@ class LoungeViewModel(
     private var lastHeartbeatSentTime = 0L
 
     // --- User profile states for side-by-side display ---
-    val myProfile = MutableStateFlow<com.enclave.app.data.local.UserProfileEntity?>(null)
-    val partnerProfile = MutableStateFlow<com.enclave.app.data.local.UserProfileEntity?>(null)
+    val myProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getMyProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val partnerProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getPartnerProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // --- Weather Sync Cache ---
     private var cachedWeather: Pair<Double, String>? = null
@@ -125,11 +134,7 @@ class LoungeViewModel(
     
     // --- Profile Management ---
     fun refreshProfiles() {
-        viewModelScope.launch {
-            val repo = bundleRepository ?: return@launch
-            myProfile.value = repo.fetchMyProfile()
-            partnerProfile.value = repo.fetchPartnerProfile(partnerId)
-        }
+        // Automatically handled by database flows.
     }
 
     fun setCountdown(label: String, targetMillis: Long) {

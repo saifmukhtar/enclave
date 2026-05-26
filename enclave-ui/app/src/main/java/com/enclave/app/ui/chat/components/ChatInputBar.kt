@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -279,6 +280,23 @@ private fun RowScope.StandardInputRow(
 ) {
     var showSendLaterMenu by remember { mutableStateOf(false) }
 
+    val isTextBlank = text.isBlank()
+    val recordScale by animateFloatAsState(
+        targetValue = if (isTextBlank) 1.0f else 0.0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        label = "record_scale"
+    )
+    val sendScale by animateFloatAsState(
+        targetValue = if (isTextBlank) 0.0f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        label = "send_scale"
+    )
+    val actionAreaWidth by animateDpAsState(
+        targetValue = if (isTextBlank) 48.dp else 100.dp,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+        label = "action_width"
+    )
+
     IconButton(
         onClick = onAttachClick,
         colors = IconButtonDefaults.iconButtonColors(
@@ -364,70 +382,82 @@ private fun RowScope.StandardInputRow(
 
     Spacer(modifier = Modifier.width(8.dp))
 
-    if (text.isBlank()) {
-        IconButton(
-            onClick = onRecordVoiceClick,
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = BlushSent,
-                contentColor = RoseAccent
-            ),
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = "Record Audio"
-            )
+    Box(
+        modifier = Modifier.width(actionAreaWidth).height(48.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        if (recordScale > 0.01f) {
+            IconButton(
+                onClick = onRecordVoiceClick,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = BlushSent,
+                    contentColor = RoseAccent
+                ),
+                modifier = Modifier
+                    .size(48.dp)
+                    .graphicsLayer(scaleX = recordScale, scaleY = recordScale)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Record Audio"
+                )
+            }
         }
-    } else {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                IconButton(
-                    onClick = { showSendLaterMenu = true },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = BlushSent,
-                        contentColor = RoseAccent
-                    ),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(Icons.Default.Schedule, contentDescription = "Send Later")
-                }
-                DropdownMenu(
-                    expanded = showSendLaterMenu,
-                    onDismissRequest = { showSendLaterMenu = false },
-                    modifier = Modifier.background(BlushReceived)
-                ) {
-                    val now = System.currentTimeMillis()
-                    val laterOptions = listOf(
-                        "In 1 minute (test)" to now + 60_000L,
-                        "In 1 hour" to now + 3600_000L,
-                        "Tomorrow" to now + 86400_000L
-                    )
-                    laterOptions.forEach { (label, time) ->
-                        DropdownMenuItem(
-                            text = { Text(label, fontFamily = InterFont, color = CharcoalText) },
-                            onClick = {
-                                onSendLaterClick(time)
-                                showSendLaterMenu = false
-                            }
+        if (sendScale > 0.01f) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.graphicsLayer(scaleX = sendScale, scaleY = sendScale)
+            ) {
+                Box {
+                    IconButton(
+                        onClick = { showSendLaterMenu = true },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = BlushSent,
+                            contentColor = RoseAccent
+                        ),
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(Icons.Default.Schedule, contentDescription = "Send Later")
+                    }
+                    DropdownMenu(
+                        expanded = showSendLaterMenu,
+                        onDismissRequest = { showSendLaterMenu = false },
+                        modifier = Modifier.background(BlushReceived)
+                    ) {
+                        val now = System.currentTimeMillis()
+                        val laterOptions = listOf(
+                            "In 1 minute (test)" to now + 60_000L,
+                            "In 1 hour" to now + 3600_000L,
+                            "Tomorrow" to now + 86400_000L
                         )
+                        laterOptions.forEach { (label, time) ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontFamily = InterFont, color = CharcoalText) },
+                                onClick = {
+                                    onSendLaterClick(time)
+                                    showSendLaterMenu = false
+                                }
+                            )
+                        }
                     }
                 }
-            }
-            
-            Spacer(modifier = Modifier.width(4.dp))
-            
-            FloatingActionButton(
-                onClick = onSendMessage,
-                containerColor = CharcoalText,
-                contentColor = BlushBackground,
-                shape = CircleShape,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                
+                Spacer(modifier = Modifier.width(4.dp))
+                
+                FloatingActionButton(
+                    onClick = onSendMessage,
+                    containerColor = RoseDeep,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                }
             }
         }
     }
 }
+
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 

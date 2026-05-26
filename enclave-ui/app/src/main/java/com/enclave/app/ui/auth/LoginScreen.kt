@@ -35,11 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.R
 
-private val BlushBackground  = Color(0xFFFFF5F6)
-private val BlushSent        = Color(0xFFFCE2E6)
-private val BlushAccent      = Color(0xFFE598A7)
-private val CharcoalText     = Color(0xFF2A1B1D)
-private val DeepRose         = Color(0xFFD4607A)
+// Hardcoded colors removed in favor of MaterialTheme.colorScheme
 
 enum class LoginState { IDLE, LOADING, ERROR }
 
@@ -86,7 +82,11 @@ fun LoginScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFFFFF0F2), Color(0xFFFCE2E6), Color(0xFFF5C6CF))
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                    )
                 )
             ),
         contentAlignment = Alignment.Center
@@ -104,7 +104,7 @@ fun LoginScreen(
                     .scale(lockScale)
                     .clip(CircleShape)
                     .background(
-                        Brush.radialGradient(listOf(BlushAccent.copy(alpha = 0.3f), Color.Transparent))
+                        Brush.radialGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), Color.Transparent))
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -118,7 +118,7 @@ fun LoginScreen(
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = stringResource(R.string.login_app_title),
-                        tint = BlushAccent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -131,13 +131,13 @@ fun LoginScreen(
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = PlayfairFont,
-                color = CharcoalText,
+                color = MaterialTheme.colorScheme.onBackground,
                 letterSpacing = 2.sp
             )
             Text(
                 text = if (isSignUp) "Register your secure intimate connection" else stringResource(R.string.login_app_subtitle),
                 fontSize = 13.sp,
-                color = CharcoalText.copy(alpha = 0.55f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
                 fontFamily = InterFont,
                 letterSpacing = 0.5.sp,
                 textAlign = TextAlign.Center
@@ -150,7 +150,7 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color.White.copy(alpha = 0.6f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
                     // Glassmorphism typically includes a subtle border in CSS
                     .padding(24.dp)
             ) {
@@ -160,9 +160,9 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text(stringResource(R.string.login_email_label), color = CharcoalText.copy(alpha = 0.7f)) },
+                        label = { Text(stringResource(R.string.login_email_label), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Email, contentDescription = null, tint = BlushAccent)
+                            Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -170,11 +170,11 @@ fun LoginScreen(
                             imeAction = ImeAction.Next
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = BlushAccent,
-                            unfocusedBorderColor = BlushAccent.copy(alpha = 0.4f),
-                            focusedTextColor     = CharcoalText,
-                            unfocusedTextColor   = CharcoalText,
-                            cursorColor          = BlushAccent,
+                            focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                            focusedTextColor     = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor   = MaterialTheme.colorScheme.onSurface,
+                            cursorColor          = MaterialTheme.colorScheme.primary,
                             focusedContainerColor   = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent
                         ),
@@ -188,16 +188,16 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text(stringResource(R.string.login_password_label), color = CharcoalText.copy(alpha = 0.7f)) },
+                        label = { Text(stringResource(R.string.login_password_label), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = BlushAccent)
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
                         trailingIcon = {
                             IconButton(onClick = { showPassword = !showPassword }) {
                                 Icon(
                                     imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                     contentDescription = if (showPassword) stringResource(R.string.login_hide_password) else stringResource(R.string.login_show_password),
-                                    tint = CharcoalText.copy(alpha = 0.5f)
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
                         },
@@ -208,11 +208,11 @@ fun LoginScreen(
                             imeAction = ImeAction.Done
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = BlushAccent,
-                            unfocusedBorderColor = BlushAccent.copy(alpha = 0.4f),
-                            focusedTextColor     = CharcoalText,
-                            unfocusedTextColor   = CharcoalText,
-                            cursorColor          = BlushAccent,
+                            focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                            focusedTextColor     = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor   = MaterialTheme.colorScheme.onSurface,
+                            cursorColor          = MaterialTheme.colorScheme.primary,
                             focusedContainerColor   = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent
                         ),
@@ -224,7 +224,7 @@ fun LoginScreen(
                     if (email.isNotEmpty() && !isEmailValid) {
                         Text(
                             text = stringResource(R.string.login_email_invalid),
-                            color = DeepRose,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 11.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -234,7 +234,7 @@ fun LoginScreen(
                     } else if (isSignUp && email.isNotEmpty() && !isEmailWhitelisted) {
                         Text(
                             text = "Unauthorized email for this private Enclave.",
-                            color = DeepRose,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 11.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -246,7 +246,7 @@ fun LoginScreen(
                     if (password.isNotEmpty() && !isPasswordValid) {
                         Text(
                             text = stringResource(R.string.login_password_invalid),
-                            color = DeepRose,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 11.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -260,7 +260,7 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = errorMessage,
-                            color = DeepRose,
+                            color = MaterialTheme.colorScheme.error,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
@@ -286,16 +286,16 @@ fun LoginScreen(
                             .height(52.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BlushAccent,
-                            contentColor   = Color.White,
-                            disabledContainerColor = BlushAccent.copy(alpha = 0.45f),
-                            disabledContentColor   = Color.White.copy(alpha = 0.7f)
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor   = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                            disabledContentColor   = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                         )
                     ) {
                         if (loginState == LoginState.LOADING) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
-                                color    = Color.White,
+                                color    = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.dp
                             )
                         } else {
@@ -312,7 +312,7 @@ fun LoginScreen(
 
                     Text(
                         text = if (isSignUp) "Already have an account? Sign In" else "Create a new private space? Sign Up",
-                        color = BlushAccent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -331,7 +331,7 @@ fun LoginScreen(
             Text(
                 text  = stringResource(R.string.login_footer_e2ee),
                 fontSize = 11.sp,
-                color = CharcoalText.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                 textAlign = TextAlign.Center
             )
         }

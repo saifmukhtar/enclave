@@ -114,14 +114,29 @@ class BundleRepository(
 
     private suspend fun awaitAuth() {
         android.util.Log.d("BundleRepository", "Resolving Supabase session status...")
-        val status = supabase.auth.sessionStatus.first {
-            it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated
+        if (supabase.auth.currentSessionOrNull() != null) {
+            android.util.Log.d("BundleRepository", "Supabase session is already present and active.")
+            return
         }
-        if (status is SessionStatus.NotAuthenticated) {
-            throw IllegalStateException("Supabase is not authenticated")
+        val currentStatus = supabase.auth.sessionStatus.value
+        if (currentStatus is SessionStatus.Authenticated) {
+            return
         }
-        android.util.Log.d("BundleRepository", "Supabase auth is ready! Status: $status")
+        if (currentStatus !is SessionStatus.Authenticated && currentStatus !is SessionStatus.NotAuthenticated) {
+            val status = supabase.auth.sessionStatus.first {
+                it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated
+            }
+            if (status is SessionStatus.NotAuthenticated && supabase.auth.currentSessionOrNull() == null) {
+                throw IllegalStateException("Supabase is not authenticated")
+            }
+        } else if (currentStatus is SessionStatus.NotAuthenticated) {
+            if (supabase.auth.currentSessionOrNull() == null) {
+                throw IllegalStateException("Supabase is not authenticated")
+            }
+        }
     }
+
+
 
     /**
      * Uploads the locally generated keys to the public registry.
@@ -168,7 +183,10 @@ class BundleRepository(
             awaitAuth()
             val bundle = supabase.postgrest["pre_key_bundles"]
                 .select { filter { eq("user_id", partnerId) } }
-                .decodeSingle<KeyBundleUpload>()
+                .decodeSingleOrNull<KeyBundleUpload>()
+                ?: return@withContext Result.failure(
+                    IllegalStateException("Partner has not uploaded their key bundle yet. Waiting for them to open Enclave.")
+                )
                 
             val identityKey = IdentityKey(Base64.decode(bundle.identity_key, Base64.NO_WRAP), 0)
             
@@ -186,10 +204,13 @@ class BundleRepository(
             }
             
             val partnerAddress1 = SignalProtocolAddress(partnerId, 1)
+            // Delete any stale session before building a new one (handles partner reinstall / key rotation)
+            signalStore.deleteSession(partnerAddress1)
             val res1 = cryptoManager.buildSession(partnerAddress1, preKeyBundle)
             if (res1.isFailure) return@withContext Result.failure(res1.exceptionOrNull() ?: Exception("Failed to build session 1"))
 
             val partnerAddress2 = SignalProtocolAddress(partnerId, 2)
+            signalStore.deleteSession(partnerAddress2)
             val res2 = cryptoManager.buildSession(partnerAddress2, preKeyBundle)
             if (res2.isFailure) return@withContext Result.failure(res2.exceptionOrNull() ?: Exception("Failed to build session 2"))
 
@@ -199,6 +220,31 @@ class BundleRepository(
         }
     }
 
+    /**
+     * Auto-resolves partner ID by querying the profiles table.
+     * If there are exactly two users in the database, returns the other user's ID.
+     */
+    suspend fun autoResolvePartnerId(): String? = withContext(Dispatchers.IO) {
+        try {
+            awaitAuth()
+            val currentUser = supabase.auth.currentUserOrNull() ?: return@withContext null
+            val profiles = supabase.postgrest["profiles"]
+                .select()
+                .decodeList<UserProfile>()
+            val otherProfiles = profiles.filter { it.id != currentUser.id }
+            if (otherProfiles.size == 1) {
+                val partner = otherProfiles.first()
+                android.util.Log.d("BundleRepository", "Auto-resolved partner: ${partner.id} (${partner.username})")
+                partner.id
+            } else {
+                android.util.Log.d("BundleRepository", "Cannot auto-resolve partner: profiles count is ${profiles.size}")
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "autoResolvePartnerId failed", e)
+            null
+        }
+    }
 
     /**
      * Synchronizes the Ntfy WebSocket topic URL into the Profiles table.

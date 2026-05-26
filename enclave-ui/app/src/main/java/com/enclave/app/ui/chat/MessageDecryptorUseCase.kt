@@ -25,6 +25,7 @@ class MessageDecryptorUseCase(
                     "MEDIA", "MEDIA_IMAGE" -> "📸 Photo"
                     "MEDIA_VIDEO" -> "🎥 Video"
                     "MEDIA_AUDIO" -> "🎵 Audio File"
+                    "MEDIA_FILE" -> "📄 Document"  // BUG-12 Fix: was falling through to else, showing garbled filename bytes
                     "VOICE" -> "🎤 Voice Memo"
                     "RECORDED_KISS" -> "Kiss Impression"
                     else -> String(decryptedBytes, Charsets.UTF_8)

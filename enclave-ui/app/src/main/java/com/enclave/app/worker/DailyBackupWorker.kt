@@ -67,17 +67,18 @@ class DailyBackupWorker(
             }
 
             // 2. Locate Database file
-            val dbFile = applicationContext.getDatabasePath("enclave_secure.db")
+            // BUG-13 Fix: Room creates the DB as "enclave_db" not "enclave_secure.db"
+            val dbFile = applicationContext.getDatabasePath("enclave_db")
             if (!dbFile.exists()) {
-                Log.e("DailyBackupWorker", "Database file enclave_secure.db not found!")
-                return@withContext Result.failure()
+                Log.w("DailyBackupWorker", "Database file enclave_db not found — likely fresh install. Skipping backup this run.")
+                return@withContext Result.success() // Gracefully skip; DB will exist after first chat
             }
 
             // 3. Create a temporary ZIP file
             tempZipFile = File(applicationContext.cacheDir, "temp_daily_backup_${System.currentTimeMillis()}.zip")
             ZipOutputStream(tempZipFile.outputStream().buffered()).use { zos ->
                 // A. Add database
-                zos.putNextEntry(ZipEntry("database/enclave_secure.db"))
+                zos.putNextEntry(ZipEntry("database/enclave_db"))
                 zos.write(dbFile.readBytes())
                 zos.closeEntry()
 

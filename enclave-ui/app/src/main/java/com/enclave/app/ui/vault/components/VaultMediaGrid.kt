@@ -2,6 +2,8 @@ package com.enclave.app.ui.vault.components
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -86,34 +88,55 @@ fun VaultGrid(
 
                 val isSelected = selectedItems.contains(entity)
 
+                val isCardPressed = remember { mutableStateOf(false) }
+                val cardScale by animateFloatAsState(
+                    targetValue = if (isCardPressed.value) 0.94f else 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "vault_card_scale"
+                )
+
                 Box(
                     modifier = Modifier
                         .padding(4.dp)
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .graphicsLayer(scaleX = cardScale, scaleY = cardScale)
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFFFCE2E6))
-                        .combinedClickable(
-                            onClick = {
-                                if (isUnlocked) {
-                                    if (isSelectionMode) {
-                                        if (isSelected) selectedItems.remove(entity)
-                                        else selectedItems.add(entity)
-                                    } else {
-                                        onItemClick(index)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onPress = {
+                                    isCardPressed.value = true
+                                    try {
+                                        awaitRelease()
+                                    } finally {
+                                        isCardPressed.value = false
+                                    }
+                                },
+                                onLongPress = {
+                                    if (isUnlocked) {
+                                        if (!isSelectionMode) {
+                                            onToggleSelectionMode(true)
+                                            selectedItems.add(entity)
+                                        } else {
+                                            expandedMenu = true
+                                        }
+                                    }
+                                },
+                                onTap = {
+                                    if (isUnlocked) {
+                                        if (isSelectionMode) {
+                                            if (isSelected) selectedItems.remove(entity)
+                                            else selectedItems.add(entity)
+                                        } else {
+                                            onItemClick(index)
+                                        }
                                     }
                                 }
-                            },
-                            onLongClick = {
-                                if (isUnlocked) {
-                                    if (!isSelectionMode) {
-                                        onToggleSelectionMode(true)
-                                        selectedItems.add(entity)
-                                    } else {
-                                        expandedMenu = true
-                                    }
-                                }
-                            }
-                        )
+                            )
+                        }
                 ) {
                     if (isUnlocked && !fileName.startsWith("mock_") && fileName.isNotEmpty()) {
                         val isVideo = entity.mimeType.startsWith("video/")

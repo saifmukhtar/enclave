@@ -215,7 +215,9 @@ class ProfileViewModel(
                     isMe = true
                 ))
             }
-            if (profileDao.getProfileSync(partnerId) == null) {
+            val existingPartner = profileDao.getProfileSync(partnerId)
+            if (existingPartner == null) {
+                // Insert a temporary stub until the real profile is fetched from Supabase below
                 profileDao.upsertProfile(UserProfileEntity(
                     userId = partnerId,
                     username = "partner_${partnerId.take(5)}",
@@ -231,8 +233,12 @@ class ProfileViewModel(
         try {
             // My profile — merge to preserve locally-set username, displayName, bio, avatarLocalPath
             bundleRepository.fetchMyProfile()?.let { profileDao.upsertProfilePreservingLocal(it) }
-            // Partner profile — same merge logic
-            bundleRepository.fetchPartnerProfile(partnerId)?.let { profileDao.upsertProfilePreservingLocal(it) }
+            // Partner profile — guard against blank partnerId (can be blank before auto-resolve completes)
+            if (partnerId.isNotBlank()) {
+                bundleRepository.fetchPartnerProfile(partnerId)?.let { profileDao.upsertProfilePreservingLocal(it) }
+            } else {
+                android.util.Log.d("ProfileViewModel", "Skipping fetchPartnerProfile: partnerId is blank")
+            }
         } catch (e: Exception) {
             android.util.Log.w("ProfileViewModel", "refreshProfiles failed (non-critical)", e)
         }

@@ -55,11 +55,14 @@ class EnclaveSyncWorker(
 
         val cryptoManager = CryptoManager(applicationContext)
         val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-        val myId = prefs.getString("my_id", "11111111-1111-1111-1111-111111111111") ?: "11111111-1111-1111-1111-111111111111"
-        val partnerId = prefs.getString("partner_id", "")?.let { if (it.isBlank()) null else it } ?: if (myId == "11111111-1111-1111-1111-111111111111") {
-            "00000000-0000-0000-0000-000000000000"
-        } else {
-            "11111111-1111-1111-1111-111111111111"
+        val myId = prefs.getString("my_id", null)?.takeIf { it.isNotBlank() }
+        val partnerId = prefs.getString("partner_id", null)?.takeIf { it.isNotBlank() }
+
+        // Abort sync gracefully if the app has not been fully paired yet.
+        // Do NOT substitute fake UUIDs — that causes ghost-user decryption attempts.
+        if (myId == null || partnerId == null) {
+            Log.d("EnclaveSyncWorker", "App not paired yet (myId=$myId, partnerId=$partnerId). Skipping sync.")
+            return Result.success()
         }
         val partnerAddress = SignalProtocolAddress(partnerId, 1)
 
@@ -304,17 +307,21 @@ class EnclaveSyncWorker(
             }
             // Also sync partner profile for the Companion Widget
             try {
-                val partnerProfile = bundleRepository.fetchPartnerProfile(partnerId)
-                if (partnerProfile != null) {
-                    database.userProfileDao().upsertProfilePreservingLocal(partnerProfile)
-                    
-                    // Force widget update
-                    val intent = android.content.Intent(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java)
-                    intent.action = android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    val ids = android.appwidget.AppWidgetManager.getInstance(applicationContext)
-                        .getAppWidgetIds(android.content.ComponentName(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java))
-                    intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                    applicationContext.sendBroadcast(intent)
+                if (partnerId.isNotBlank()) {
+                    val partnerProfile = bundleRepository.fetchPartnerProfile(partnerId)
+                    if (partnerProfile != null) {
+                        database.userProfileDao().upsertProfilePreservingLocal(partnerProfile)
+                        
+                        // Force widget update
+                        val intent = android.content.Intent(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java)
+                        intent.action = android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                        val ids = android.appwidget.AppWidgetManager.getInstance(applicationContext)
+                            .getAppWidgetIds(android.content.ComponentName(applicationContext, com.enclave.app.ui.widget.CompanionWidgetProvider::class.java))
+                        intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                        applicationContext.sendBroadcast(intent)
+                    }
+                } else {
+                    Log.d("EnclaveSyncWorker", "Skipping partner profile sync: partnerId is blank")
                 }
             } catch (e: Exception) {
                 Log.e("EnclaveSyncWorker", "Failed to sync partner profile for widget", e)

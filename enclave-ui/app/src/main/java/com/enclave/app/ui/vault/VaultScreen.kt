@@ -2,6 +2,7 @@ package com.enclave.app.ui.vault
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -103,16 +104,32 @@ fun VaultScreen(
         }
     }
 
+    val isUnlocked = authState == BiometricPromptManager.AuthState.UNLOCKED
+
+    val shakeOffset = remember { Animatable(0f) }
+    LaunchedEffect(authState) {
+        if (authState == BiometricPromptManager.AuthState.UNLOCKED) {
+            // Visual feedback - rapid tumbler alignment shake
+            shakeOffset.animateTo(12f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(-12f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(8f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(-8f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(4f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(-4f, animationSpec = tween(40, easing = LinearEasing))
+            shakeOffset.animateTo(0f, animationSpec = tween(40, easing = LinearEasing))
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFFFFF5F6) // Blush minimal base background
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            val isUnlocked = authState == BiometricPromptManager.AuthState.UNLOCKED
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .offset(x = shakeOffset.value.dp)
                     .blur(if (!isUnlocked) 16.dp else 0.dp)
             ) {
                 // 1. Soft Blushing Folder Chip bar with "New Album" trigger

@@ -18,6 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -50,11 +54,28 @@ fun SwipeToReplyMessageBubble(
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
 
+    val isPressed = remember { mutableStateOf(false) }
+    val scaleFactor by animateFloatAsState(
+        targetValue = if (isPressed.value) 0.95f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "bubble_scale"
+    )
+
     LaunchedEffect(Unit) {
         if (!message.isFromMe && message.deliveryStatus != "READ") {
             viewModel.markMessageAsRead(message.id)
         }
     }
+
+    val bubbleShape = RoundedCornerShape(
+        topStart = 24.dp,
+        topEnd = 24.dp,
+        bottomStart = if (message.isFromMe) 24.dp else 4.dp,
+        bottomEnd = if (message.isFromMe) 4.dp else 24.dp
+    )
 
     Box(
         modifier = Modifier
@@ -70,34 +91,54 @@ fun SwipeToReplyMessageBubble(
         ) {
             Box(
                 modifier = Modifier
+                    .graphicsLayer(
+                        scaleX = scaleFactor,
+                        scaleY = scaleFactor,
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                            pivotFractionX = if (message.isFromMe) 1.0f else 0.0f,
+                            pivotFractionY = 1.0f
+                        )
+                    )
                     .widthIn(max = 280.dp)
+                    .border(
+                        width = 1.dp,
+                        color = if (message.isFromMe) Color.Transparent else Color(0xFFFFE4E8),
+                        shape = bubbleShape
+                    )
                     .background(
                         brush = androidx.compose.ui.graphics.Brush.linearGradient(
                             colors = if (message.isFromMe) {
-                                listOf(Color(0xFFFFF0F2), Color(0xFFFCE2E6))
+                                listOf(RoseAccent, RoseDeep)
                             } else {
-                                listOf(LilacBubble, LilacBubbleEnd)
+                                listOf(Color.White, Color(0xFFFFF9FA))
                             }
                         ),
-                        shape = RoundedCornerShape(
-                            topStart = 20.dp,
-                            topEnd = 20.dp,
-                            bottomStart = if (message.isFromMe) 20.dp else 4.dp,
-                            bottomEnd = if (message.isFromMe) 4.dp else 20.dp
-                        )
+                        shape = bubbleShape
                     )
-                    .messageContextMenuGesture(
-                        onLongPress = { showContextMenu = true },
-                        onTap = {
-                            if (message.messageType == "MEDIA") {
-                                onMediaClick()
-                            } else if (message.messageType == "RECORDED_KISS") {
-                                viewModel.playRecordedKiss(message.id)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                isPressed.value = true
+                                try {
+                                    awaitRelease()
+                                } finally {
+                                    isPressed.value = false
+                                }
+                            },
+                            onLongPress = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showContextMenu = true
+                            },
+                            onTap = {
+                                if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE") {
+                                    onMediaClick()
+                                } else if (message.messageType == "RECORDED_KISS") {
+                                    viewModel.playRecordedKiss(message.id)
+                                }
                             }
-                        },
-                        haptic = haptic
-                    )
-                    .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)
+                        )
+                    }
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.End) {
                     // Quoted reply preview
@@ -107,14 +148,14 @@ fun SwipeToReplyMessageBubble(
                                 .fillMaxWidth()
                                 .padding(bottom = 6.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(CharcoalText.copy(alpha = 0.05f))
+                                .background(if (message.isFromMe) Color.White.copy(alpha = 0.15f) else CharcoalText.copy(alpha = 0.05f))
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Reply,
                                 contentDescription = null,
-                                tint = CharcoalText.copy(alpha = 0.5f),
+                                tint = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f),
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -123,25 +164,27 @@ fun SwipeToReplyMessageBubble(
                                     text = message.quotedMsgSender ?: "Partner",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 9.sp,
-                                    color = CharcoalText
+                                    color = if (message.isFromMe) Color.White else CharcoalText
                                 )
                                 Text(
                                     text = message.quotedMsgText ?: "",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     fontSize = 10.sp,
-                                    color = CharcoalText.copy(alpha = 0.8f)
+                                    color = if (message.isFromMe) Color.White.copy(alpha = 0.8f) else CharcoalText.copy(alpha = 0.8f)
                                 )
                             }
                         }
                     }
 
                     // Message content body
+                    val contentColor = if (message.isFromMe) Color.White else CharcoalText
                     MessageContent(
                         message = message,
                         searchQuery = searchQuery,
                         viewModel = viewModel,
-                        onMediaClick = onMediaClick
+                        onMediaClick = onMediaClick,
+                        contentColor = contentColor
                     )
 
                     Spacer(modifier = Modifier.height(2.dp))
@@ -157,14 +200,14 @@ fun SwipeToReplyMessageBubble(
                                 java.util.Locale.getDefault()
                             ).format(java.util.Date(message.timestamp)),
                             fontSize = 9.sp,
-                            color = CharcoalText.copy(alpha = 0.5f)
+                            color = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f)
                         )
                         if (message.isFromMe) {
                             Spacer(modifier = Modifier.width(3.dp))
                             val (tickIcon, tickTint) = when (message.deliveryStatus) {
-                                "READ" -> Pair(Icons.Default.DoneAll, Color(0xFFE36B87))
-                                "DELIVERED" -> Pair(Icons.Default.DoneAll, CharcoalText.copy(alpha = 0.55f))
-                                else -> Pair(Icons.Default.Check, CharcoalText.copy(alpha = 0.35f))
+                                "READ" -> Pair(Icons.Default.DoneAll, Color(0xFFFFF0F2))
+                                "DELIVERED" -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.8f))
+                                else -> Pair(Icons.Default.Check, Color.White.copy(alpha = 0.5f))
                             }
                             Icon(
                                 imageVector = tickIcon,
@@ -187,10 +230,11 @@ fun SwipeToReplyMessageBubble(
                         )
                         .clip(CircleShape)
                         .background(Color.White)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .border(1.dp, Color(0xFFFFE4E8), CircleShape)
                         .clickable {
                             viewModel.toggleReaction(message.id, message.reaction)
                         }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(text = message.reaction, fontSize = 11.sp)
                 }
@@ -297,7 +341,8 @@ private fun MessageContent(
     message: ChatMessage,
     searchQuery: String,
     viewModel: ChatViewModel,
-    onMediaClick: () -> Unit
+    onMediaClick: () -> Unit,
+    contentColor: Color
 ) {
     when (message.messageType) {
         "RECORDED_KISS" -> KissMessageContent(message = message, viewModel = viewModel)
@@ -306,7 +351,7 @@ private fun MessageContent(
         "MEDIA_VIDEO" -> VideoMessageContent(onMediaClick = onMediaClick)
         "MEDIA_AUDIO" -> AudioFileMessageContent(message = message, viewModel = viewModel)
         "MEDIA_FILE" -> FileMessageContent(onMediaClick = onMediaClick)
-        else -> TextMessageContent(message = message, searchQuery = searchQuery)
+        else -> TextMessageContent(message = message, searchQuery = searchQuery, contentColor = contentColor)
     }
 }
 
@@ -349,7 +394,7 @@ private fun KissMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
 }
 
 @Composable
-private fun TextMessageContent(message: ChatMessage, searchQuery: String) {
+private fun TextMessageContent(message: ChatMessage, searchQuery: String, contentColor: Color) {
     val text = message.text
     if (searchQuery.isNotEmpty() && text.contains(searchQuery, ignoreCase = true)) {
         val annotatedString = buildAnnotatedString {
@@ -371,7 +416,7 @@ private fun TextMessageContent(message: ChatMessage, searchQuery: String) {
             text = annotatedString,
             fontFamily = InterFont,
             fontSize = 14.sp,
-            color = CharcoalText,
+            color = contentColor,
             modifier = Modifier.padding(bottom = 2.dp)
         )
     } else {
@@ -379,7 +424,7 @@ private fun TextMessageContent(message: ChatMessage, searchQuery: String) {
             text = text,
             fontFamily = InterFont,
             fontSize = 14.sp,
-            color = CharcoalText,
+            color = contentColor,
             modifier = Modifier.padding(bottom = 2.dp)
         )
     }
