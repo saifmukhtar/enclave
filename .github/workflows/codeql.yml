@@ -1,0 +1,64 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '37 2 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'java-kotlin' ]
+        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'swift' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Initializes the CodeQL tools for scanning.
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
+
+    # Manual build steps for Java/Kotlin (Android)
+    - name: Set up JDK 17
+      if: matrix.language == 'java-kotlin'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Create local.properties for Gradle
+      if: matrix.language == 'java-kotlin'
+      run: |
+        cd enclave-ui
+        echo "SUPABASE_URL=https://dummy.supabase.co" > local.properties
+        echo "SUPABASE_KEY=dummy-key" >> local.properties
+        echo "SIGNALING_SERVER_URL=ws://127.0.0.1:3000" >> local.properties
+        echo "NTFY_SERVER_URL=https://ntfy.sh" >> local.properties
+
+    - name: Build Android App (CodeQL)
+      if: matrix.language == 'java-kotlin'
+      run: |
+        cd enclave-ui
+        chmod +x gradlew
+        ./gradlew assembleDebug
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"

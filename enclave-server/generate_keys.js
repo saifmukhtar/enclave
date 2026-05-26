@@ -6,6 +6,7 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
 
 function base64UrlEncode(str) {
   return Buffer.from(str)
@@ -53,19 +54,31 @@ const servicePayload = {
 const anonKey = signJwt(anonPayload, jwtSecret);
 const serviceRoleKey = signJwt(servicePayload, jwtSecret);
 
-console.log("================================================================================");
-console.log("🔐 ENCLAVE PRODUCTION RE-KEY GENERATOR");
-console.log("================================================================================");
-console.log("\n📍 [STEP 1] COPY THESE ENTRIES TO YOUR SERVER '.env' FILE:\n");
-console.log(`JWT_SECRET=${jwtSecret}`);
-console.log(`SECRET_KEY_BASE=${secretKeyBase}`);
-console.log(`POSTGRES_PASSWORD=${dbPassword}`);
-console.log(`ANON_KEY=${anonKey}`);
-console.log(`SERVICE_ROLE_KEY=${serviceRoleKey}`);
+const output = `================================================================================
+🔐 ENCLAVE PRODUCTION RE-KEY GENERATOR
+================================================================================
 
-console.log("\n--------------------------------------------------------------------------------");
-console.log("\n📍 [STEP 2] COPY THIS ENTRY TO YOUR CLIENT 'local.properties' FILE:\n");
-console.log(`SUPABASE_KEY=${anonKey}`);
+📍 [STEP 1] COPY THESE ENTRIES TO YOUR SERVER '.env' FILE:
+
+JWT_SECRET=${jwtSecret}
+SECRET_KEY_BASE=${secretKeyBase}
+POSTGRES_PASSWORD=${dbPassword}
+ANON_KEY=${anonKey}
+SERVICE_ROLE_KEY=${serviceRoleKey}
+
+--------------------------------------------------------------------------------
+
+📍 [STEP 2] COPY THIS ENTRY TO YOUR CLIENT 'local.properties' FILE:
+
+SUPABASE_KEY=${anonKey}
+
+================================================================================
+✅ Key generation complete! Copy these secure coordinates into place and deploy.
+================================================================================
+`;
+
+fs.writeFileSync('enclave-secrets.txt', output);
+console.log("✅ Secure keys generated and saved to 'enclave-secrets.txt'.");
 console.log("\n================================================================================");
 console.log("✅ Key generation complete! Copy these secure coordinates into place and deploy.");
 console.log("================================================================================");
