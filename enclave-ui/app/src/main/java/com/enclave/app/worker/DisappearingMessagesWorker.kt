@@ -18,7 +18,7 @@ class DisappearingMessagesWorker(
             database.messageDao().deleteExpiredMessages(System.currentTimeMillis())
             Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
             Result.retry()
         }
     }

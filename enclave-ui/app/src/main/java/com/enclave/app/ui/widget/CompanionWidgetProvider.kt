@@ -45,7 +45,7 @@ class CompanionWidgetProvider : AppWidgetProvider() {
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             } finally {
                 pendingResult.finish()
             }

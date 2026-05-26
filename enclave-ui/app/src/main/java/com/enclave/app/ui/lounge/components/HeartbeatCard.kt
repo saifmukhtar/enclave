@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 
 @Composable
 fun HeartbeatCard(
@@ -33,14 +35,14 @@ fun HeartbeatCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.6f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Tactile Heartbeat Synchronizer", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-            Text("Hold the heart to transmit your real-time vital sign pulse to your partner.", color = Color.Gray, fontSize = 11.sp)
+            Text("Tactile Heartbeat Synchronizer", fontWeight = FontWeight.Bold, fontFamily = PlayfairFont, color = Color(0xFF2A1B1D), fontSize = 14.sp)
+            Text("Hold the heart to transmit your real-time vital sign pulse to your partner.", fontFamily = InterFont, color = Color.Gray, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(16.dp))
 
             Box(

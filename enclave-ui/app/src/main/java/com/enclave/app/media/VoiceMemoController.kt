@@ -58,7 +58,7 @@ class VoiceMemoController(
                 }
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
                 false
             }
         }
@@ -82,7 +82,7 @@ class VoiceMemoController(
                 
                 bytes
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
                 null
             }
         }
@@ -96,7 +96,7 @@ class VoiceMemoController(
                     release()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
             mediaRecorder = null
             tempRecordFile?.let { shredFile(it) }
@@ -118,7 +118,7 @@ class VoiceMemoController(
                 start()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
     }
 
@@ -129,7 +129,7 @@ class VoiceMemoController(
                 release()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
         mediaPlayer = null
     }
@@ -162,7 +162,7 @@ class VoiceMemoController(
             raf.close()
             file.delete()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
             file.delete()
         }
     }

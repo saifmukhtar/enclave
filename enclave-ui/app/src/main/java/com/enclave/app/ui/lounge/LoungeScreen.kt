@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 import com.enclave.app.data.local.LetterEntity
 import com.enclave.app.media.MusicSyncController
 import kotlinx.coroutines.delay
@@ -108,7 +110,7 @@ fun LoungeScreen(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2A1B1D),
-                    fontFamily = FontFamily.Serif
+                    fontFamily = PlayfairFont
                 )
             }
 
@@ -154,6 +156,7 @@ fun LoungeScreen(
                             Text(
                                 text = label,
                                 fontSize = 11.sp,
+                                fontFamily = InterFont,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isSelected) Color.White else Color(0xFF2A1B1D)
                             )

@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,7 +97,7 @@ fun AppLockScreen(
                 text = "Enclave Locked",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif,
+                fontFamily = PlayfairFont,
                 color = CharcoalText,
                 letterSpacing = 1.5.sp
             )
@@ -104,7 +106,7 @@ fun AppLockScreen(
                 text = "Tap to unlock your private space",
                 fontSize = 13.sp,
                 color = CharcoalText.copy(alpha = 0.6f),
-                fontFamily = FontFamily.Default,
+                fontFamily = InterFont,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -116,7 +118,7 @@ fun AppLockScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.55f))
+                    .background(Color.White.copy(alpha = 0.6f))
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

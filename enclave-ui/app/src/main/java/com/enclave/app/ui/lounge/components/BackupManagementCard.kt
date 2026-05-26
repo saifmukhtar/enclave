@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 
 @Composable
 fun BackupManagementCard(
@@ -24,11 +26,11 @@ fun BackupManagementCard(
             .fillMaxWidth()
             .padding(bottom = 24.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.6f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Enclave Database Encrypted Backup", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
-            Text("Safeguard or migrate your ratchet databases via secure AES-256 GCM passphrase-encrypted backup files.", color = Color.Gray, fontSize = 11.sp)
+            Text("Enclave Database Encrypted Backup", fontWeight = FontWeight.Bold, fontFamily = PlayfairFont, color = Color(0xFF2A1B1D), fontSize = 14.sp)
+            Text("Safeguard or migrate your ratchet databases via secure AES-256 GCM passphrase-encrypted backup files.", fontFamily = InterFont, color = Color.Gray, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

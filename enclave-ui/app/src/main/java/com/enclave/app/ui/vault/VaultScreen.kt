@@ -47,8 +47,8 @@ import androidx.activity.compose.BackHandler
 import com.enclave.app.ui.vault.components.VaultGrid
 import com.enclave.app.ui.vault.components.FullscreenMediaPager
 
-val InterFont = FontFamily.Default
-val OutfitFont = FontFamily.Default
+import com.enclave.app.ui.theme.InterFont
+import com.enclave.app.ui.theme.PlayfairFont
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -244,7 +244,7 @@ fun VaultScreen(
                     if (showMoveDialog) {
                         AlertDialog(
                             onDismissRequest = { showMoveDialog = false },
-                            title = { Text("Move to Album", fontFamily = OutfitFont) },
+                            title = { Text("Move to Album", fontFamily = PlayfairFont) },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     folders.forEach { folder ->
@@ -342,7 +342,7 @@ fun VaultScreen(
                 var newAlbumName by remember { mutableStateOf("") }
                 AlertDialog(
                     onDismissRequest = { showCreateAlbumDialog = false },
-                    title = { Text("New Album Name", fontFamily = OutfitFont) },
+                    title = { Text("New Album Name", fontFamily = PlayfairFont) },
                     text = {
                         TextField(
                             value = newAlbumName,

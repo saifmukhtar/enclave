@@ -610,7 +610,27 @@ class BundleRepository(
             android.util.Log.e("BundleRepository", "Failed to clean old backups", e)
         }
     }
+
+    suspend fun fetchTurnCredentials(): TurnCredentials? = withContext(Dispatchers.IO) {
+        try {
+            awaitAuth()
+            val list = supabase.postgrest["turn_credentials"]
+                .select()
+                .decodeList<TurnCredentials>()
+            list.firstOrNull()
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "fetchTurnCredentials failed", e)
+            null
+        }
+    }
 }
+
+@Serializable
+data class TurnCredentials(
+    val turn_url: String,
+    val turn_username: String,
+    val turn_password: String
+)
 
 @Serializable
 data class lounge_vault_metadata_upload(

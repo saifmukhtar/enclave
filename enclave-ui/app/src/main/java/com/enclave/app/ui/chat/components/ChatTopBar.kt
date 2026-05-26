@@ -20,7 +20,7 @@ import com.enclave.app.ui.profile.components.E2eeAvatar
 import com.enclave.app.ui.chat.ChatUiState
 import com.enclave.app.ui.theme.CharcoalText
 import com.enclave.app.ui.theme.InterFont
-import com.enclave.app.ui.theme.OutfitFont
+import com.enclave.app.ui.theme.PlayfairFont
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.core.animateFloat
@@ -52,7 +52,7 @@ fun GlassmorphicTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(80.dp)
-            .background(Color.White.copy(alpha = 0.4f))
+            .background(Color.White.copy(alpha = 0.6f))
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
@@ -170,7 +170,7 @@ fun GlassmorphicTopBar(
                     Column {
                         Text(
                             text = partnerName,
-                            fontFamily = OutfitFont,
+                            fontFamily = PlayfairFont,
                             fontWeight = FontWeight.Bold,
                             color = CharcoalText,
                             fontSize = 16.sp

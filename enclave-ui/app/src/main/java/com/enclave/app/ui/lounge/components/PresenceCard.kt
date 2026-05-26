@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.ui.profile.components.E2eeAvatar
 import com.enclave.app.ui.profile.ProfileViewModel
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 
 @Composable
 fun PresenceCard(
@@ -46,7 +48,7 @@ fun PresenceCard(
     Card(
         modifier = modifier.height(260.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f))
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.6f))
     ) {
         Column(
             modifier = Modifier
@@ -59,6 +61,7 @@ fun PresenceCard(
                 Text(
                     text = name.uppercase(),
                     fontSize = 12.sp,
+                    fontFamily = PlayfairFont,
                     fontWeight = FontWeight.Bold,
                     color = if (isMe) Color(0xFFE598A7) else Color(0xFF2A1B1D),
                     maxLines = 1,
@@ -68,6 +71,7 @@ fun PresenceCard(
                     Text(
                         text = username,
                         fontSize = 9.sp,
+                        fontFamily = InterFont,
                         color = Color.Gray.copy(alpha = 0.8f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -124,14 +128,14 @@ fun PresenceCard(
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(statusText, fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 13.sp)
+                Text(statusText, fontWeight = FontWeight.Bold, fontFamily = InterFont, color = Color(0xFF2A1B1D), fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(2.dp))
                 val weatherStr = if (weatherTemp != -999.0) {
                     " • $weatherCondition ${weatherTemp.toInt()}°C"
                 } else ""
                 
                 val timeStr = if (!isMe && localTimeStr.isNotEmpty()) " • 🕒 $localTimeStr" else ""
-                Text("🔋 Battery: $batteryPct%$timeStr$weatherStr", fontSize = 10.sp, color = Color.Gray)
+                Text("🔋 Battery: $batteryPct%$timeStr$weatherStr", fontSize = 10.sp, fontFamily = InterFont, color = Color.Gray)
             }
 
             Row(
@@ -144,7 +148,7 @@ fun PresenceCard(
             ) {
                 Icon(Icons.Default.MusicNote, contentDescription = "Listen", tint = if (isMe) Color(0xFFE598A7) else Color(0xFF2A1B1D), modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(nowListening, fontSize = 9.sp, color = Color(0xFF2A1B1D), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(nowListening, fontSize = 9.sp, fontFamily = InterFont, color = Color(0xFF2A1B1D), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

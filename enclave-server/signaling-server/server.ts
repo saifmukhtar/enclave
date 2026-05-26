@@ -5,7 +5,6 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import * as admin from 'firebase-admin';
 
 // Simple helper to load .env file
 function loadEnv() {
@@ -51,31 +50,7 @@ if (!process.env.SUPABASE_KEY) {
   process.env.SUPABASE_KEY = process.env.SERVICE_ROLE_KEY || process.env.ANON_KEY;
 }
 
-// Initialize firebase-admin
-let isFcmReady = false;
-try {
-  const credentialsPath = process.env.FIREBASE_CREDENTIALS_PATH;
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-
-  if (credentialsPath && fs.existsSync(credentialsPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: projectId || undefined
-    });
-    isFcmReady = true;
-    console.log(`Firebase Admin successfully initialized via service account cert (Project: ${projectId || 'default'}).`);
-  } else {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-      projectId: projectId || undefined
-    });
-    isFcmReady = true;
-    console.log("Firebase Admin successfully initialized via applicationDefault.");
-  }
-} catch (e) {
-  console.warn("FCM Admin failed to initialize. Background pushes will run in local mock logs.", (e as Error).message);
-}
+// Removed firebase-admin initialization
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://your-project.supabase.co';
 const SUPABASE_KEY = process.env.SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? process.env.ANON_KEY ?? 'your-anon-key';
@@ -100,8 +75,8 @@ async function fetchTargetPushToken(targetId: string): Promise<string | null> {
       console.warn(`Supabase token lookup returned status ${res.status}`);
       return null;
     }
-    const data = await res.json() as { push_token?: string; fcm_token?: string }[];
-    return data[0]?.push_token ?? data[0]?.fcm_token ?? null;
+    const data = await res.json() as { push_token?: string }[];
+    return data[0]?.push_token ?? null;
   } catch (err) {
     console.error(`Failed to fetch push token for ${targetId}:`, err);
     return null;
@@ -109,22 +84,38 @@ async function fetchTargetPushToken(targetId: string): Promise<string | null> {
 }
 
 async function sendPushNotification(targetToken: string, payload: Record<string, string>) {
-  if (!isFcmReady) {
-    console.log(`[MOCK FCM] Dispatched push to token ${targetToken} with payload:`, payload);
+  const ntfyUrl = process.env.NTFY_SERVER_URL;
+  const ntfyUser = process.env.NTFY_USERNAME;
+  const ntfyPass = process.env.NTFY_PASSWORD;
+
+  if (!ntfyUrl) {
+    console.log(`[MOCK NTFY] Dispatched push to token ${targetToken} with payload:`, payload);
     return;
   }
+
   try {
-    const message = {
-      token: targetToken,
-      data: payload,
-      android: {
-        priority: 'high' as const
-      }
+    const headers: Record<string, string> = {
+      'Title': 'New Message',
+      'Priority': 'high',
+      'Tags': 'speech_balloon'
     };
-    await admin.messaging().send(message);
-    console.log(`Successfully sent high-priority FCM push to token ${targetToken}`);
+    if (ntfyUser && ntfyPass) {
+      headers['Authorization'] = 'Basic ' + Buffer.from(`${ntfyUser}:${ntfyPass}`).toString('base64');
+    }
+
+    const res = await fetch(`${ntfyUrl}/${targetToken}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      console.log(`Successfully sent high-priority NTFY push to topic ${targetToken}`);
+    } else {
+      console.error(`Failed to send NTFY push: ${res.statusText}`);
+    }
   } catch (err) {
-    console.error("Failed to send FCM push:", err);
+    console.error("Failed to send NTFY push:", err);
   }
 }
 
@@ -277,18 +268,6 @@ app.get('/healthz', (_req, res) => {
 });
 
 async function verifySupabaseToken(token: string): Promise<string | null> {
-  // If Supabase has a placeholder configuration, decode JWT sub claim for local dev
-  if (SUPABASE_URL.includes('your-project') || SUPABASE_KEY === 'your-anon-key') {
-    console.warn("Supabase not fully configured; decoding JWT payload sub claim without verification (DEV ONLY)");
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        return payload.sub ?? null;
-      }
-    } catch (e) {}
-    return null;
-  }
 
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {

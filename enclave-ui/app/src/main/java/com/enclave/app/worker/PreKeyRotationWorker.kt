@@ -98,7 +98,7 @@ class PreKeyRotationWorker(
 
             Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
             Result.retry()
         }
     }

@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.enclave.app.data.local.MediaMetadataEntity
 import com.enclave.app.data.vault.VaultRepository
 import com.enclave.app.media.EncryptedFileDataSource
-import com.enclave.app.ui.vault.InterFont
+import com.enclave.app.ui.theme.InterFont
 import com.enclave.app.ui.vault.VaultViewModel
 
 @OptIn(ExperimentalFoundationApi::class)

@@ -229,7 +229,7 @@ private fun RowScope.RecordingInputRow(
         val secs = recordingDuration % 60
         Text(
             text = "%02d:%02d".format(mins, secs),
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = 14.sp,
             color = CharcoalText
         )

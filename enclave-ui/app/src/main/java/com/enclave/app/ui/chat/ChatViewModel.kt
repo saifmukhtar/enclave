@@ -507,7 +507,7 @@ class ChatViewModel(
                 val payload = LenientJson.decodeFromString<RecordedKissPayload>(jsonStr)
                 _activePlaybackKiss.value = payload
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
         }
     }
@@ -537,7 +537,7 @@ class ChatViewModel(
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
         }
     }
@@ -587,7 +587,7 @@ class ChatViewModel(
                 val fileName = String(fileNameBytes, Charsets.UTF_8)
                 vaultRepository.encryptedFileManager.readSecureFile(fileName)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
                 null
             }
         }

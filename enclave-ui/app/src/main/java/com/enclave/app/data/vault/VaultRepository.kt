@@ -134,7 +134,7 @@ class VaultRepository(
             }
             bitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Exception", "Error occurred", e)
             null
         }
     }
@@ -163,7 +163,7 @@ class VaultRepository(
             mediaMetadataDao.deleteMediaByPath(fileName)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Exception", "Error occurred", e)
             false
         }
     }
@@ -214,7 +214,7 @@ class VaultRepository(
                 false
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Exception", "Error occurred", e)
             false
         }
     }
@@ -259,7 +259,7 @@ class VaultRepository(
                                 thumbnailPath = thumbName
                             }
                         } catch (ex: Exception) {
-                            ex.printStackTrace()
+                            android.util.Log.e("Exception", "Error occurred", ex)
                         } finally {
                             retriever.release()
                         }
@@ -314,7 +314,7 @@ class VaultRepository(
                         val pendingIntent = MediaStore.createDeleteRequest(context.contentResolver, urisToDelete)
                         return@withContext ImportResult.RequiresPermission(pendingIntent.intentSender)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        android.util.Log.e("Exception", "Error occurred", e)
                     }
                 }
 
@@ -328,7 +328,7 @@ class VaultRepository(
                                 e.userAction.actionIntent.intentSender
                             )
                         } else {
-                            e.printStackTrace()
+                            android.util.Log.e("Exception", "Error occurred", e)
                         }
                     }
                 }
@@ -336,7 +336,7 @@ class VaultRepository(
 
             ImportResult.Success
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Exception", "Error occurred", e)
             ImportResult.Error(e)
         }
     }

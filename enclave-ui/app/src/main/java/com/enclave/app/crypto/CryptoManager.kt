@@ -34,8 +34,8 @@ class CryptoManager(private val context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     } catch (e: Exception) {
-        android.util.Log.e("CryptoManager", "EncryptedSharedPreferences failed, falling back to standard SharedPreferences", e)
-        context.getSharedPreferences("enclave_signal_state_fallback", Context.MODE_PRIVATE)
+        android.util.Log.e("CryptoManager", "EncryptedSharedPreferences failed initialization", e)
+        throw SecurityException("Hardware-backed Keystore failed. Enclave cannot safely store keys. Error: ${e.message}", e)
     }
 
     val signalStore = EnclaveSignalStore(sharedPreferences)

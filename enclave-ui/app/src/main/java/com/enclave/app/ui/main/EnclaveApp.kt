@@ -75,6 +75,8 @@ fun EnclaveApp(
                         val pinner = okhttp3.CertificatePinner.Builder()
                             .add("*.$parsedHost", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
                             .add(parsedHost, "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=")
+                            .add("*.$parsedHost", "sha256/k2v657xBsOVe1PQRwOsHsw3bsGT2VzIqz5K+59sNQws=") // Backup pin
+                            .add(parsedHost, "sha256/k2v657xBsOVe1PQRwOsHsw3bsGT2VzIqz5K+59sNQws=") // Backup pin
                             .build()
                         certificatePinner(pinner)
                     }
@@ -250,14 +252,8 @@ fun EnclaveApp(
 
                 val savedPartner = prefs.getString("partner_id", "")
                 if (savedPartner.isNullOrBlank() || savedPartner == "11111111-1111-1111-1111-111111111111" || savedPartner == "00000000-0000-0000-0000-000000000000") {
-                    val allProfiles = supabase.postgrest["profiles"]
-                        .select()
-                        .decodeList<com.enclave.app.network.UserProfile>()
-                    val peer = allProfiles.firstOrNull { it.id != resolvedMyId }
-                    if (peer != null) {
-                        prefs.edit().putString("partner_id", peer.id).apply()
-                        partnerId = peer.id
-                    }
+                    // Intentionally empty. Partner ID must be resolved via secure invite link.
+                    // Fallback to auto-discovery was removed for privacy.
                 }
             } catch (e: Exception) {
                 // handle
@@ -325,7 +321,7 @@ fun EnclaveApp(
                 musicSyncController?.destroy()
                 musicSyncController = MusicSyncController(controller, signalingClient, myId, partnerId)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
         }, com.google.common.util.concurrent.MoreExecutors.directExecutor())
     }

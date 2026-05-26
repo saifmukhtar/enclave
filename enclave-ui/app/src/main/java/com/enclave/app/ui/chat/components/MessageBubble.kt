@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -263,7 +264,7 @@ fun SwipeToReplyMessageBubble(
             AlertDialog(
                 onDismissRequest = { showDeleteConfirmation = false },
                 title = {
-                    Text("Delete Message", fontFamily = OutfitFont, fontWeight = FontWeight.Bold)
+                    Text("Delete Message", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
                 },
                 text = {
                     Text("Are you sure you want to delete this message? This action cannot be undone.")
@@ -339,7 +340,7 @@ private fun KissMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = "Tap to replay impression",
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = 12.sp,
             color = RoseAccent,
             fontWeight = FontWeight.Bold
@@ -410,7 +411,7 @@ fun LightboxOverlay(message: ChatMessage, viewModel: ChatViewModel, onClose: () 
                     fos.close()
                     isVideoPrepared = true
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.e("Enclave", "Exception caught", e)
                 }
             } else {
                 bitmapState = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -473,7 +474,7 @@ fun LightboxOverlay(message: ChatMessage, viewModel: ChatViewModel, onClose: () 
                 }
             } else if (message.messageType == "MEDIA_FILE") {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
+                    Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Document securely stored in Vault.", color = Color.White)
                     Spacer(modifier = Modifier.height(8.dp))

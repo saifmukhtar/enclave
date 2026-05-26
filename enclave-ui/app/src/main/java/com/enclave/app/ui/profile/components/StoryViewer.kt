@@ -99,13 +99,13 @@ fun StoryViewerOverlay(
                             val durationMs = durationStr?.toLongOrNull() ?: 5000L
                             viewerDuration = durationMs
                         } catch (ex: Exception) {
-                            ex.printStackTrace()
+                            android.util.Log.e("Enclave", "Exception caught", ex)
                         } finally {
                             retriever.release()
                         }
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.e("Enclave", "Exception caught", e)
                 }
             }
 
@@ -208,7 +208,7 @@ fun secureShred(file: File) {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         } finally {
             file.delete()
         }

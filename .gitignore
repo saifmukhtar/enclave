@@ -31,6 +31,8 @@ Thumbs.db
 .directory
 logcat.txt
 bugs.md
+review/
+release_test_log.txt
 # ------------------------------------------------------------------------------
 # Enclave Client (Android) Ignored Files
 # ------------------------------------------------------------------------------

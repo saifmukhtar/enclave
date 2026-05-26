@@ -43,7 +43,7 @@ import com.enclave.app.models.RecordedKissPayload
 import com.enclave.app.models.RecordedKissPoint
 import com.enclave.app.ui.kiss.haptics.KissHapticManager
 import com.enclave.app.ui.kiss.physics.LipPhysicsEngine
-import com.enclave.app.ui.theme.OutfitFont
+import com.enclave.app.ui.theme.PlayfairFont
 import com.enclave.app.ui.theme.BlushBackground
 import com.enclave.app.webrtc.SignalingClient
 import com.enclave.app.webrtc.SignalMessageWrapper
@@ -395,7 +395,7 @@ fun KissGestureCanvasOverlay(
 
         Text(
             text = "Touch Impression",
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = 22.sp,
             color = BlushBackground.copy(alpha = 0.85f),
             fontWeight = FontWeight.Bold,
@@ -408,7 +408,7 @@ fun KissGestureCanvasOverlay(
                 isRecordingKiss -> "Recording Impression... keep touching the screen"
                 else -> "Press and hold to create your live impression"
             },
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = if (isMutual) 18.sp else 12.sp,
             color = when {
                 isMutual -> Color(0xFFFFB3C6)
@@ -468,7 +468,7 @@ fun KissGestureCanvasOverlay(
                 .padding(32.dp)
                 .onGloballyPositioned { closeButtonBounds = it.boundsInParent() }
         ) {
-            Text("✕ Close", fontFamily = OutfitFont, color = BlushBackground, fontSize = 13.sp)
+            Text("✕ Close", fontFamily = PlayfairFont, color = BlushBackground, fontSize = 13.sp)
         }
     }
 }
@@ -511,7 +511,7 @@ fun RecordedKissPlaybackOverlay(payload: RecordedKissPayload, onClose: () -> Uni
     ) {
         Text(
             text = "Impression Playback...",
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = 20.sp,
             color = BlushBackground.copy(alpha = 0.9f),
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 40.dp)

@@ -41,7 +41,7 @@ fun VoiceMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
                 durationState = mp.duration / 1000
                 mp.release()
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
         }
     }
@@ -106,7 +106,7 @@ fun AudioFileMessageContent(message: ChatMessage, viewModel: ChatViewModel) {
                 durationState = mp.duration / 1000
                 mp.release()
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
         }
     }

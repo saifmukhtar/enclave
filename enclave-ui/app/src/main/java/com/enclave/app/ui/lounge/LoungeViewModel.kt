@@ -65,6 +65,8 @@ class LoungeViewModel(
     private var cachedWeather: Pair<Double, String>? = null
     private var lastWeatherFetchTime = 0L
 
+    private val syncUseCase = LoungeSyncUseCase(signalingClient, myId, partnerId)
+
     init {
         // Load persistent countdown states
         val savedMyLabel = prefs.getString("my_countdown_label", "") ?: ""
@@ -246,8 +248,6 @@ class LoungeViewModel(
             signalingClient.sendRawMessage(Json.encodeToString(wrapper))
         }
     }
-
-    private val syncUseCase = LoungeSyncUseCase(signalingClient, myId, partnerId)
 
     private fun observeSignaling() {
         viewModelScope.launch {

@@ -72,7 +72,7 @@ fun getRawMotionEvent(event: androidx.compose.ui.input.pointer.PointerEvent): an
             return method.invoke(event) as? android.view.MotionEvent
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("Enclave", "Exception caught", e)
     }
     return null
 }

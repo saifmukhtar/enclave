@@ -296,7 +296,7 @@ class CallViewModel(
                 proximityWakeLock?.release()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
         sensorManager.unregisterListener(proximityListener)
     }

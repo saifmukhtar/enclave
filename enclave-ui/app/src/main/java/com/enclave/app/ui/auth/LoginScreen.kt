@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -128,7 +130,7 @@ fun LoginScreen(
                 text = if (isSignUp) "Create Space" else stringResource(R.string.login_app_title),
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif,
+                fontFamily = PlayfairFont,
                 color = CharcoalText,
                 letterSpacing = 2.sp
             )
@@ -136,7 +138,7 @@ fun LoginScreen(
                 text = if (isSignUp) "Register your secure intimate connection" else stringResource(R.string.login_app_subtitle),
                 fontSize = 13.sp,
                 color = CharcoalText.copy(alpha = 0.55f),
-                fontFamily = FontFamily.Default,
+                fontFamily = InterFont,
                 letterSpacing = 0.5.sp,
                 textAlign = TextAlign.Center
             )
@@ -148,7 +150,8 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color.White.copy(alpha = 0.55f))
+                    .background(Color.White.copy(alpha = 0.6f))
+                    // Glassmorphism typically includes a subtle border in CSS
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

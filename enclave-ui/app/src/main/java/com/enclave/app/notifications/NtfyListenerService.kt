@@ -22,6 +22,10 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class NtfyListenerService : Service() {
 
@@ -99,8 +103,10 @@ class NtfyListenerService : Service() {
                 Log.e(TAG, "ntfy WebSocket failure", t)
                 isConnected = false
                 // Reconnect logic
-                Thread.sleep(5000) // Simple backoff
-                connectWebSocket(topic)
+                CoroutineScope(Dispatchers.IO).launch {
+                    delay(5000) // Simple backoff
+                    connectWebSocket(topic)
+                }
             }
         })
     }

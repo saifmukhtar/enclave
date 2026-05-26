@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enclave | Secure, Self-Hosted Communications</title>
+    <meta name="description" content="A privacy-first, E2EE secure vault and communication platform designed for absolute digital intimacy.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <nav>
+        <a href="#" class="logo">
+            <span style="font-size: 28px;">&#x1F512;</span> Enclave
+        </a>
+        <div class="nav-links">
+            <a href="#motivation">Motivation</a>
+            <a href="#features">Features</a>
+            <a href="#setup">Setup Guide</a>
+            <a href="https://github.com/saifmukhtar/enclave" target="_blank">GitHub</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Your Digital Sanctuary</h1>
+            <p>A beautifully crafted, offline-first secure vault and WebRTC communication app. Built with uncompromising privacy, featuring End-to-End Encryption and 100% self-hosted infrastructure.</p>
+            <a href="#setup" class="btn">Get Started</a>
+        </div>
+    </header>
+
+    <section id="motivation" class="section">
+        <div class="glass-container">
+            <h2 class="section-title">The Motivation</h2>
+            <p style="font-size: 18px; margin-bottom: 20px;">
+                In an era of data mining and server-side tracking, true privacy is hard to find. We built Enclave to be an impenetrable digital space—a sanctuary for intimate communications. 
+            </p>
+            <p style="font-size: 18px;">
+                By utilizing the <strong>Signal Protocol</strong> for messaging, <strong>WebRTC</strong> for peer-to-peer video, and <strong>Ntfy</strong> for private push notifications, Enclave guarantees that no third party—not even us—can access your data. Your keys stay on your device, protected by Biometric Keystores.
+            </p>
+        </div>
+    </section>
+
+    <section id="features" class="section">
+        <h2 class="section-title">Core Features</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F512;</div>
+                <h3 class="feature-title">End-to-End Encryption</h3>
+                <p>Every message, photo, and video call is encrypted locally using the Signal Protocol before it ever leaves your device.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4F9;</div>
+                <h3 class="feature-title">Peer-to-Peer WebRTC</h3>
+                <p>High-quality, low-latency video and audio calls routed directly between devices via self-hosted TURN servers.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F514;</div>
+                <h3 class="feature-title">Private Push (Ntfy)</h3>
+                <p>Zero reliance on Google FCM or Apple APNs. Background sync runs through your own secure WebSockets.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4DC;</div>
+                <h3 class="feature-title">Secure Vault</h3>
+                <p>Hide your photos and videos behind an AES-GCM encrypted local vault, accessible only via Biometrics.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F3A8;</div>
+                <h3 class="feature-title">Glassmorphic UI</h3>
+                <p>A stunning, dynamic interface built in Jetpack Compose, featuring smooth blurs and micro-animations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F310;</div>
+                <h3 class="feature-title">100% Self-Hosted</h3>
+                <p>Deploy the Node.js signaling server and PostgreSQL database on your own VPS. You own the entire stack.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="setup" class="section">
+        <div class="glass-container">
+            <h2 class="section-title">Setup & Deployment</h2>
+            
+            <div class="doc-block">
+                <h3>1. Clone the Repository</h3>
+                <pre><code>git clone https://github.com/saifmukhtar/enclave.git
+cd enclave</code></pre>
+            </div>
+
+            <div class="doc-block">
+                <h3>2. Server Infrastructure</h3>
+                <p>Deploy the backend services on your VPS. We recommend Ubuntu 24.04.</p>
+                <pre><code>cd enclave-server
+chmod +x setup_coturn.sh
+sudo ./setup_coturn.sh
+npm install
+npm run start</code></pre>
+            </div>
+
+            <div class="doc-block">
+                <h3>3. Android Build Configuration</h3>
+                <p>Create a <code>local.properties</code> file in the <code>enclave-ui</code> directory and configure your server IP and credentials.</p>
+                <pre><code>SUPABASE_URL=https://your-supabase-url.supabase.co
+SUPABASE_KEY=your-anon-key
+SIGNALING_SERVER_URL=ws://your-vps-ip:3000
+NTFY_SERVER_URL=https://ntfy.sh</code></pre>
+            </div>
+
+            <div class="doc-block">
+                <h3>4. Compile the App</h3>
+                <p>Build the signed release APK.</p>
+                <pre><code>cd enclave-ui
+./gradlew assembleRelease</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 Saif Mukhtar. Licensed under the GNU AGPLv3.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

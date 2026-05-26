@@ -368,7 +368,7 @@ class KissWorkflowViewModel(
 
             manager.notify(8888, notification)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
     }
 

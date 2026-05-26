@@ -209,7 +209,7 @@ class DailyBackupWorker(
                 tempZipFile?.let { if (it.exists()) it.delete() }
                 tempEncFile?.let { if (it.exists()) it.delete() }
             } catch (ex: Exception) {
-                ex.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", ex)
             }
         }
     }

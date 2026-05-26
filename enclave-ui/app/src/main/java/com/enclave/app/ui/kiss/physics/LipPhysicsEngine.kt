@@ -56,7 +56,7 @@ class LipPhysicsEngine(context: Context, rawAssetId: Int) {
             val dto = Json.decodeFromString<LipMeshDto>(jsonString)
             initializeMesh(dto)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
     }
 

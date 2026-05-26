@@ -25,7 +25,7 @@ import com.enclave.app.media.MemoryMediaDataSource
 import com.enclave.app.media.MusicSyncController
 import com.enclave.app.ui.chat.components.*
 import com.enclave.app.ui.theme.BlushBackground
-import com.enclave.app.ui.theme.OutfitFont
+import com.enclave.app.ui.theme.PlayfairFont
 
 // ─── ChatScreen – thin orchestrator ──────────────────────────────────────────
 // All Composable building blocks live in com.enclave.app.ui.chat.components.*
@@ -363,7 +363,7 @@ private fun AttachmentSheet(
     ) {
         Text(
             text = "Share Content",
-            fontFamily = OutfitFont,
+            fontFamily = PlayfairFont,
             fontSize = 18.sp,
             color = com.enclave.app.ui.theme.CharcoalText,
             modifier = Modifier.padding(bottom = 20.dp)

@@ -120,7 +120,7 @@ class WebRtcManager(
                 videoCapturer?.stopCapture()
                 videoCapturer?.dispose()
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("Enclave", "Exception caught", e)
             }
 
             // Ensure surfaceTextureHelper is initialized (e.g. if call started as audio-only)
@@ -162,7 +162,7 @@ class WebRtcManager(
             videoCapturer?.stopCapture()
             videoCapturer?.dispose()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
 
         // 2. Restore camera capture
@@ -263,7 +263,7 @@ class WebRtcManager(
             videoCapturer?.stopCapture()
             videoCapturer?.dispose()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("Enclave", "Exception caught", e)
         }
         surfaceTextureHelper?.dispose()
         peerConnection?.close()

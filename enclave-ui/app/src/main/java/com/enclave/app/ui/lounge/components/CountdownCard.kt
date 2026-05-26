@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.enclave.app.ui.lounge.tabs.CircularCountdownUnit
+import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.InterFont
 
 @Composable
 fun CountdownCard(
@@ -30,7 +32,7 @@ fun CountdownCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.6f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -42,10 +44,11 @@ fun CountdownCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Shared Visit Countdown", fontWeight = FontWeight.Bold, color = Color(0xFF2A1B1D), fontSize = 14.sp)
+                    Text("Shared Visit Countdown", fontWeight = FontWeight.Bold, fontFamily = PlayfairFont, color = Color(0xFF2A1B1D), fontSize = 14.sp)
                     Text(
                         text = if (targetLabel.isNotEmpty()) targetLabel else "Set countdown to keep track of next meeting!",
                         color = Color.Gray,
+                        fontFamily = InterFont,
                         fontSize = 11.sp
                     )
                 }
@@ -66,6 +69,7 @@ fun CountdownCard(
                     Text(
                         text = if (targetLabel.isNotEmpty()) "Countdown expired! 💕" else "No countdown active",
                         fontSize = 14.sp,
+                        fontFamily = InterFont,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFE598A7)
                     )
