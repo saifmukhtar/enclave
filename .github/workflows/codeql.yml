@@ -50,6 +50,11 @@ jobs:
         echo "SUPABASE_KEY=dummy-key" >> local.properties
         echo "SIGNALING_SERVER_URL=ws://127.0.0.1:3000" >> local.properties
         echo "NTFY_SERVER_URL=https://ntfy.sh" >> local.properties
+        echo "NTFY_USERNAME=dummy" >> local.properties
+        echo "NTFY_PASSWORD=dummy" >> local.properties
+        echo "TURN_SERVER_URL=turn:dummy.com:3478" >> local.properties
+        echo "TURN_USERNAME=dummy" >> local.properties
+        echo "TURN_PASSWORD=dummy" >> local.properties
 
     - name: Build Android App (CodeQL)
       if: matrix.language == 'java-kotlin'
