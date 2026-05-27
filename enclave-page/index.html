@@ -7,6 +7,7 @@
   <!-- ═══ PERFORMANCE ═══ -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="image" href="enclave.png" fetchpriority="high">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- ═══ PRIMARY SEO META ═══ -->
@@ -143,7 +144,7 @@
   ═══════════════════════════════════════════════════ -->
   <nav id="main-nav" role="navigation" aria-label="Main navigation">
     <a href="#" class="logo" aria-label="Enclave — back to top">
-      <img src="enclave.png" alt="Enclave logo" class="nav-logo" width="36" height="36">
+      <img src="enclave.png" alt="Enclave logo" class="nav-logo" width="36" height="36" decoding="async" fetchpriority="high">
       Enclave
     </a>
     <div class="nav-right-wrap">
@@ -181,7 +182,7 @@
         <!-- Logo with glow halo -->
         <div class="hero-logo-wrap" aria-hidden="true">
           <div class="hero-logo-glow"></div>
-          <img src="enclave.png" alt="Enclave app icon — self-hosted private communication" class="hero-logo" width="140" height="140">
+          <img src="enclave.png" alt="Enclave app icon — self-hosted private communication" class="hero-logo" width="140" height="140" decoding="async" fetchpriority="high">
         </div>
 
         <p class="eyebrow">Private by design &nbsp;·&nbsp; Self-hosted by default &nbsp;·&nbsp; Open source</p>
@@ -1059,6 +1060,6 @@ cd enclave-server
   <!-- Copy toast notification -->
   <div class="copy-toast" id="copy-toast" role="status" aria-live="polite" aria-atomic="true">Copied to clipboard!</div>
 
-  <script src="script.js"></script>
+  <script src="script.js" defer></script>
 </body>
 </html>
