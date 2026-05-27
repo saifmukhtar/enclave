@@ -433,8 +433,13 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           console.warn(`[offline-queue] Queue full for target ${message.targetId}, dropping message`);
         }
 
-        // Push notification only for E2EE signal payloads (calls are handled by call UI directly)
-        if (message.type === 'SIGNAL_PAYLOAD') {
+        // Push notification for E2EE signals, lounge letters, status stories, and mutual kiss triggers
+        if (
+          message.type === 'SIGNAL_PAYLOAD' ||
+          message.type === 'LOUNGE_LETTER_SEND' ||
+          message.type === 'STORY_SHARE' ||
+          message.type === 'KISS_WORKFLOW_TRIGGER'
+        ) {
           fetchTargetPushToken(message.targetId).then(token => {
             if (token) {
               sendPushNotification(token, { action: 'sync', type: message.type });
@@ -489,7 +494,14 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
             type: 'PROFILE_UPDATE',
             senderId: current.id,
             targetId: otherId,
-            payload: { isOnline: false, lastSeen: Date.now() },
+            payload: JSON.stringify({
+              username: '',
+              displayName: '',
+              bio: '',
+              avatarUrl: '',
+              isOnline: false,
+              lastSeen: Date.now(),
+            }),
           });
         }
       }

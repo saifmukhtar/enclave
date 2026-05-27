@@ -62,6 +62,7 @@ fun AppLockScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFFFFF5F6))
             .pointerInput(Unit) {
                 // Consume all touch events so they don't pass through to the screen below
                 awaitPointerEventScope {

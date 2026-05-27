@@ -29,9 +29,9 @@ CREATE POLICY "Authenticated users can insert vault metadata"
     ON public.lounge_vault_metadata FOR INSERT
     WITH CHECK (auth.uid() = uploaded_by);
 
-CREATE POLICY "Authenticated users can delete own vault metadata"
+CREATE POLICY "Authenticated users can delete vault metadata"
     ON public.lounge_vault_metadata FOR DELETE
-    USING (auth.uid() = uploaded_by);
+    USING (auth.role() = 'authenticated');
 
 -- ─────────────────────────────────────────────
 -- 2. Shared Vault Storage Bucket (Public - Streams encrypted E2EE payload directly)
@@ -48,9 +48,9 @@ CREATE POLICY "Authenticated users can upload encrypted vault files"
     ON storage.objects FOR INSERT
     WITH CHECK (bucket_id = 'vault' AND auth.role() = 'authenticated');
 
-CREATE POLICY "Uploader can delete own vault files"
+CREATE POLICY "Authenticated users can delete vault files"
     ON storage.objects FOR DELETE
-    USING (bucket_id = 'vault' AND auth.uid()::text = (storage.foldername(name))[1]);
+    USING (bucket_id = 'vault' AND auth.role() = 'authenticated');
 
 -- ─────────────────────────────────────────────
 -- 3. Private Backups Storage Bucket

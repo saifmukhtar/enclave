@@ -186,6 +186,12 @@ class ChatSessionManager(
                                 retryHandshakeNow(scope)
                             }
                         }
+                        "MESSAGE_REVOKE" -> {
+                            val revokeId = msg.payload
+                            if (revokeId != null) {
+                                database.messageDao().deleteMessage(revokeId)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("Enclave", "Exception caught", e)

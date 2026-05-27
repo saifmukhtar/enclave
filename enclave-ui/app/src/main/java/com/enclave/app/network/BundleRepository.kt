@@ -618,6 +618,50 @@ class BundleRepository(
         }
     }
 
+    suspend fun deleteVaultFile(mediaId: String) = withContext(Dispatchers.IO) {
+        try {
+            awaitAuth()
+            // 1. Fetch metadata to find who uploaded it and what the file names are
+            val list = supabase.postgrest["lounge_vault_metadata"]
+                .select {
+                    filter {
+                        eq("media_id", mediaId)
+                    }
+                }
+                .decodeList<lounge_vault_metadata_upload>()
+            
+            val record = list.firstOrNull() ?: return@withContext
+            
+            // 2. Delete metadata row in Postgrest
+            supabase.postgrest["lounge_vault_metadata"].delete {
+                filter {
+                    eq("media_id", mediaId)
+                }
+            }
+            
+            // 3. Delete files from Supabase storage bucket "vault"
+            val uploaderId = record.uploaded_by
+            val fileName = record.local_encrypted_path
+            val thumbName = record.thumbnail_path
+            
+            try {
+                supabase.storage.from("vault").delete("$uploaderId/$fileName")
+            } catch (e: Exception) {
+                android.util.Log.w("BundleRepository", "Failed to delete vault file $fileName from storage", e)
+            }
+            
+            if (thumbName.isNotEmpty()) {
+                try {
+                    supabase.storage.from("vault").delete("$uploaderId/$thumbName")
+                } catch (e: Exception) {
+                    android.util.Log.w("BundleRepository", "Failed to delete thumbnail $thumbName from storage", e)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BundleRepository", "deleteVaultFile failed", e)
+        }
+    }
+
     suspend fun fetchRemoteVaultMetadata(): List<lounge_vault_metadata_upload> = withContext(Dispatchers.IO) {
         try {
             awaitAuth()

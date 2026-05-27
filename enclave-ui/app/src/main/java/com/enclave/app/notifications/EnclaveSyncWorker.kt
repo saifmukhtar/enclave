@@ -164,6 +164,11 @@ class EnclaveSyncWorker(
                                         database.statusStoryDao().markViewed(payload, System.currentTimeMillis())
                                     }
                                 }
+                                "MESSAGE_REVOKE" -> {
+                                    msg.payload?.let { payload ->
+                                        database.messageDao().deleteMessage(payload)
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
                             Log.e("EnclaveSyncWorker", "Failed parsing raw message", e)
@@ -197,6 +202,12 @@ class EnclaveSyncWorker(
                             } catch (e: Exception) {
                                 Log.e("EnclaveSyncWorker", "Failed to parse reaction JSON", e)
                             }
+                            return@collect
+                        }
+
+                        if (baseType == "LOUNGE") {
+                            val loungeJson = String(decryptedBytes, Charsets.UTF_8)
+                            signalingClient.emitDecryptedRawMessage(loungeJson)
                             return@collect
                         }
 

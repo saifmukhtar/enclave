@@ -216,6 +216,12 @@ class ChatViewModel(
                     }
                 }
 
+                if (baseType == "LOUNGE") {
+                    val loungeJson = String(decryptedBytes, Charsets.UTF_8)
+                    signalingClient.emitDecryptedRawMessage(loungeJson)
+                    return@launch
+                }
+
                 if (baseType == "VAULT_KEY_SYNC") {
                     val keyBase64 = Base64.encodeToString(decryptedBytes, Base64.NO_WRAP)
                     context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
@@ -313,9 +319,27 @@ class ChatViewModel(
 
 
 
-    fun deleteMessage(messageId: String) {
+    fun deleteMessage(messageId: String, forEveryone: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            database.messageDao().deleteMessage(messageId)
+            val msgEntity = database.messageDao().getMessageById(messageId)
+            if (msgEntity != null) {
+                database.messageDao().deleteMessage(messageId)
+                if (forEveryone && msgEntity.senderId == myId) {
+                    val msg = SignalMessageWrapper(
+                        type = "MESSAGE_REVOKE",
+                        senderId = myId,
+                        targetId = partnerId,
+                        payload = messageId
+                    )
+                    signalingClient.sendRawMessage(Json.encodeToString(msg))
+                }
+            }
+        }
+    }
+
+    fun clearEntireChat() {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.messageDao().clearEntireChat()
         }
     }
 
@@ -400,9 +424,43 @@ class ChatViewModel(
                 }
             }
 
+            var mediaBytesToEncrypt = mediaBytes
+            if (baseType == "MEDIA_IMAGE" && !mimeType.endsWith("gif")) {
+                try {
+                    val options = android.graphics.BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    android.graphics.BitmapFactory.decodeByteArray(mediaBytes, 0, mediaBytes.size, options)
+                    
+                    val maxDim = 1280
+                    var inSampleSize = 1
+                    if (options.outHeight > maxDim || options.outWidth > maxDim) {
+                        val halfHeight = options.outHeight / 2
+                        val halfWidth = options.outWidth / 2
+                        while (halfHeight / inSampleSize >= maxDim && halfWidth / inSampleSize >= maxDim) {
+                            inSampleSize *= 2
+                        }
+                    }
+                    
+                    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                        inSampleSize = inSampleSize
+                    }
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(mediaBytes, 0, mediaBytes.size, decodeOptions)
+                    if (bitmap != null) {
+                        val bos = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+                        mediaBytesToEncrypt = bos.toByteArray()
+                        bitmap.recycle()
+                        android.util.Log.d("ChatViewModel", "Compressed image from ${mediaBytes.size} bytes to ${mediaBytesToEncrypt.size} bytes")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatViewModel", "Image compression failed, sending raw", e)
+                }
+            }
+
             val contentTypeHeader = if (baseType == "MEDIA_FILE") "$baseType;ext=$ext" else baseType
 
-            val encryptionResult = cryptoManager.encryptMessage(partnerAddress, mediaBytes)
+            val encryptionResult = cryptoManager.encryptMessage(partnerAddress, mediaBytesToEncrypt)
             if (encryptionResult.isSuccess) {
                 val ciphertext = encryptionResult.getOrThrow()
                 val messageId = UUID.randomUUID().toString()
@@ -589,6 +647,59 @@ class ChatViewModel(
             } catch (e: Exception) {
                 android.util.Log.e("Enclave", "Exception caught", e)
                 null
+            }
+        }
+    }
+
+    fun openDecryptedFile(messageId: String, context: android.content.Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val entity = database.messageDao().getMessageById(messageId) ?: return@launch
+                val fileNameBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
+                val fileName = String(fileNameBytes, Charsets.UTF_8)
+                val decryptedBytes = vaultRepository.encryptedFileManager.readSecureFile(fileName)
+                
+                // Write to cache directory
+                val cacheFile = java.io.File(context.cacheDir, "shared_$fileName")
+                cacheFile.writeBytes(decryptedBytes)
+                
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "com.enclave.app.fileprovider",
+                    cacheFile
+                )
+                
+                val ext = fileName.substringAfterLast('.', "")
+                val mimeType = when (ext) {
+                    "pdf" -> "application/pdf"
+                    "md", "txt" -> "text/plain"
+                    "doc" -> "application/msword"
+                    "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    else -> "application/octet-stream"
+                }
+                
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, mimeType)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Failed to open decrypted file", e)
+            }
+        }
+    }
+
+    fun exportChatMessageMedia(messageId: String, context: android.content.Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val entity = database.messageDao().getMessageById(messageId) ?: return@launch
+                val fileNameBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
+                val fileName = String(fileNameBytes, Charsets.UTF_8)
+                vaultRepository.exportToPublic(fileName, context)
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Failed to export chat media", e)
             }
         }
     }

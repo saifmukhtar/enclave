@@ -32,6 +32,7 @@ class NtfyListenerService : Service() {
     companion object {
         private const val TAG = "NtfyListenerService"
         private const val CHANNEL_ID = "ntfy_background_sync"
+        private const val ALERT_CHANNEL_ID = "enclave_alerts"
         private const val NOTIFICATION_ID = 2586
         private const val INITIAL_BACKOFF_MS = 5_000L
         private const val MAX_BACKOFF_MS = 300_000L // 5 minutes max
@@ -95,7 +96,19 @@ class NtfyListenerService : Service() {
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 Log.d(TAG, "ntfy WebSocket received message: $text")
-                triggerSync()
+                try {
+                    val json = org.json.JSONObject(text)
+                    val event = json.optString("event")
+                    if (event == "message") {
+                        val title = json.optString("title", "Enclave Update")
+                        val message = json.optString("message", "You have a new private update.")
+                        showNotification(title, message)
+                        triggerSync()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse ntfy WebSocket message", e)
+                    triggerSync()
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -146,6 +159,19 @@ class NtfyListenerService : Service() {
         WorkManager.getInstance(applicationContext).enqueue(syncRequest)
     }
 
+    private fun showNotification(title: String, message: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setColor(0xFFFCE2E6.toInt()) // Blush Soft Pink Accent
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         webSocket?.close(1000, "Service destroyed")
@@ -157,16 +183,30 @@ class NtfyListenerService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Background service sync channel (low importance)
+        val syncChannel = NotificationChannel(
             CHANNEL_ID,
             "Background Sync",
-            NotificationManager.IMPORTANCE_MIN // Minimizes annoyance, user can still disable channel
+            NotificationManager.IMPORTANCE_MIN
         ).apply {
             description = "Maintains connection to private push server"
             setShowBadge(false)
         }
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(syncChannel)
+
+        // User alert channel (high importance)
+        val alertChannel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "Private Updates",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notifications for incoming private chat messages, lounge activities, and stories"
+            enableVibration(true)
+            setShowBadge(true)
+        }
+        manager.createNotificationChannel(alertChannel)
     }
 
     private fun createNotification(): Notification {

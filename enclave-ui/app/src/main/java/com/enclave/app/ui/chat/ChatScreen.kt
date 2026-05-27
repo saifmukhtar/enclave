@@ -17,8 +17,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -30,6 +31,11 @@ import com.enclave.app.media.MusicSyncController
 import com.enclave.app.ui.chat.components.*
 import com.enclave.app.ui.theme.BlushBackground
 import com.enclave.app.ui.theme.PlayfairFont
+import com.enclave.app.ui.theme.CharcoalText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import com.enclave.app.ui.theme.InterFont
+import androidx.compose.material.icons.automirrored.filled.Reply
 
 // ─── ChatScreen – thin orchestrator ──────────────────────────────────────────
 // All Composable building blocks live in com.enclave.app.ui.chat.components.*
@@ -84,6 +90,15 @@ fun ChatScreen(
     val activePlaybackKiss by viewModel.activePlaybackKiss.collectAsState()
     var lightboxMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var showHapticDialog by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var showSelectionDeleteDialog by remember { mutableStateOf(false) }
+    var showSelectionInfoDialog by remember { mutableStateOf(false) }
+
+    // Multi-selection states
+    var isChatSelectionMode by rememberSaveable { mutableStateOf(false) }
+    val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
+    val coroutineScope = rememberCoroutineScope()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     LaunchedEffect(autoShowKissCanvas) {
         if (autoShowKissCanvas) showKissCanvas = true
@@ -92,7 +107,7 @@ fun ChatScreen(
     // ── Back-press handling ───────────────────────────────────────────────────
     androidx.activity.compose.BackHandler(
         enabled = showKissCanvas || lightboxMessage != null ||
-                showAttachmentSheet || activePlaybackKiss != null || isSearchActive
+                showAttachmentSheet || activePlaybackKiss != null || isSearchActive || isChatSelectionMode
     ) {
         when {
             showKissCanvas -> showKissCanvas = false
@@ -100,6 +115,10 @@ fun ChatScreen(
             showAttachmentSheet -> showAttachmentSheet = false
             activePlaybackKiss != null -> viewModel.clearPlaybackKiss()
             isSearchActive -> { isSearchActive = false; viewModel.updateSearchQuery("") }
+            isChatSelectionMode -> {
+                isChatSelectionMode = false
+                selectedMessages.clear()
+            }
         }
     }
 
@@ -197,30 +216,74 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent, // Make Scaffold transparent to reveal dynamic canvas backdrop
             topBar = {
-                GlassmorphicTopBar(
-                    uiState = uiState,
-                    partnerName = partnerName,
-                    partnerInitials = partnerInitials.ifBlank { "P" },
-                    isPartnerOnline = isPartnerOnline,
-                    lastSeenText = lastSeenText,
-                    partnerAvatarUrl = partnerProfile?.avatarUrl,
-                    profileViewModel = profileViewModel,
-                    partnerDisplayName = partnerProfile?.displayName,
-                    partnerUsername = partnerProfile?.username,
-                    partnerBio = partnerProfile?.bio,
-                    partnerStatusText = partnerStatus?.statusText,
-                    onAudioCallClick = onAudioCallClick,
-                    onVideoCallClick = onVideoCallClick,
-                    onKissClick = { showKissCanvas = !showKissCanvas },
-                    onProfileClick = onProfileClick,
-                    isSearchActive = isSearchActive,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { viewModel.updateSearchQuery(it) },
-                    onToggleSearch = { active ->
-                        isSearchActive = active
-                        if (!active) viewModel.updateSearchQuery("")
-                    }
-                )
+                if (isChatSelectionMode) {
+                    ChatSelectionTopBar(
+                        selectedCount = selectedMessages.size,
+                        onCloseClick = {
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onDeleteClick = {
+                            showSelectionDeleteDialog = true
+                        },
+                        onCopyClick = {
+                            val textToCopy = selectedMessages
+                                .filter { it.messageType == "TEXT" }
+                                .joinToString("\n") { it.text }
+                            clipboardManager.setText(AnnotatedString(textToCopy))
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onReplyClick = {
+                            if (selectedMessages.size == 1) {
+                                viewModel.setReplyToMessage(selectedMessages.first())
+                            }
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onSaveClick = {
+                            selectedMessages.forEach { msg ->
+                                viewModel.exportChatMessageMedia(msg.id, context)
+                            }
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onInfoClick = {
+                            showSelectionInfoDialog = true
+                        },
+                        showDelete = selectedMessages.isNotEmpty(),
+                        showCopy = selectedMessages.any { it.messageType == "TEXT" },
+                        showReply = selectedMessages.size == 1,
+                        showSave = selectedMessages.any { it.messageType == "MEDIA" || it.messageType == "MEDIA_IMAGE" || it.messageType == "MEDIA_VIDEO" || it.messageType == "MEDIA_FILE" },
+                        showInfo = selectedMessages.size == 1
+                    )
+                } else {
+                    GlassmorphicTopBar(
+                        uiState = uiState,
+                        partnerName = partnerName,
+                        partnerInitials = partnerInitials.ifBlank { "P" },
+                        isPartnerOnline = isPartnerOnline,
+                        lastSeenText = lastSeenText,
+                        partnerAvatarUrl = partnerProfile?.avatarUrl,
+                        profileViewModel = profileViewModel,
+                        partnerDisplayName = partnerProfile?.displayName,
+                        partnerUsername = partnerProfile?.username,
+                        partnerBio = partnerProfile?.bio,
+                        partnerStatusText = partnerStatus?.statusText,
+                        onAudioCallClick = onAudioCallClick,
+                        onVideoCallClick = onVideoCallClick,
+                        onKissClick = { showKissCanvas = !showKissCanvas },
+                        onClearChatClick = { showClearChatDialog = true },
+                        onProfileClick = onProfileClick,
+                        isSearchActive = isSearchActive,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                        onToggleSearch = { active ->
+                            isSearchActive = active
+                            if (!active) viewModel.updateSearchQuery("")
+                        }
+                    )
+                }
             },
             bottomBar = {
                 ChatInputBar(
@@ -291,12 +354,27 @@ fun ChatScreen(
                                 message = message,
                                 viewModel = viewModel,
                                 searchQuery = if (isSearchActive) searchQuery else "",
+                                isSelectionMode = isChatSelectionMode,
+                                isSelected = selectedMessages.contains(message),
+                                onSelectedChange = { selected ->
+                                    if (selected) {
+                                        isChatSelectionMode = true
+                                        selectedMessages.add(message)
+                                    } else {
+                                        selectedMessages.remove(message)
+                                        if (selectedMessages.isEmpty()) {
+                                            isChatSelectionMode = false
+                                        }
+                                    }
+                                },
                                 onMediaClick = {
                                     if (message.messageType == "MEDIA" ||
                                         message.messageType == "MEDIA_IMAGE" ||
                                         message.messageType == "MEDIA_VIDEO"
                                     ) {
                                         lightboxMessage = message
+                                    } else if (message.messageType == "MEDIA_FILE") {
+                                        viewModel.openDecryptedFile(message.id, context)
                                     }
                                 }
                             )
@@ -402,6 +480,108 @@ fun ChatScreen(
             )
         }
     }
+
+    if (showClearChatDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearChatDialog = false },
+            title = { Text("Clear Entire Chat", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete all messages? This action is permanent.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearEntireChat()
+                        showClearChatDialog = false
+                    }
+                ) {
+                    Text("Clear All", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearChatDialog = false }) {
+                    Text("Cancel", color = CharcoalText)
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
+
+    if (showSelectionDeleteDialog && selectedMessages.isNotEmpty()) {
+        val allOutgoing = selectedMessages.all { it.isFromMe }
+        AlertDialog(
+            onDismissRequest = { showSelectionDeleteDialog = false },
+            title = {
+                Text("Delete ${selectedMessages.size} Messages", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Are you sure you want to delete these messages?")
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (allOutgoing) {
+                        TextButton(
+                            onClick = {
+                                selectedMessages.forEach { msg ->
+                                    viewModel.deleteMessage(msg.id, forEveryone = true)
+                                }
+                                selectedMessages.clear()
+                                isChatSelectionMode = false
+                                showSelectionDeleteDialog = false
+                            }
+                        ) {
+                            Text("Delete for Everyone", color = Color.Red, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedMessages.forEach { msg ->
+                                viewModel.deleteMessage(msg.id, forEveryone = false)
+                            }
+                            selectedMessages.clear()
+                            isChatSelectionMode = false
+                            showSelectionDeleteDialog = false
+                        }
+                    ) {
+                        Text("Delete for Me", color = Color.Red)
+                    }
+                    TextButton(onClick = { showSelectionDeleteDialog = false }) {
+                        Text("Cancel", color = CharcoalText)
+                    }
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
+
+    if (showSelectionInfoDialog && selectedMessages.size == 1) {
+        val msg = selectedMessages.first()
+        val timeText = try {
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(msg.timestamp))
+        } catch (e: Exception) { "" }
+        AlertDialog(
+            onDismissRequest = { showSelectionInfoDialog = false },
+            title = {
+                Text("Message Info", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Sender: ${if (msg.isFromMe) "Me" else "Partner"}", fontFamily = InterFont)
+                    Text("Type: ${msg.messageType}", fontFamily = InterFont)
+                    Text("Timestamp: $timeText", fontFamily = InterFont)
+                    Text("Delivery Status: ${msg.deliveryStatus}", fontFamily = InterFont)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSelectionInfoDialog = false }) {
+                    Text("Close", color = Color(0xFFE598A7))
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
 }
 
 // ─── Attachment sheet content (used only by ChatScreen) ───────────────────────
@@ -465,3 +645,75 @@ private fun AttachmentSheet(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatSelectionTopBar(
+    selectedCount: Int,
+    onCloseClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onCopyClick: () -> Unit,
+    onReplyClick: () -> Unit,
+    onSaveClick: () -> Unit,
+    onInfoClick: () -> Unit,
+    showDelete: Boolean,
+    showCopy: Boolean,
+    showReply: Boolean,
+    showSave: Boolean,
+    showInfo: Boolean
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding(),
+        color = Color(0xFFFFF5F6),
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCloseClick) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF2A1B1D))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "$selectedCount selected",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2A1B1D),
+                modifier = Modifier.weight(1f)
+            )
+            
+            if (showReply) {
+                IconButton(onClick = onReplyClick) {
+                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Reply", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showCopy) {
+                IconButton(onClick = onCopyClick) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showSave) {
+                IconButton(onClick = onSaveClick) {
+                    Icon(Icons.Default.Download, contentDescription = "Save Media", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showInfo) {
+                IconButton(onClick = onInfoClick) {
+                    Icon(Icons.Default.Info, contentDescription = "Info", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showDelete) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F))
+                }
+            }
+        }
+    }
+}
+

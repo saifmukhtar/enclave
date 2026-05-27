@@ -4,9 +4,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.network.BundleRepository
-import com.enclave.app.webrtc.LenientJson
 import com.enclave.app.webrtc.SignalMessageWrapper
 import com.enclave.app.webrtc.SignalingClient
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +20,6 @@ import kotlinx.serialization.json.Json
 
 class LoungeDrawingViewModel(
     private val signalingClient: SignalingClient,
-    private val cryptoManager: CryptoManager,
     private val bundleRepository: BundleRepository?,
     private val partnerId: String,
     val myId: String,
@@ -80,20 +77,18 @@ class LoungeDrawingViewModel(
     }
 
     fun sendLoungeMessage(type: String, payload: String) {
-        val msg = SignalMessageWrapper(
-            senderId = myId,
-            type = type,
-            payload = payload
-        )
-        val jsonStr = LenientJson.encodeToString(msg)
-        val encryptedResult = cryptoManager.encryptMessage(
-            org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1),
-            jsonStr.toByteArray(Charsets.UTF_8)
-        )
-        if (encryptedResult.isSuccess) {
-            viewModelScope.launch {
-                signalingClient.sendEncryptedMessage(partnerId, encryptedResult.getOrThrow(), "LOUNGE")
-            }
+        // Use plain sendRawMessage (same as all other lounge VMs) so LoungeSyncUseCase
+        // can decode it from incomingRawMessages. Canvas strokes are non-sensitive
+        // meta-data transmitted over TLS — Signal double-encryption is unnecessary here
+        // and was silently dropping all canvas events on the receiving end.
+        viewModelScope.launch {
+            val wrapper = SignalMessageWrapper(
+                type = type,
+                senderId = myId,
+                targetId = partnerId,
+                payload = payload
+            )
+            signalingClient.sendRawMessage(Json.encodeToString(wrapper))
         }
     }
 
@@ -231,7 +226,6 @@ class LoungeDrawingViewModel(
 
     class Factory(
         private val signalingClient: SignalingClient,
-        private val cryptoManager: CryptoManager,
         private val bundleRepository: BundleRepository?,
         private val partnerId: String,
         private val myId: String,
@@ -240,7 +234,7 @@ class LoungeDrawingViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(LoungeDrawingViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
-                return LoungeDrawingViewModel(signalingClient, cryptoManager, bundleRepository, partnerId, myId, loungeSyncUseCase) as T
+                return LoungeDrawingViewModel(signalingClient, bundleRepository, partnerId, myId, loungeSyncUseCase) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }

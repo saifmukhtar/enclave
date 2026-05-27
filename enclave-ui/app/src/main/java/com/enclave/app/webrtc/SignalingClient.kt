@@ -328,4 +328,8 @@ class SignalingClient(
             try { client.close() } catch (_: Exception) {}
         }
     }
+
+    fun emitDecryptedRawMessage(text: String) {
+        _incomingRawMessages.tryEmit(text)
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +43,7 @@ fun GlassmorphicTopBar(
     onAudioCallClick: () -> Unit,
     onVideoCallClick: () -> Unit,
     onKissClick: () -> Unit,
+    onClearChatClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     isSearchActive: Boolean = false,
     searchQuery: String = "",
@@ -205,6 +207,26 @@ fun GlassmorphicTopBar(
                     }
                     IconButton(onClick = onVideoCallClick) {
                         Icon(Icons.Default.Videocam, contentDescription = "Video Call", tint = CharcoalText)
+                    }
+
+                    var expandedMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { expandedMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More Options", tint = CharcoalText)
+                        }
+                        DropdownMenu(
+                            expanded = expandedMenu,
+                            onDismissRequest = { expandedMenu = false },
+                            modifier = Modifier.background(Color(0xFFFFF5F6))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Clear Entire Chat", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold) },
+                                onClick = {
+                                    expandedMenu = false
+                                    onClearChatClick()
+                                }
+                            )
+                        }
                     }
                 }
             }

@@ -3,24 +3,32 @@ package com.enclave.app.ui.vault.components
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +50,24 @@ import com.enclave.app.data.vault.VaultRepository
 import com.enclave.app.media.EncryptedFileDataSource
 import com.enclave.app.ui.theme.InterFont
 import com.enclave.app.ui.vault.VaultViewModel
+
+fun LazyGridState.getItemIndexAtOffset(offset: Offset): Int? {
+    val layoutInfo = this.layoutInfo
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val gridX = offset.x
+    val gridY = offset.y
+    for (item in visibleItems) {
+        val itemX = item.offset.x.toFloat()
+        val itemY = item.offset.y.toFloat()
+        val itemWidth = item.size.width.toFloat()
+        val itemHeight = item.size.height.toFloat()
+        if (gridX >= itemX && gridX <= itemX + itemWidth &&
+            gridY >= itemY && gridY <= itemY + itemHeight) {
+            return item.index
+        }
+    }
+    return null
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -76,21 +102,107 @@ fun VaultGrid(
             )
         }
     } else {
+        val gridState = rememberLazyGridState()
+        var startDragIndex by remember { mutableStateOf<Int?>(null) }
+        var dragModeIsSelect by remember { mutableStateOf(true) }
+        var pressedItemIndex by remember { mutableStateOf<Int?>(null) }
+
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(8.dp),
-            modifier = modifier.fillMaxSize()
+            modifier = modifier
+                .fillMaxSize()
+                .pointerInput(isUnlocked, isSelectionMode, displayItems) {
+                    if (!isUnlocked || displayItems.isEmpty()) return@pointerInput
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            val index = gridState.getItemIndexAtOffset(offset)
+                            if (index != null && index < displayItems.size) {
+                                startDragIndex = index
+                                val entity = displayItems[index]
+                                if (!isSelectionMode) {
+                                    onToggleSelectionMode(true)
+                                    selectedItems.add(entity)
+                                    dragModeIsSelect = true
+                                } else {
+                                    if (selectedItems.contains(entity)) {
+                                        selectedItems.remove(entity)
+                                        dragModeIsSelect = false
+                                    } else {
+                                        selectedItems.add(entity)
+                                        dragModeIsSelect = true
+                                    }
+                                }
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            val index = gridState.getItemIndexAtOffset(change.position)
+                            val start = startDragIndex
+                            if (index != null && start != null && index < displayItems.size) {
+                                val range = if (start <= index) start..index else index..start
+                                for (i in range) {
+                                    if (i >= 0 && i < displayItems.size) {
+                                        val item = displayItems[i]
+                                        if (dragModeIsSelect) {
+                                            if (!selectedItems.contains(item)) {
+                                                selectedItems.add(item)
+                                            }
+                                        } else {
+                                            selectedItems.remove(item)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            startDragIndex = null
+                        },
+                        onDragCancel = {
+                            startDragIndex = null
+                        }
+                    )
+                }
+                .pointerInput(isUnlocked, isSelectionMode, displayItems) {
+                    if (!isUnlocked || displayItems.isEmpty()) return@pointerInput
+                    detectTapGestures(
+                        onPress = { offset ->
+                            val index = gridState.getItemIndexAtOffset(offset)
+                            if (index != null) {
+                                pressedItemIndex = index
+                                try {
+                                    awaitRelease()
+                                } finally {
+                                    pressedItemIndex = null
+                                }
+                            }
+                        },
+                        onTap = { offset ->
+                            val index = gridState.getItemIndexAtOffset(offset)
+                            if (index != null && index < displayItems.size) {
+                                val entity = displayItems[index]
+                                if (isSelectionMode) {
+                                    if (selectedItems.contains(entity)) {
+                                        selectedItems.remove(entity)
+                                    } else {
+                                        selectedItems.add(entity)
+                                    }
+                                } else {
+                                    onItemClick(index)
+                                }
+                            }
+                        }
+                    )
+                }
         ) {
             items(displayItems.size) { index ->
                 val entity = displayItems[index]
                 val fileName = entity.localEncryptedPath
-                var expandedMenu by remember { mutableStateOf(false) }
 
                 val isSelected = selectedItems.contains(entity)
-
-                val isCardPressed = remember { mutableStateOf(false) }
+                val isPressed = pressedItemIndex == index
                 val cardScale by animateFloatAsState(
-                    targetValue = if (isCardPressed.value) 0.94f else 1.0f,
+                    targetValue = if (isPressed) 0.94f else 1.0f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
@@ -105,38 +217,13 @@ fun VaultGrid(
                         .graphicsLayer(scaleX = cardScale, scaleY = cardScale)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFFFCE2E6))
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onPress = {
-                                    isCardPressed.value = true
-                                    try {
-                                        awaitRelease()
-                                    } finally {
-                                        isCardPressed.value = false
-                                    }
-                                },
-                                onLongPress = {
-                                    if (isUnlocked) {
-                                        if (!isSelectionMode) {
-                                            onToggleSelectionMode(true)
-                                            selectedItems.add(entity)
-                                        } else {
-                                            expandedMenu = true
-                                        }
-                                    }
-                                },
-                                onTap = {
-                                    if (isUnlocked) {
-                                        if (isSelectionMode) {
-                                            if (isSelected) selectedItems.remove(entity)
-                                            else selectedItems.add(entity)
-                                        } else {
-                                            onItemClick(index)
-                                        }
-                                    }
-                                }
-                            )
-                        }
+                        .then(
+                            if (isSelected && isUnlocked) {
+                                Modifier.border(2.dp, Color(0xFFE598A7), RoundedCornerShape(16.dp))
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     if (isUnlocked && !fileName.startsWith("mock_") && fileName.isNotEmpty()) {
                         val isVideo = entity.mimeType.startsWith("video/")
@@ -147,7 +234,6 @@ fun VaultGrid(
                         }
 
                         if (isVideo && entity.thumbnailPath.isEmpty()) {
-                            // Fallback video player card
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -196,49 +282,36 @@ fun VaultGrid(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (isSelected) Color(0xFFE598A7).copy(alpha = 0.4f)
+                                    if (isSelected) Color(0xFFE598A7).copy(alpha = 0.2f)
                                     else Color.Transparent
                                 )
                         ) {
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(8.dp)
-                                        .size(20.dp)
-                                        .background(Color(0xFFE598A7), CircleShape)
-                                        .align(Alignment.TopStart),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(22.dp)
+                                    .background(
+                                        if (isSelected) Color(0xFFE598A7) else Color.Black.copy(alpha = 0.3f),
+                                        CircleShape
+                                    )
+                                    .border(
+                                        width = 1.5.dp,
+                                        color = Color.White,
+                                        shape = CircleShape
+                                    )
+                                    .align(Alignment.TopEnd),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "Selected",
                                         tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
                         }
-                    }
-
-                    DropdownMenu(
-                        expanded = expandedMenu,
-                        onDismissRequest = { expandedMenu = false },
-                        modifier = Modifier.background(Color(0xFFFFF5F6))
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Export to Public Gallery", color = Color(0xFF2A1B1D)) },
-                            onClick = {
-                                expandedMenu = false
-                                viewModel.exportToPublic(fileName, context)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Securely Shred File", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                expandedMenu = false
-                                viewModel.shredFile(fileName)
-                            }
-                        )
                     }
                 }
             }
@@ -252,55 +325,229 @@ fun FullscreenMediaPager(
     items: List<MediaMetadataEntity>,
     initialIndex: Int,
     repository: VaultRepository,
+    viewModel: VaultViewModel,
+    isSelectionMode: Boolean,
+    selectedItems: MutableList<MediaMetadataEntity>,
+    onToggleSelection: (MediaMetadataEntity) -> Unit,
     onClose: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { items.size })
+    val context = LocalContext.current
+
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val backgroundAlpha by animateFloatAsState(
+        targetValue = (1f - (kotlin.math.abs(dragOffsetY) / 800f)).coerceIn(0f, 1f),
+        label = "bg_alpha"
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Color.Black.copy(alpha = backgroundAlpha))
     ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { page ->
-            val entity = items[page]
-            val fileName = entity.localEncryptedPath
-            val isVideo = entity.mimeType.startsWith("video/")
+            if (page < items.size) {
+                val entity = items[page]
+                val fileName = entity.localEncryptedPath
+                val isVideo = entity.mimeType.startsWith("video/")
 
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isVideo) {
-                    SecureVideoPlayer(
-                        fileName = fileName,
-                        repository = repository,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    ZoomableImage(
-                        fileName = fileName,
-                        repository = repository
-                    )
+                var scale by remember { mutableStateOf(1f) }
+                var offset by remember { mutableStateOf(Offset.Zero) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(scale) {
+                            if (scale == 1f) {
+                                detectDragGestures(
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetY += dragAmount.y
+                                    },
+                                    onDragEnd = {
+                                        if (kotlin.math.abs(dragOffsetY) > 200f) {
+                                            onClose()
+                                        } else {
+                                            dragOffsetY = 0f
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        dragOffsetY = 0f
+                                    }
+                                )
+                            }
+                        }
+                        .graphicsLayer {
+                            translationY = dragOffsetY
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isVideo) {
+                        SecureVideoPlayer(
+                            fileName = fileName,
+                            repository = repository,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        val bitmapState = produceState<Bitmap?>(initialValue = null, fileName) {
+                            value = repository.getDecryptedImageBitmap(fileName, 0, 0)
+                        }
+
+                        bitmapState.value?.let { bmp ->
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = fileName,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                scale = if (scale > 1f) 1f else 3f
+                                                offset = Offset.Zero
+                                            }
+                                        )
+                                    }
+                                    .pointerInput(Unit) {
+                                        detectTransformGestures { _, pan, zoom, _ ->
+                                            scale = (scale * zoom).coerceIn(1f, 5f)
+                                            if (scale > 1f) {
+                                                offset += pan
+                                            } else {
+                                                offset = Offset.Zero
+                                            }
+                                        }
+                                    }
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y
+                                    )
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Close Trigger Button overlay
-        IconButton(
-            onClick = onClose,
+        // Top Header Bar
+        val currentItem = if (pagerState.currentPage < items.size) items[pagerState.currentPage] else null
+        val isSelected = currentItem?.let { selectedItems.contains(it) } ?: false
+
+        Row(
             modifier = Modifier
-                .padding(24.dp)
-                .align(Alignment.TopEnd)
-                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .align(Alignment.TopCenter),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close Pager",
-                tint = Color.White
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+
+            Text(
+                text = "${pagerState.currentPage + 1} of ${items.size}",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                fontFamily = InterFont,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             )
+
+            IconButton(
+                onClick = {
+                    currentItem?.let { onToggleSelection(it) }
+                },
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(
+                            if (isSelected) Color(0xFFE598A7) else Color.Transparent,
+                            CircleShape
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            color = Color.White,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Action Overlay at the bottom
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .fillMaxWidth()
+                .padding(bottom = 32.dp, start = 32.dp, end = 32.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (pagerState.currentPage < items.size) {
+                val activeEntity = items[pagerState.currentPage]
+                val activeFileName = activeEntity.localEncryptedPath
+
+                IconButton(
+                    onClick = {
+                        viewModel.exportToPublic(activeFileName, context)
+                    },
+                    modifier = Modifier
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Export File",
+                        tint = Color.White
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        viewModel.shredFile(activeFileName)
+                        if (items.size <= 1) {
+                            onClose()
+                        }
+                    },
+                    modifier = Modifier
+                        .background(Color.Red.copy(alpha = 0.2f), CircleShape)
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Shred File",
+                        tint = Color.Red
+                    )
+                }
+            }
         }
     }
 }
@@ -310,38 +557,7 @@ fun ZoomableImage(
     fileName: String,
     repository: VaultRepository
 ) {
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    val bitmapState = produceState<Bitmap?>(initialValue = null, fileName) {
-        value = repository.getDecryptedImageBitmap(fileName, 0, 0)
-    }
-
-    bitmapState.value?.let { bmp ->
-        Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = fileName,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
-                        if (scale > 1f) {
-                            offset += pan
-                        } else {
-                            offset = Offset.Zero
-                        }
-                    }
-                }
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
-                )
-        )
-    }
+    // ZoomableImage is inline now in FullscreenMediaPager for better gesture integration.
 }
 
 @Composable

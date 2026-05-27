@@ -38,6 +38,9 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteMessage(messageId: String)
 
+    @Query("DELETE FROM messages")
+    suspend fun clearEntireChat()
+
     @Query("SELECT * FROM messages WHERE id = :messageId")
     suspend fun getMessageById(messageId: String): MessageEntity?
 

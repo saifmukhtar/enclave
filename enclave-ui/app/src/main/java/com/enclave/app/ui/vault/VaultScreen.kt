@@ -65,6 +65,7 @@ fun VaultScreen(
     val folders by viewModel.folders.collectAsState()
     val selectedFolder by viewModel.selectedFolder.collectAsState()
     var showCreateAlbumDialog by remember { mutableStateOf(false) }
+    var showShredConfirmDialog by remember { mutableStateOf(false) }
 
     // Multi-Selection State
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -174,6 +175,26 @@ fun VaultScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                isSelectionMode = !isSelectionMode
+                                if (!isSelectionMode) selectedItems.clear()
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    if (isSelectionMode) Color(0xFFE598A7) else Color(0xFFE598A7).copy(alpha = 0.2f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = if (isSelectionMode) Icons.Default.Close else Icons.Default.Check,
+                                contentDescription = "Toggle Selection Mode",
+                                tint = if (isSelectionMode) Color.White else Color(0xFFE598A7),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -223,9 +244,7 @@ fun VaultScreen(
                         ) {
                             IconButton(
                                 onClick = {
-                                    viewModel.shredItems(selectedItems.map { it.localEncryptedPath })
-                                    selectedItems.clear()
-                                    isSelectionMode = false
+                                    showShredConfirmDialog = true
                                 }
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = "Shred", tint = Color(0xFFD32F2F))
@@ -392,12 +411,48 @@ fun VaultScreen(
                 )
             }
 
+            if (showShredConfirmDialog && selectedItems.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { showShredConfirmDialog = false },
+                    title = { Text("Securely Shred Items?", fontFamily = PlayfairFont) },
+                    text = { Text("Are you sure you want to securely shred/delete ${selectedItems.size} items? This action will permanently remove the items from both local storage and the collaborative cloud vault, and cannot be undone.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.shredItems(selectedItems.map { it.localEncryptedPath })
+                                selectedItems.clear()
+                                isSelectionMode = false
+                                showShredConfirmDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                        ) {
+                            Text("Permanently Shred")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showShredConfirmDialog = false }) {
+                            Text("Cancel", color = Color.Gray)
+                        }
+                    }
+                )
+            }
+
             // 7. Fullscreen Image/Video Horizontal Pager Overlay
             if (isUnlocked && activePagerIndex >= 0 && activePagerIndex < vaultItems.size) {
                 FullscreenMediaPager(
                     items = vaultItems,
                     initialIndex = activePagerIndex,
                     repository = vaultRepository,
+                    viewModel = viewModel,
+                    isSelectionMode = isSelectionMode,
+                    selectedItems = selectedItems,
+                    onToggleSelection = { entity ->
+                        if (selectedItems.contains(entity)) {
+                            selectedItems.remove(entity)
+                        } else {
+                            selectedItems.add(entity)
+                        }
+                    },
                     onClose = { activePagerIndex = -1 }
                 )
             }

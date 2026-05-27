@@ -47,6 +47,9 @@ fun SwipeToReplyMessageBubble(
     message: ChatMessage,
     viewModel: ChatViewModel,
     searchQuery: String = "",
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onSelectedChange: (Boolean) -> Unit = {},
     onMediaClick: () -> Unit
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
@@ -80,10 +83,17 @@ fun SwipeToReplyMessageBubble(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .swipeToReplyGesture(
-                onReplyTriggered = { viewModel.setReplyToMessage(message) },
-                haptic = haptic
-            ),
+            .background(if (isSelected) Color(0xFFE598A7).copy(alpha = 0.2f) else Color.Transparent)
+            .pointerInput(isSelectionMode) {
+                if (!isSelectionMode) {
+                    detectTapGestures(
+                        onLongPress = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showContextMenu = true
+                        }
+                    )
+                }
+            },
         contentAlignment = if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Box(
@@ -115,7 +125,7 @@ fun SwipeToReplyMessageBubble(
                         ),
                         shape = bubbleShape
                     )
-                    .pointerInput(Unit) {
+                    .pointerInput(isSelectionMode) {
                         detectTapGestures(
                             onPress = {
                                 isPressed.value = true
@@ -127,13 +137,21 @@ fun SwipeToReplyMessageBubble(
                             },
                             onLongPress = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showContextMenu = true
+                                if (isSelectionMode) {
+                                    onSelectedChange(!isSelected)
+                                } else {
+                                    showContextMenu = true
+                                }
                             },
                             onTap = {
-                                if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE") {
-                                    onMediaClick()
-                                } else if (message.messageType == "RECORDED_KISS") {
-                                    viewModel.playRecordedKiss(message.id)
+                                if (isSelectionMode) {
+                                    onSelectedChange(!isSelected)
+                                } else {
+                                    if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE") {
+                                        onMediaClick()
+                                    } else if (message.messageType == "RECORDED_KISS") {
+                                        viewModel.playRecordedKiss(message.id)
+                                    }
                                 }
                             }
                         )
@@ -292,6 +310,16 @@ fun SwipeToReplyMessageBubble(
                 )
             }
             DropdownMenuItem(
+                text = { Text("Select", color = CharcoalText) },
+                leadingIcon = {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = CharcoalText)
+                },
+                onClick = {
+                    showContextMenu = false
+                    onSelectedChange(true)
+                }
+            )
+            DropdownMenuItem(
                 text = { Text("Delete", color = Color.Red) },
                 leadingIcon = {
                     Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
@@ -311,23 +339,38 @@ fun SwipeToReplyMessageBubble(
                     Text("Delete Message", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
                 },
                 text = {
-                    Text("Are you sure you want to delete this message? This action cannot be undone.")
+                    Text("Are you sure you want to delete this message?")
                 },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteMessage(message.id)
-                            showDeleteConfirmation = false
-                        }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Delete", color = Color.Red)
+                        if (message.isFromMe) {
+                            TextButton(
+                                onClick = {
+                                    viewModel.deleteMessage(message.id, forEveryone = true)
+                                    showDeleteConfirmation = false
+                                }
+                            ) {
+                                Text("Delete for Everyone", color = Color.Red, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteMessage(message.id, forEveryone = false)
+                                showDeleteConfirmation = false
+                            }
+                        ) {
+                            Text("Delete for Me", color = Color.Red)
+                        }
+                        TextButton(onClick = { showDeleteConfirmation = false }) {
+                            Text("Cancel", color = CharcoalText)
+                        }
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteConfirmation = false }) {
-                        Text("Cancel", color = CharcoalText)
-                    }
-                },
+                dismissButton = null,
                 containerColor = BlushBackground
             )
         }

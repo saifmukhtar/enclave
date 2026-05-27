@@ -98,6 +98,8 @@ fun EnclaveMainScreen(
         }
     }
 
+
+
     val audioCallPermissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->

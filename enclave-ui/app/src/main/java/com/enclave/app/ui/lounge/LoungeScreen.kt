@@ -85,7 +85,7 @@ fun LoungeScreen(
     chatViewModel: com.enclave.app.ui.chat.ChatViewModel? = null,
     loungeGamesFactory: androidx.lifecycle.ViewModelProvider.Factory,
     loungeDrawingFactory: androidx.lifecycle.ViewModelProvider.Factory,
-    loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory,
+    @Suppress("UNUSED_PARAMETER") loungeMusicFactory: androidx.lifecycle.ViewModelProvider.Factory,
     loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Factory
 ) {
     var activeTab by remember { mutableStateOf("hub") }
@@ -189,10 +189,8 @@ fun LoungeScreen(
                         Triple("dice", "Games", "Play Together") to (Icons.Default.Casino to (Color(0xFF52B788) to Color(0xFF2D6A4F))),
                         Triple("canvas", "Live Draw", "Shared Canvas") to (Icons.Default.Edit to (Color(0xFF4ECDC4) to Color(0xFF2AA8A0))),
                         Triple("secret", "Reveal", "Secret Photos") to (Icons.Default.VisibilityOff to (Color(0xFF9B5DE5) to Color(0xFF7B2FBE))),
-                        Triple("quiz", "Quiz", "Love Language") to (Icons.Default.Favorite to (Color(0xFFF15BB5) to Color(0xFFC2185B))),
                         Triple("scrapbook", "Scrapbook", "Photo Albums") to (Icons.Default.PhotoLibrary to (Color(0xFFFFA600) to Color(0xFFE68200))),
-                        Triple("timeline", "Timeline", "Memory Lane") to (Icons.Default.History to (Color(0xFF6495ED) to Color(0xFF4169E1))),
-                        Triple("music", "Music", "Listen Together") to (Icons.Default.MusicNote to (Color(0xFFFF6B6B) to Color(0xFFD63031)))
+                        Triple("timeline", "Timeline", "Memory Lane") to (Icons.Default.History to (Color(0xFF6495ED) to Color(0xFF4169E1)))
                     )
 
                     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
@@ -325,10 +323,8 @@ fun LoungeScreen(
                         "dice" -> "Intimate Games"
                         "canvas" -> "Shared Canvas"
                         "secret" -> "Secret Photos"
-                        "quiz" -> "Love Language"
                         "scrapbook" -> "Scrapbook Albums"
                         "timeline" -> "Memory Timeline"
-                        "music" -> "Music Together"
                         else -> activeTab.replaceFirstChar { it.uppercase() }
                     }
 
@@ -356,10 +352,8 @@ fun LoungeScreen(
                         "dice" -> DiceAndIntimacyTab(loungeGamesFactory)
                         "canvas" -> LiveSharedCanvasTab(loungeDrawingFactory)
                         "secret" -> ScratchToRevealTab(loungeGamesFactory)
-                        "quiz" -> LoveLanguageQuizTab(loungeGamesFactory)
                         "scrapbook" -> ScrapbookTab(loungeMediaFactory)
                         "timeline" -> MemoryTimelineTab(chatViewModel)
-                        "music" -> MusicLoungeTab(musicSyncController, loungeMusicFactory)
                     }
                 }
             }

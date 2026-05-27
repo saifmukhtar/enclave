@@ -141,6 +141,27 @@ class VaultRepository(
 
     suspend fun shredFile(fileName: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            // 1. Sync Supabase deletions first
+            val localEntity = mediaMetadataDao.getMediaByPathSync(fileName)
+            if (localEntity != null) {
+                try {
+                    bundleRepository.deleteVaultFile(localEntity.mediaId)
+                } catch (e: Exception) {
+                    android.util.Log.e("VaultRepository", "Supabase vault delete failed for $fileName", e)
+                }
+
+                // If this is a video with a thumbnail, delete the local thumbnail too!
+                if (localEntity.thumbnailPath.isNotEmpty()) {
+                    try {
+                        val thumbFile = encryptedFileManager.getRawFile(localEntity.thumbnailPath)
+                        if (thumbFile.exists()) thumbFile.delete()
+                    } catch (e: Exception) {
+                        android.util.Log.e("VaultRepository", "Failed to delete local thumb for $fileName", e)
+                    }
+                }
+            }
+
+            // 2. Perform secure local shredding
             val rawFile = encryptedFileManager.getRawFile(fileName)
             if (!rawFile.exists()) return@withContext false
 

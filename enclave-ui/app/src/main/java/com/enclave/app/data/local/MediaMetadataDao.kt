@@ -23,6 +23,9 @@ interface MediaMetadataDao {
     @Query("DELETE FROM media_metadata WHERE localEncryptedPath = :path")
     suspend fun deleteMediaByPath(path: String)
 
+    @Query("SELECT * FROM media_metadata WHERE localEncryptedPath = :path LIMIT 1")
+    suspend fun getMediaByPathSync(path: String): MediaMetadataEntity?
+
     @Query("UPDATE media_metadata SET folderName = :folderName WHERE mediaId = :mediaId")
     suspend fun updateMediaFolder(mediaId: String, folderName: String)
 

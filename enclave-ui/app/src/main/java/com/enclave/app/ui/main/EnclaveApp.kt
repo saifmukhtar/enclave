@@ -208,6 +208,8 @@ fun EnclaveApp(
     val appLockManager = remember { BiometricPromptManager(activity) }
     val appAuthState by appLockManager.authState.collectAsState()
 
+    val vaultBiometricManager = remember { BiometricPromptManager(activity) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
 
@@ -382,7 +384,7 @@ fun EnclaveApp(
     
     val loungeDrawingFactory = remember(myId, partnerId, signalingClient) {
         com.enclave.app.ui.lounge.LoungeDrawingViewModel.Factory(
-            signalingClient, cryptoManager, bundleRepository, partnerId, myId, loungeSyncUseCase
+            signalingClient, bundleRepository, partnerId, myId, loungeSyncUseCase
         )
     }
     
@@ -414,6 +416,20 @@ fun EnclaveApp(
             myId = myId,
             partnerId = partnerId
         )
+    }
+
+    DisposableEffect(profileViewModel, lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                profileViewModel.broadcastOnline()
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                profileViewModel.broadcastOffline()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val storyViewModel = remember(myId, partnerId, signalingClient) {
@@ -489,7 +505,7 @@ fun EnclaveApp(
             profileViewModel = profileViewModel,
             storyViewModel = storyViewModel,
             vaultViewModel = vaultViewModel,
-            biometricManager = appLockManager,
+            biometricManager = vaultBiometricManager,
             vaultRepository = vaultRepository,
             signalingClient = signalingClient,
             musicSyncController = musicSyncController,

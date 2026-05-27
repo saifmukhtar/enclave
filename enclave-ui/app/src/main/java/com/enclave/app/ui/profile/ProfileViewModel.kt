@@ -21,10 +21,10 @@ import com.enclave.app.webrtc.LenientJson
 
 @Serializable
 data class ProfileUpdatePayload(
-    val username: String,
-    val displayName: String,
-    val bio: String,
-    val avatarUrl: String,
+    val username: String = "",
+    val displayName: String = "",
+    val bio: String = "",
+    val avatarUrl: String = "",
     val isOnline: Boolean,
     val lastSeen: Long
 )
@@ -198,6 +198,22 @@ class ProfileViewModel(
     fun broadcastOffline() {
         viewModelScope.launch {
             try {
+                val me = myProfile.value
+                val payload = ProfileUpdatePayload(
+                    username = me?.username ?: "",
+                    displayName = me?.displayName ?: "",
+                    bio = me?.bio ?: "",
+                    avatarUrl = me?.avatarUrl ?: "",
+                    isOnline = false,
+                    lastSeen = System.currentTimeMillis()
+                )
+                val msg = SignalMessageWrapper(
+                    type = "PROFILE_UPDATE",
+                    senderId = myId,
+                    targetId = partnerId,
+                    payload = Json.encodeToString(payload)
+                )
+                signalingClient.sendRawMessage(Json.encodeToString(msg))
                 bundleRepository.setOffline()
                 profileDao.updateLastSeen(myId, System.currentTimeMillis())
             } catch (_: Exception) {}
