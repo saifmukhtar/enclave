@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enclave | Secure, Self-Hosted Communications</title>
-    <meta name="description" content="A privacy-first, E2EE secure vault and communication platform designed for absolute digital intimacy.">
+    <title>Enclave | Private, Self-Hosted Communication</title>
+    <meta name="description" content="Enclave is a privacy-first communication stack for couples: Android client, self-hosted backend, and guided setup from local development to VPS deployment.">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,113 +12,157 @@
     <div class="blob blob-2"></div>
 
     <nav>
-        <a href="#" class="logo">
-            <span style="font-size: 28px;">&#x1F512;</span> Enclave
-        </a>
+        <a href="#" class="logo"><span aria-hidden="true">🔐</span> Enclave</a>
         <div class="nav-links">
-            <a href="#motivation">Motivation</a>
+            <a href="#motivation">Why</a>
             <a href="#features">Features</a>
-            <a href="#setup">Setup Guide</a>
-            <a href="https://github.com/saifmukhtar/enclave" target="_blank">GitHub</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#setup">Setup</a>
+            <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
     </nav>
 
-    <header class="hero">
+    <header class="hero section-reveal">
         <div class="hero-content">
-            <h1>Your Digital Sanctuary</h1>
-            <p>A beautifully crafted, offline-first secure vault and WebRTC communication app. Built with uncompromising privacy, featuring End-to-End Encryption and 100% self-hosted infrastructure.</p>
-            <a href="#setup" class="btn">Get Started</a>
+            <p class="eyebrow">Private by design · Self-hosted by default</p>
+            <h1>Your shared digital sanctuary</h1>
+            <p>
+                Enclave combines Signal-style encrypted messaging, self-hosted infrastructure,
+                and Android-first experiences so you and your partner keep full control of data,
+                keys, and runtime.
+            </p>
+            <div class="hero-actions">
+                <a href="#setup" class="btn">Start Setup</a>
+                <a href="../SETUP_GUIDE.md" class="btn btn-secondary">Read Setup Guide</a>
+            </div>
         </div>
     </header>
 
-    <section id="motivation" class="section">
+    <section id="motivation" class="section section-reveal">
         <div class="glass-container">
-            <h2 class="section-title">The Motivation</h2>
-            <p style="font-size: 18px; margin-bottom: 20px;">
-                In an era of data mining and server-side tracking, true privacy is hard to find. We built Enclave to be an impenetrable digital space—a sanctuary for intimate communications. 
+            <h2 class="section-title">Why Enclave exists</h2>
+            <p>
+                Most communication apps centralize control over storage, metadata, and notifications.
+                Enclave flips that model: your infrastructure, your secrets, your policy boundaries.
             </p>
-            <p style="font-size: 18px;">
-                By utilizing the <strong>Signal Protocol</strong> for messaging, <strong>WebRTC</strong> for peer-to-peer video, and <strong>Ntfy</strong> for private push notifications, Enclave guarantees that no third party—not even us—can access your data. Your keys stay on your device, protected by Biometric Keystores.
-            </p>
+            <div class="pill-grid">
+                <div class="pill">Signal-style E2EE model</div>
+                <div class="pill">Self-hosted Supabase backend</div>
+                <div class="pill">Dedicated signaling server</div>
+                <div class="pill">TURN relay for reliable calls</div>
+                <div class="pill">Ntfy-based private push</div>
+                <div class="pill">Android 14+ optimized client</div>
+            </div>
         </div>
     </section>
 
-    <section id="features" class="section">
-        <h2 class="section-title">Core Features</h2>
+    <section id="features" class="section section-reveal">
+        <h2 class="section-title">Core features</h2>
         <div class="feature-grid">
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F512;</div>
-                <h3 class="feature-title">End-to-End Encryption</h3>
-                <p>Every message, photo, and video call is encrypted locally using the Signal Protocol before it ever leaves your device.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F4F9;</div>
-                <h3 class="feature-title">Peer-to-Peer WebRTC</h3>
-                <p>High-quality, low-latency video and audio calls routed directly between devices via self-hosted TURN servers.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F514;</div>
-                <h3 class="feature-title">Private Push (Ntfy)</h3>
-                <p>Zero reliance on Google FCM or Apple APNs. Background sync runs through your own secure WebSockets.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F4DC;</div>
-                <h3 class="feature-title">Secure Vault</h3>
-                <p>Hide your photos and videos behind an AES-GCM encrypted local vault, accessible only via Biometrics.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F3A8;</div>
-                <h3 class="feature-title">Glassmorphic UI</h3>
-                <p>A stunning, dynamic interface built in Jetpack Compose, featuring smooth blurs and micro-animations.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F310;</div>
-                <h3 class="feature-title">100% Self-Hosted</h3>
-                <p>Deploy the Node.js signaling server and PostgreSQL database on your own VPS. You own the entire stack.</p>
-            </div>
+            <article class="feature-card">
+                <div class="feature-icon">💬</div>
+                <h3 class="feature-title">Encrypted chat</h3>
+                <p>Messages are encrypted on-device before transport and synchronized through your own backend.</p>
+            </article>
+            <article class="feature-card">
+                <div class="feature-icon">📞</div>
+                <h3 class="feature-title">WebRTC calls</h3>
+                <p>Self-hosted signaling + TURN keep voice/video channels resilient across NAT and mobile networks.</p>
+            </article>
+            <article class="feature-card">
+                <div class="feature-icon">🗃️</div>
+                <h3 class="feature-title">Vault & backups</h3>
+                <p>Protect sensitive media with local encryption and controlled backup workflows.</p>
+            </article>
+            <article class="feature-card">
+                <div class="feature-icon">🛎️</div>
+                <h3 class="feature-title">Private push</h3>
+                <p>Use Ntfy for owner-controlled notifications without depending entirely on third-party push channels.</p>
+            </article>
+            <article class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3 class="feature-title">Shared experiences</h3>
+                <p>Lounge, stories, and interaction modules extend beyond plain messaging into collaborative moments.</p>
+            </article>
+            <article class="feature-card">
+                <div class="feature-icon">⚙️</div>
+                <h3 class="feature-title">Operator-ready setup</h3>
+                <p>Includes local bootstrap scripts and production deployment flows for reproducible environments.</p>
+            </article>
         </div>
     </section>
 
-    <section id="setup" class="section">
+    <section id="architecture" class="section section-reveal">
         <div class="glass-container">
-            <h2 class="section-title">Setup & Deployment</h2>
-            
-            <div class="doc-block">
-                <h3>1. Clone the Repository</h3>
-                <pre><code>git clone https://github.com/saifmukhtar/enclave.git
-cd enclave</code></pre>
+            <h2 class="section-title">System architecture</h2>
+            <div class="architecture-grid">
+                <div class="arch-card">
+                    <h3>Android Client</h3>
+                    <p>Jetpack Compose app for chat, calls, vault, and interactive shared modules.</p>
+                </div>
+                <div class="arch-card">
+                    <h3>Supabase Stack</h3>
+                    <p>Auth, Postgres, storage, and realtime behind Kong in Docker.</p>
+                </div>
+                <div class="arch-card">
+                    <h3>Signaling Server</h3>
+                    <p>Node.js WebSocket relay for call/session negotiation and live events.</p>
+                </div>
+                <div class="arch-card">
+                    <h3>Coturn + Ntfy</h3>
+                    <p>Reliable media relay and private push event delivery for resilient sessions.</p>
+                </div>
             </div>
+            <p class="muted-note">See <a href="../REPO_STRUCTURE.md">REPO_STRUCTURE.md</a> for a detailed workspace map.</p>
+        </div>
+    </section>
 
-            <div class="doc-block">
-                <h3>2. Server Infrastructure</h3>
-                <p>Deploy the backend services on your VPS. We recommend Ubuntu 24.04.</p>
-                <pre><code>cd enclave-server
-chmod +x setup_coturn.sh
-sudo ./setup_coturn.sh
-npm install
-npm run start</code></pre>
-            </div>
+    <section id="setup" class="section section-reveal">
+        <div class="glass-container">
+            <h2 class="section-title">Setup guide (practical path)</h2>
+            <ol class="setup-steps">
+                <li>
+                    <h3>1. Prepare templates</h3>
+                    <pre><code>cp enclave-ui/local.properties.example enclave-ui/local.properties
+cp enclave-server/.env.example enclave-server/.env
+cp enclave-server/signaling-server/firebase-adminsdk.json.example enclave-server/signaling-server/firebase-adminsdk.json</code></pre>
+                </li>
+                <li>
+                    <h3>2. Bootstrap local stack</h3>
+                    <pre><code>chmod +x setup-local.sh
+./setup-local.sh</code></pre>
+                </li>
+                <li>
+                    <h3>3. Fill required Android keys</h3>
+                    <p>Add SDK, Supabase, signaling, TURN, and Ntfy keys in <code>enclave-ui/local.properties</code>.</p>
+                </li>
+                <li>
+                    <h3>4. Build app</h3>
+                    <pre><code>cd enclave-ui
+./gradlew assembleDebug</code></pre>
+                </li>
+                <li>
+                    <h3>5. Production hardening</h3>
+                    <p>Configure DNS + Nginx TLS + Coturn + PM2 as documented in <a href="../SETUP_GUIDE.md">SETUP_GUIDE.md</a>.</p>
+                </li>
+            </ol>
+        </div>
+    </section>
 
-            <div class="doc-block">
-                <h3>3. Android Build Configuration</h3>
-                <p>Create a <code>local.properties</code> file in the <code>enclave-ui</code> directory and configure your server IP and credentials.</p>
-                <pre><code>SUPABASE_URL=https://your-supabase-url.supabase.co
-SUPABASE_KEY=your-anon-key
-SIGNALING_SERVER_URL=ws://your-vps-ip:3000
-NTFY_SERVER_URL=https://ntfy.sh</code></pre>
+    <section class="section section-reveal">
+        <div class="glass-container">
+            <h2 class="section-title">Workspace docs</h2>
+            <div class="doc-links">
+                <a href="../README.md">README.md</a>
+                <a href="../SETUP_GUIDE.md">SETUP_GUIDE.md</a>
+                <a href="../REPO_STRUCTURE.md">REPO_STRUCTURE.md</a>
             </div>
-
-            <div class="doc-block">
-                <h3>4. Compile the App</h3>
-                <p>Build the signed release APK.</p>
-                <pre><code>cd enclave-ui
-./gradlew assembleRelease</code></pre>
-            </div>
+            <p class="muted-note">Use these docs together: overview, setup execution, and file-by-file navigation.</p>
         </div>
     </section>
 
     <footer>
-        <p>&copy; 2026 Saif Mukhtar. Licensed under the GNU AGPLv3.</p>
+        <p>&copy; 2026 Enclave. Licensed under GNU AGPLv3.</p>
     </footer>
 
     <script src="script.js"></script>
