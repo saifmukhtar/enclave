@@ -1,170 +1,1063 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enclave | Private, Self-Hosted Communication</title>
-    <meta name="description" content="Enclave is a privacy-first communication stack for couples: Android client, self-hosted backend, and guided setup from local development to VPS deployment.">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- ═══ PERFORMANCE ═══ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- ═══ PRIMARY SEO META ═══ -->
+  <title>Enclave — Zero-Knowledge Private Communication for Couples | Self-Hosted E2EE</title>
+  <meta name="description" content="Enclave is a self-hosted, zero-knowledge private communication platform for couples. Signal-style Double Ratchet E2EE, WebRTC calls, shared canvas, Voice Notes, the Presence Engine, and a fully Dockerized backend. Android 14+ | AGPLv3 open-source.">
+  <meta name="keywords" content="enclave, self-hosted messaging, E2EE, end-to-end encryption, Signal protocol, double ratchet, X3DH, private communication, couples app, WebRTC, zero-knowledge, open source, Android, Jetpack Compose, Docker, Supabase, Ntfy, Coturn, TURN server, AGPLv3, Saif Mukhtar">
+  <meta name="author" content="Saif Mukhtar">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <link rel="canonical" href="https://enclave.saifmukhtar.dev/">
+  <link rel="author" href="https://github.com/saifmukhtar">
+
+  <!-- ═══ OPEN GRAPH ═══ -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Enclave">
+  <meta property="og:title" content="Enclave — Zero-Knowledge Private Communication for Couples">
+  <meta property="og:description" content="Self-hosted, end-to-end encrypted messaging, WebRTC calls, shared canvas, voice notes, and the Presence Engine physics sync. You own the keys, the server, and the database. AGPLv3.">
+  <meta property="og:url" content="https://enclave.saifmukhtar.dev/">
+  <meta property="og:image" content="https://enclave.saifmukhtar.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Enclave app logo — Cryptographic Sovereignty for Couples">
+  <meta property="og:locale" content="en_US">
+
+  <!-- ═══ TWITTER CARDS ═══ -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@saifmukhtar">
+  <meta name="twitter:creator" content="@saifmukhtar">
+  <meta name="twitter:title" content="Enclave — Zero-Knowledge Private Communication for Couples">
+  <meta name="twitter:description" content="Self-hosted E2EE messaging. Signal Protocol, WebRTC, shared canvas, Presence Engine physics. Own your entire stack. AGPLv3 open-source.">
+  <meta name="twitter:image" content="https://enclave.saifmukhtar.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Enclave — Cryptographic Sovereignty for Couples">
+
+  <!-- ═══ FAVICON / THEME ═══ -->
+  <link rel="icon" type="image/png" href="enclave.png">
+  <link rel="apple-touch-icon" href="enclave.png">
+  <meta name="theme-color" content="#E598A7">
+  <meta name="color-scheme" content="light">
+
+  <!-- ═══ JSON-LD — SoftwareApplication ═══ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Enclave",
+    "applicationCategory": "CommunicationApplication",
+    "applicationSubCategory": "PrivateMessenger",
+    "operatingSystem": "Android 14+",
+    "description": "A self-hosted, zero-knowledge private communication platform for couples featuring Signal-style E2EE Double Ratchet encryption, WebRTC voice and video calls, shared interactive canvas, voice notes, the Presence Engine soft-body physics sync, and a fully Dockerized backend.",
+    "url": "https://enclave.saifmukhtar.dev/",
+    "downloadUrl": "https://github.com/saifmukhtar/enclave",
+    "codeRepository": "https://github.com/saifmukhtar/enclave",
+    "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+    "softwareVersion": "1.0",
+    "releaseNotes": "https://github.com/saifmukhtar/enclave/releases",
+    "author": {
+      "@type": "Person",
+      "name": "Saif Mukhtar",
+      "url": "https://github.com/saifmukhtar",
+      "sameAs": ["https://github.com/saifmukhtar"]
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "End-to-End Encrypted Messaging (Signal Double Ratchet + X3DH)",
+      "Self-Hosted Infrastructure (Supabase, Node.js, Coturn, Docker)",
+      "WebRTC Voice and Video Calls via self-hosted Coturn TURN",
+      "Shared Interactive Canvas — 60 FPS WebSocket vector sync",
+      "Presence Engine — 2D Soft-Body Spring Physics Mesh",
+      "ASMR Whisper Mode via raw unprocessed WebRTC audio",
+      "Zero-Knowledge AES-256-GCM Encrypted Vault and Backups",
+      "Status Stories and Lounge powered by Supabase Realtime",
+      "Private Push Notifications via self-hosted Ntfy",
+      "Biometric Keystore Authentication"
+    ]
+  }
+  </script>
+
+  <!-- ═══ JSON-LD — Person + WebSite + BreadcrumbList ═══ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://github.com/saifmukhtar",
+        "name": "Saif Mukhtar",
+        "url": "https://github.com/saifmukhtar",
+        "sameAs": [
+          "https://github.com/saifmukhtar",
+          "https://enclave.saifmukhtar.dev/"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://enclave.saifmukhtar.dev/#website",
+        "name": "Enclave",
+        "url": "https://enclave.saifmukhtar.dev/",
+        "description": "Self-hosted zero-knowledge private communication for couples",
+        "author": { "@id": "https://github.com/saifmukhtar" },
+        "inLanguage": "en-US"
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Enclave",
+            "item": "https://enclave.saifmukhtar.dev/"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
 
-    <nav>
-        <a href="#" class="logo"><span aria-hidden="true">🔐</span> Enclave</a>
-        <div class="nav-links">
-            <a href="#motivation">Why</a>
-            <a href="#features">Features</a>
-            <a href="#architecture">Architecture</a>
-            <a href="#setup">Setup</a>
-            <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer">GitHub</a>
+  <!-- Ambient background blobs -->
+  <div class="blob blob-1" aria-hidden="true"></div>
+  <div class="blob blob-2" aria-hidden="true"></div>
+  <div class="blob blob-3" aria-hidden="true"></div>
+
+  <!-- Skip to content (accessibility) -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- ═══════════════════════════════════════════════════
+       NAVIGATION
+  ═══════════════════════════════════════════════════ -->
+  <nav id="main-nav" role="navigation" aria-label="Main navigation">
+    <a href="#" class="logo" aria-label="Enclave — back to top">
+      <img src="enclave.png" alt="Enclave logo" class="nav-logo" width="36" height="36">
+      Enclave
+    </a>
+    <div class="nav-right-wrap">
+      <button class="nav-search-btn" id="nav-search-btn" aria-label="Open command palette" title="Search (Ctrl+K)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <span>Search</span>
+        <kbd class="nav-kbd">⌘K</kbd>
+      </button>
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-links" id="nav-links" role="list">
+      <a href="#motivation" role="listitem">Why</a>
+      <a href="#features" role="listitem">Features</a>
+      <a href="#presence-engine" role="listitem">Presence Engine</a>
+      <a href="#architecture" role="listitem">Architecture</a>
+      <a href="#setup" role="listitem">Setup</a>
+      <a href="#credits" role="listitem">Credits</a>
+      <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer" class="nav-github" role="listitem" aria-label="View Enclave source code on GitHub">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </nav>
+
+  <main id="main-content">
+
+    <!-- ═══════════════════════════════════════════════════
+         HERO
+    ═══════════════════════════════════════════════════ -->
+    <header class="hero section-reveal" id="hero">
+      <div class="hero-content">
+
+        <!-- Logo with glow halo -->
+        <div class="hero-logo-wrap" aria-hidden="true">
+          <div class="hero-logo-glow"></div>
+          <img src="enclave.png" alt="Enclave app icon — self-hosted private communication" class="hero-logo" width="140" height="140">
         </div>
-    </nav>
 
-    <header class="hero section-reveal">
-        <div class="hero-content">
-            <p class="eyebrow">Private by design · Self-hosted by default</p>
-            <h1>Your shared digital sanctuary</h1>
-            <p>
-                Enclave combines Signal-style encrypted messaging, self-hosted infrastructure,
-                and Android-first experiences so you and your partner keep full control of data,
-                keys, and runtime.
-            </p>
-            <div class="hero-actions">
-                <a href="#setup" class="btn">Start Setup</a>
-                <a href="../SETUP_GUIDE.md" class="btn btn-secondary">Read Setup Guide</a>
+        <p class="eyebrow">Private by design &nbsp;·&nbsp; Self-hosted by default &nbsp;·&nbsp; Open source</p>
+        <h1>Your Shared Digital Sanctuary</h1>
+        <p class="hero-sub">
+          Enclave is an elite, zero-knowledge communication platform built exclusively for two. Signal-grade E2EE, WebRTC calls, a shared canvas, and a completely self-hosted Dockerized backend — your conversations, keys, and server. Always yours.
+        </p>
+
+        <!-- Animated tech badge strip -->
+        <div class="ticker-wrap" aria-hidden="true">
+          <div class="ticker-track">
+            <span>Signal Protocol</span><span class="sep">·</span>
+            <span>Double Ratchet</span><span class="sep">·</span>
+            <span>WebRTC</span><span class="sep">·</span>
+            <span>Ntfy</span><span class="sep">·</span>
+            <span>Supabase</span><span class="sep">·</span>
+            <span>Coturn</span><span class="sep">·</span>
+            <span>Docker</span><span class="sep">·</span>
+            <span>Jetpack Compose</span><span class="sep">·</span>
+            <span>AES-256-GCM</span><span class="sep">·</span>
+            <span>AGPLv3</span><span class="sep">·</span>
+            <!-- duplicate for seamless loop -->
+            <span>Signal Protocol</span><span class="sep">·</span>
+            <span>Double Ratchet</span><span class="sep">·</span>
+            <span>WebRTC</span><span class="sep">·</span>
+            <span>Ntfy</span><span class="sep">·</span>
+            <span>Supabase</span><span class="sep">·</span>
+            <span>Coturn</span><span class="sep">·</span>
+            <span>Docker</span><span class="sep">·</span>
+            <span>Jetpack Compose</span><span class="sep">·</span>
+            <span>AES-256-GCM</span><span class="sep">·</span>
+            <span>AGPLv3</span><span class="sep">·</span>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <a href="#setup" class="btn" id="cta-setup">Start Self-Hosting</a>
+          <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" id="cta-github" aria-label="View Enclave source code on GitHub">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:6px"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+
+      <!-- Floating phone mockup -->
+      <div class="hero-visual" aria-hidden="true">
+        <div class="phone-mockup">
+          <div class="phone-screen">
+            <div class="phone-status-bar"><span>09:41</span><span>●●●</span></div>
+            <div class="phone-header">
+              <div class="phone-avatar"></div>
+              <div class="phone-contact">
+                <strong>Partner</strong>
+                <span class="phone-online">● Online</span>
+              </div>
+              <span class="phone-lock">🔒</span>
             </div>
+            <div class="phone-chat">
+              <div class="chat-bubble incoming">
+                <span>Encrypted & delivered ✓</span>
+              </div>
+              <div class="chat-bubble outgoing">Your reply — E2EE ✓✓</div>
+              <div class="chat-time">End-to-end encrypted</div>
+              <div class="chat-bubble incoming typing">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
+            </div>
+          </div>
         </div>
+        <div class="phone-glow" aria-hidden="true"></div>
+      </div>
     </header>
 
-    <section id="motivation" class="section section-reveal">
-        <div class="glass-container">
-            <h2 class="section-title">Why Enclave exists</h2>
-            <p>
-                Most communication apps centralize control over storage, metadata, and notifications.
-                Enclave flips that model: your infrastructure, your secrets, your policy boundaries.
-            </p>
-            <div class="pill-grid">
-                <div class="pill">Signal-style E2EE model</div>
-                <div class="pill">Self-hosted Supabase backend</div>
-                <div class="pill">Dedicated signaling server</div>
-                <div class="pill">TURN relay for reliable calls</div>
-                <div class="pill">Ntfy-based private push</div>
-                <div class="pill">Android 14+ optimized client</div>
+    <!-- ═══════════════════════════════════════════════════
+         WHY ENCLAVE
+    ═══════════════════════════════════════════════════ -->
+    <section id="motivation" class="section section-reveal" aria-labelledby="motivation-title">
+      <div class="glass-container">
+        <h2 class="section-title" id="motivation-title">Why Enclave Exists</h2>
+        <p class="section-lead">
+          Every mainstream messaging app centralizes your metadata, your keys, and your trust on their servers. Enclave inverts that model entirely — two people, complete cryptographic sovereignty, zero third-party infrastructure.
+        </p>
+        <div class="pill-grid" role="list" aria-label="Core principles">
+          <div class="pill" role="listitem"><span class="pill-icon">🔐</span>Signal-grade Double Ratchet + X3DH</div>
+          <div class="pill" role="listitem"><span class="pill-icon">🗄️</span>Self-hosted Supabase backend</div>
+          <div class="pill" role="listitem"><span class="pill-icon">📡</span>Dedicated WebSocket signaling server</div>
+          <div class="pill" role="listitem"><span class="pill-icon">🌐</span>Coturn STUN/TURN for resilient calls</div>
+          <div class="pill" role="listitem"><span class="pill-icon">🔔</span>Ntfy self-hosted private push</div>
+          <div class="pill" role="listitem"><span class="pill-icon">📱</span>Android 14+ hardware-accelerated client</div>
+          <div class="pill" role="listitem"><span class="pill-icon">🛡️</span>Biometric Keystore key protection</div>
+          <div class="pill" role="listitem"><span class="pill-icon">📦</span>AGPLv3 open-source</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         CORE FEATURES
+    ═══════════════════════════════════════════════════ -->
+    <section id="features" class="section section-reveal" aria-labelledby="features-title">
+      <h2 class="section-title" id="features-title">Core Features</h2>
+      <div class="feature-grid" role="list">
+
+        <article class="feature-card" role="listitem" id="feature-e2ee">
+          <div class="feature-icon" aria-hidden="true">💬</div>
+          <h3 class="feature-title">E2EE Chat</h3>
+          <p>Every message is encrypted on-device using the <strong>Double Ratchet Algorithm</strong> (X3DH key exchange) before it ever reaches the server. Not even the database owner can read your conversations. Delivery receipts show sent, delivered, and read states.</p>
+          <div class="feature-tags"><span>Double Ratchet</span><span>X3DH</span><span>Signal Protocol</span></div>
+        </article>
+
+        <article class="feature-card" role="listitem" id="feature-webrtc">
+          <div class="feature-icon" aria-hidden="true">📞</div>
+          <h3 class="feature-title">WebRTC Calls</h3>
+          <p>High-fidelity voice and video calls routed peer-to-peer via your self-hosted <strong>Coturn STUN/TURN</strong> server. The Node.js WebSocket signaling engine negotiates sessions without exposing call contents to any relay.</p>
+          <div class="feature-tags"><span>WebRTC</span><span>Coturn TURN</span><span>SRTP</span></div>
+        </article>
+
+        <article class="feature-card" role="listitem" id="feature-canvas">
+          <div class="feature-icon" aria-hidden="true">🎨</div>
+          <h3 class="feature-title">Shared Canvas</h3>
+          <p>A real-time collaborative whiteboard where both partners draw together live. Vector coordinate batches transmitted via <strong>WebSocket with a 16 ms throttle</strong>, ensuring fluid 60 FPS rendering on both devices simultaneously.</p>
+          <div class="feature-tags"><span>WebSocket</span><span>60 FPS</span><span>Vector sync</span></div>
+        </article>
+
+        <article class="feature-card" role="listitem" id="feature-voice">
+          <div class="feature-icon" aria-hidden="true">🎙️</div>
+          <h3 class="feature-title">Intimate Voice Notes</h3>
+          <p>Record and exchange audio messages with a live waveform preview. Encrypted audio is processed as in-memory byte streams and stored in private <strong>Supabase storage buckets</strong> — never as plain files on a shared server.</p>
+          <div class="feature-tags"><span>AES-256-GCM</span><span>Supabase Storage</span></div>
+        </article>
+
+        <article class="feature-card" role="listitem" id="feature-vault">
+          <div class="feature-icon" aria-hidden="true">🗃️</div>
+          <h3 class="feature-title">Vault &amp; Zero-Knowledge Backups</h3>
+          <p>A local encrypted gallery behind biometric authentication. Backup payloads sealed with <strong>AES-256-GCM</strong>, the key derived from your master passphrase via PBKDF2 — a key only you know, never transmitted.</p>
+          <div class="feature-tags"><span>AES-256-GCM</span><span>PBKDF2</span><span>Biometrics</span></div>
+        </article>
+
+        <article class="feature-card" role="listitem" id="feature-lounge">
+          <div class="feature-icon" aria-hidden="true">🏡</div>
+          <h3 class="feature-title">Lounge &amp; Status Stories</h3>
+          <p>A shared dashboard showing your partner's live status, mood, and 24-hour stories. Powered by <strong>Supabase Realtime</strong> listeners streaming database row-level changes instantly to both devices.</p>
+          <div class="feature-tags"><span>Supabase Realtime</span><span>PostgreSQL</span></div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         PRESENCE ENGINE (light card section)
+    ═══════════════════════════════════════════════════ -->
+    <section id="presence-engine" class="presence-section section-reveal" aria-labelledby="presence-title">
+      <div class="presence-header">
+        <span class="presence-eyebrow">Signature Module</span>
+        <h2 id="presence-title">The Presence Engine</h2>
+        <p class="section-lead">A multi-layered intimate interaction engine that translates physical touch, sound, and device motion into a synchronized sensory experience across any distance. Physics simulation, low-latency audio pipeline, and haptic synthesis — all operating simultaneously.</p>
+      </div>
+
+      <div class="presence-bento">
+
+        <article class="presence-card" id="presence-physics">
+          <div class="presence-card-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <circle cx="20" cy="20" r="18" stroke="#E598A7" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <circle cx="20" cy="12" r="3" fill="#E598A7" opacity="0.9"/>
+              <circle cx="28" cy="24" r="3" fill="#E598A7" opacity="0.6"/>
+              <circle cx="12" cy="24" r="3" fill="#E598A7" opacity="0.6"/>
+              <line x1="20" y1="12" x2="28" y2="24" stroke="#E598A7" stroke-width="1" opacity="0.4"/>
+              <line x1="20" y1="12" x2="12" y2="24" stroke="#E598A7" stroke-width="1" opacity="0.4"/>
+              <line x1="12" y1="24" x2="28" y2="24" stroke="#E598A7" stroke-width="1" opacity="0.4"/>
+            </svg>
+          </div>
+          <h3>2D Soft-Body Physics Mesh</h3>
+          <p>The interaction surface is a live physical model — vertices connected by elastic springs governed by <strong>Hooke's Law</strong>. Touch input deforms the mesh in real time using Android's multi-touch telemetry: contact ellipse footprint, pressure magnitude, and contact angle.</p>
+          <ul class="presence-detail-list">
+            <li><span class="detail-dot"></span>Hooke's Law anchor springs for elastic restoration</li>
+            <li><span class="detail-dot"></span>Multi-touch repulsion from finger contact ellipses</li>
+            <li><span class="detail-dot"></span>Accelerometer gravity vector shifts mesh sag in real time</li>
+          </ul>
+        </article>
+
+        <article class="presence-card" id="presence-audio">
+          <div class="presence-card-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <rect x="6" y="16" width="4" height="8" rx="2" fill="#E598A7" opacity="0.4"/>
+              <rect x="12" y="10" width="4" height="20" rx="2" fill="#E598A7" opacity="0.6"/>
+              <rect x="18" y="6" width="4" height="28" rx="2" fill="#E598A7" opacity="0.9"/>
+              <rect x="24" y="12" width="4" height="16" rx="2" fill="#E598A7" opacity="0.6"/>
+              <rect x="30" y="18" width="4" height="8" rx="2" fill="#E598A7" opacity="0.4"/>
+            </svg>
+          </div>
+          <h3>ASMR Whisper Mode</h3>
+          <p>A parallel low-latency <strong>WebRTC voice link</strong> configured for intimate, close-range audio. Standard mobile processing — echo cancellation, noise suppression, automatic gain control — is bypassed entirely to stream raw, uncompressed audio. Playout via device earpiece by default.</p>
+          <ul class="presence-detail-list">
+            <li><span class="detail-dot"></span>Raw WebRTC audio — no AGC, no noise suppression</li>
+            <li><span class="detail-dot"></span>Earpiece routing for private listening</li>
+            <li><span class="detail-dot"></span>Simultaneous to physics simulation, zero blocking</li>
+          </ul>
+        </article>
+
+        <article class="presence-card" id="presence-haptics">
+          <div class="presence-card-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <path d="M20 8 C14 8, 8 14, 8 20 C8 28, 20 36, 20 36 C20 36, 32 28, 32 20 C32 14, 26 8, 20 8Z" stroke="#E598A7" stroke-width="1.5" fill="none"/>
+              <path d="M15 20 L18 17 L21 22 L24 18 L26 20" stroke="#E598A7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+          <h3>Audio-Tactile Synthesis &amp; Mutual Press</h3>
+          <p>The physics mesh continuously calculates <strong>Kinetic Energy</strong> and <strong>Mesh Stress</strong>. A built-in synthesizer maps kinetic energy → volume and mesh stress → sub-bass pitch. When both partners touch simultaneously, the system enters <strong>Mutual Press</strong> — a haptic loop whose frequency blends both partners' pressure into a personalized tactile pulse.</p>
+          <ul class="presence-detail-list">
+            <li><span class="detail-dot"></span>Kinetic energy → volume; mesh stress → pitch</li>
+            <li><span class="detail-dot"></span>Mutual Press detection via WebSocket telemetry</li>
+            <li><span class="detail-dot"></span>Personalized haptic heartbeat blended from both inputs</li>
+          </ul>
+        </article>
+
+        <article class="presence-card" id="presence-privacy">
+          <div class="presence-card-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <rect x="10" y="18" width="20" height="14" rx="4" stroke="#E598A7" stroke-width="1.5"/>
+              <path d="M15 18V14a5 5 0 0110 0v4" stroke="#E598A7" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="20" cy="25" r="2" fill="#E598A7"/>
+            </svg>
+          </div>
+          <h3>Discreet Privacy Signals</h3>
+          <p>When the canvas is opened, a <code>PRESENCE_INVITATION</code> packet is dispatched via WebSocket relay. If your partner is inactive, a high-priority system notification fires — disguised with a generic compass icon and the text <em>"Someone is thinking of you… ❤️"</em>, revealing neither sender identity nor app name.</p>
+          <ul class="presence-detail-list">
+            <li><span class="detail-dot"></span>Steganographic notification design</li>
+            <li><span class="detail-dot"></span>No sender identity in push payload</li>
+            <li><span class="detail-dot"></span>Ntfy self-hosted silent wakeup — no third-party push</li>
+          </ul>
+        </article>
+
+      </div>
+
+      <!-- Interaction data flow -->
+      <div class="flow-diagram-wrap" aria-label="Presence Engine data flow diagram">
+        <h3 class="flow-title">Interaction Data Flow</h3>
+        <div class="flow-diagram">
+          <div class="flow-node" id="flow-touch"><span class="flow-icon">👆</span><strong>Touch Input</strong><small>Multi-touch pressure + ellipse</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node" id="flow-physics"><span class="flow-icon">⚙️</span><strong>Physics Mesh</strong><small>Spring deformation + KE + stress</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node" id="flow-synth"><span class="flow-icon">🎵</span><strong>Synthesizer</strong><small>Volume + pitch mapping</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node" id="flow-ws"><span class="flow-icon">📡</span><strong>WebSocket Relay</strong><small>Telemetry → partner device</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node" id="flow-haptics"><span class="flow-icon">📳</span><strong>Haptic Engine</strong><small>Blended pulse on partner</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         SYSTEM ARCHITECTURE (light section)
+    ═══════════════════════════════════════════════════ -->
+    <section id="architecture" class="section section-reveal" aria-labelledby="arch-title">
+      <h2 class="section-title" id="arch-title">System Architecture</h2>
+      <p class="arch-lead">Every component is self-hosted. No third-party cloud infrastructure touches your data in transit or at rest.</p>
+
+      <div class="architecture-grid">
+        <article class="arch-card" id="arch-android">
+          <div class="arch-badge">Client</div>
+          <h3>Android Client</h3>
+          <p>Jetpack Compose UI with HSL blush/glassmorphism theme. Room SQLite with WAL-mode encryption. Accelerometer-coupled physics mesh. Hardware-accelerated Canvas rendering.</p>
+          <div class="arch-stack"><span>Kotlin</span><span>Jetpack Compose</span><span>Room</span><span>WorkManager</span></div>
+        </article>
+        <article class="arch-card" id="arch-supabase">
+          <div class="arch-badge">Backend</div>
+          <h3>Supabase Stack</h3>
+          <p>Self-hosted PostgreSQL, Gotrue Auth, PostgREST, Realtime listeners, and private storage — all behind Kong API gateway in Docker with full RLS policy enforcement.</p>
+          <div class="arch-stack"><span>PostgreSQL</span><span>Docker</span><span>Kong</span><span>RLS</span></div>
+        </article>
+        <article class="arch-card" id="arch-signaling">
+          <div class="arch-badge">Relay</div>
+          <h3>Signaling Server</h3>
+          <p>Custom Node.js TypeScript WebSocket server. Routes SDP offers/answers, ICE candidates, and live events. Client-map tracker with keep-alive ping/pong heartbeats.</p>
+          <div class="arch-stack"><span>Node.js</span><span>TypeScript</span><span>WebSocket</span><span>PM2</span></div>
+        </article>
+        <article class="arch-card" id="arch-infra">
+          <div class="arch-badge">Infrastructure</div>
+          <h3>Coturn + Ntfy</h3>
+          <p>Coturn STUN/TURN for peer-connection establishment behind complex NAT. Self-hosted Ntfy for low-latency private push and silent wakeup — zero reliance on any proprietary push infrastructure.</p>
+          <div class="arch-stack"><span>Coturn</span><span>Ntfy</span><span>Nginx</span><span>Certbot</span></div>
+        </article>
+      </div>
+
+      <div class="arch-diagram" aria-label="Architecture flow map">
+        <div class="arch-visual-flow">
+          <!-- Top Node: The client -->
+          <div class="flow-layer top-layer">
+            <div class="arch-node client-node" id="node-android">
+              <span class="node-badge">Frontend Client</span>
+              <div class="node-main">
+                <span class="node-icon">📱</span>
+                <strong>Android Client App</strong>
+              </div>
+              <small>Jetpack Compose UI · WAL Encrypted Room SQLite</small>
+              <div class="node-tech"><span>Kotlin</span><span>Room</span><span>WebRTC</span></div>
             </div>
-        </div>
-    </section>
+          </div>
 
-    <section id="features" class="section section-reveal">
-        <h2 class="section-title">Core features</h2>
-        <div class="feature-grid">
-            <article class="feature-card">
-                <div class="feature-icon">💬</div>
-                <h3 class="feature-title">Encrypted chat</h3>
-                <p>Messages are encrypted on-device before transport and synchronized through your own backend.</p>
-            </article>
-            <article class="feature-card">
-                <div class="feature-icon">📞</div>
-                <h3 class="feature-title">WebRTC calls</h3>
-                <p>Self-hosted signaling + TURN keep voice/video channels resilient across NAT and mobile networks.</p>
-            </article>
-            <article class="feature-card">
-                <div class="feature-icon">🗃️</div>
-                <h3 class="feature-title">Vault & backups</h3>
-                <p>Protect sensitive media with local encryption and controlled backup workflows.</p>
-            </article>
-            <article class="feature-card">
-                <div class="feature-icon">🛎️</div>
-                <h3 class="feature-title">Private push</h3>
-                <p>Use Ntfy for owner-controlled notifications without depending entirely on third-party push channels.</p>
-            </article>
-            <article class="feature-card">
-                <div class="feature-icon">🎨</div>
-                <h3 class="feature-title">Shared experiences</h3>
-                <p>Lounge, stories, and interaction modules extend beyond plain messaging into collaborative moments.</p>
-            </article>
-            <article class="feature-card">
-                <div class="feature-icon">⚙️</div>
-                <h3 class="feature-title">Operator-ready setup</h3>
-                <p>Includes local bootstrap scripts and production deployment flows for reproducible environments.</p>
-            </article>
-        </div>
-    </section>
+          <!-- Connection visual links -->
+          <div class="flow-wires" aria-hidden="true">
+            <div class="wire wire-left"><span>wss:// Secure WebSocket</span></div>
+            <div class="wire wire-center-left"><span>HTTPS secure API</span></div>
+            <div class="wire wire-center-right"><span>P2P WebRTC Relay</span></div>
+            <div class="wire wire-right"><span>Persistent Notification</span></div>
+          </div>
 
-    <section id="architecture" class="section section-reveal">
-        <div class="glass-container">
-            <h2 class="section-title">System architecture</h2>
-            <div class="architecture-grid">
-                <div class="arch-card">
-                    <h3>Android Client</h3>
-                    <p>Jetpack Compose app for chat, calls, vault, and interactive shared modules.</p>
-                </div>
-                <div class="arch-card">
-                    <h3>Supabase Stack</h3>
-                    <p>Auth, Postgres, storage, and realtime behind Kong in Docker.</p>
-                </div>
-                <div class="arch-card">
-                    <h3>Signaling Server</h3>
-                    <p>Node.js WebSocket relay for call/session negotiation and live events.</p>
-                </div>
-                <div class="arch-card">
-                    <h3>Coturn + Ntfy</h3>
-                    <p>Reliable media relay and private push event delivery for resilient sessions.</p>
-                </div>
+          <!-- Middle Nodes: The sovereign self-hosted backend stack -->
+          <div class="flow-layer middle-layer">
+            <div class="arch-node server-node" id="node-signaling">
+              <span class="node-badge">Signaling Relay</span>
+              <div class="node-main">
+                <span class="node-icon">📡</span>
+                <strong>Node.js Server</strong>
+              </div>
+              <small>Real-time Handshakes &amp; WebSocket coordination</small>
+              <div class="node-tech"><span>TypeScript</span><span>WS</span><span>PM2</span></div>
             </div>
-            <p class="muted-note">See <a href="../REPO_STRUCTURE.md">REPO_STRUCTURE.md</a> for a detailed workspace map.</p>
+
+            <div class="arch-node server-node" id="node-supabase">
+              <span class="node-badge">Sovereign Backend</span>
+              <div class="node-main">
+                <span class="node-icon">🗄️</span>
+                <strong>Supabase Stack</strong>
+              </div>
+              <small>Postgres Auth, Storage, and Realtime Listeners</small>
+              <div class="node-tech"><span>PostgreSQL</span><span>Docker</span><span>RLS</span></div>
+            </div>
+
+            <div class="arch-node server-node" id="node-coturn">
+              <span class="node-badge">TURN Gateway</span>
+              <div class="node-main">
+                <span class="node-icon">🌐</span>
+                <strong>Coturn Relay</strong>
+              </div>
+              <small>Resilient STUN/TURN traversal behind symmetric NATs</small>
+              <div class="node-tech"><span>Coturn</span><span>SRTP</span><span>VPS</span></div>
+            </div>
+
+            <div class="arch-node server-node" id="node-ntfy">
+              <span class="node-badge">Private Push</span>
+              <div class="node-main">
+                <span class="node-icon">🔔</span>
+                <strong>Ntfy Wake Server</strong>
+              </div>
+              <small>Silent foreground background notifications sync</small>
+              <div class="node-tech"><span>Go</span><span>SQLite</span><span>Push</span></div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <p class="muted-note-dark" style="color:var(--text-400);text-align:center;margin-top:20px">
+        See <a href="https://github.com/saifmukhtar/enclave/blob/main/REPO_STRUCTURE.md" target="_blank" rel="noopener noreferrer">REPO_STRUCTURE.md</a> for the complete workspace file map and <a href="https://github.com/saifmukhtar/enclave/blob/main/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer">SETUP_GUIDE.md</a> for VPS deployment.
+      </p>
     </section>
 
-    <section id="setup" class="section section-reveal">
-        <div class="glass-container">
-            <h2 class="section-title">Setup guide (practical path)</h2>
-            <ol class="setup-steps">
-                <li>
-                    <h3>1. Prepare templates</h3>
-                    <pre><code>cp enclave-ui/local.properties.example enclave-ui/local.properties
-cp enclave-server/.env.example enclave-server/.env
-cp enclave-server/signaling-server/firebase-adminsdk.json.example enclave-server/signaling-server/firebase-adminsdk.json</code></pre>
-                </li>
-                <li>
-                    <h3>2. Bootstrap local stack</h3>
-                    <pre><code>chmod +x setup-local.sh
+    <!-- ═══════════════════════════════════════════════════
+         SETUP GUIDE
+    ═══════════════════════════════════════════════════ -->
+    <section id="setup" class="section section-reveal" aria-labelledby="setup-title">
+      <div class="glass-container">
+        <h2 class="section-title" id="setup-title">Setup Guide — Practical Path</h2>
+        <p class="section-lead">A comprehensive walkthrough to provision, configure, and compile your sovereign communication stack.</p>
+
+        <!-- Prerequisites & Expectation Board -->
+        <div class="prereq-container">
+          <div class="prereq-header">
+            <h3>⚙️ Prerequisites &amp; Project Scope</h3>
+            <p>What is required to host your secure Enclave, and what you can expect from the setup workflow.</p>
+          </div>
+          <div class="prereq-grid">
+            <div class="prereq-card">
+              <h4>System Requirements</h4>
+              <ul>
+                <li><strong>Linux VPS</strong>: Ubuntu/Debian server with minimum 1 vCPU &amp; 2GB RAM.</li>
+                <li><strong>DNS Domain</strong>: A custom domain name pointing records to your server.</li>
+                <li><strong>Android Environment</strong>: Android Studio or SDK CLI (to compile client app).</li>
+              </ul>
+            </div>
+            <div class="prereq-card">
+              <h4>What You Can Expect</h4>
+              <ul>
+                <li><strong>Time Investment</strong>: ~15 to 20 minutes for full server &amp; mobile setup.</li>
+                <li><strong>Absolute Control</strong>: 100% data residency — keys, databases, and assets stay strictly on your hardware.</li>
+                <li><strong>High Reliability</strong>: WebRTC peer connection traverse even strict carrier NATs using Coturn.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-container">
+          <!-- Terminal Tabs Navigation -->
+          <div class="terminal-nav" role="tablist" aria-label="Setup steps selector">
+            <button class="terminal-tab-btn active" role="tab" aria-selected="true" aria-controls="term-tab-1" id="tab-1">
+              <span class="tab-dot dot-red"></span>
+              <span class="tab-index">1</span> Clone &amp; Template
+            </button>
+            <button class="terminal-tab-btn" role="tab" aria-selected="false" aria-controls="term-tab-2" id="tab-2">
+              <span class="tab-dot dot-yellow"></span>
+              <span class="tab-index">2</span> Local DB Stack
+            </button>
+            <button class="terminal-tab-btn" role="tab" aria-selected="false" aria-controls="term-tab-3" id="tab-3">
+              <span class="tab-dot dot-green"></span>
+              <span class="tab-index">3</span> Android Keys
+            </button>
+            <button class="terminal-tab-btn" role="tab" aria-selected="false" aria-controls="term-tab-4" id="tab-4">
+              <span class="tab-dot dot-gray"></span>
+              <span class="tab-index">4</span> Compile Client
+            </button>
+            <button class="terminal-tab-btn" role="tab" aria-selected="false" aria-controls="term-tab-5" id="tab-5">
+              <span class="tab-dot dot-purple"></span>
+              <span class="tab-index">5</span> Cloud Deploy
+            </button>
+          </div>
+
+          <!-- Terminal Window Frame -->
+          <div class="terminal-window">
+            <div class="terminal-header">
+              <div class="terminal-actions-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="terminal-title">saif@enclave-vps: ~</span>
+              <button class="terminal-copy-btn" id="terminal-copy-all" aria-label="Copy terminal content">Copy Tab</button>
+            </div>
+            
+            <div class="terminal-body">
+              <!-- Tab 1 -->
+              <div class="terminal-tab-content active" id="term-tab-1" role="tabpanel" aria-labelledby="tab-1">
+                <div class="term-instruction">
+                  <h4>Step 1: Clone the repository and scaffold template configurations</h4>
+                  <p>Clone the core workspace repository onto your local environment, enter the folder, and bootstrap configuration files.</p>
+                </div>
+                <pre><code id="code-1" class="language-bash"><span class="c"># Clone Enclave server and mobile codebase</span>
+git clone https://github.com/saifmukhtar/enclave.git
+cd enclave
+
+<span class="c"># Scaffold properties and local environment template templates</span>
+cp enclave-ui/local.properties.example enclave-ui/local.properties
+cp enclave-server/.env.example enclave-server/.env</code></pre>
+              </div>
+
+              <!-- Tab 2 -->
+              <div class="terminal-tab-content" id="term-tab-2" role="tabpanel" aria-labelledby="tab-2" style="display:none">
+                <div class="term-instruction">
+                  <h4>Step 2: Bootstrap the local Dockerized backend stack</h4>
+                  <p>Give execution rights to our local script and run it. This will automatically spin up PostgreSQL database containers, Supabase Realtime listeners, Coturn TURN server relays, and Ntfy secure local notifications.</p>
+                </div>
+                <pre><code id="code-2" class="language-bash"><span class="c"># Elevate execution permissions</span>
+chmod +x setup-local.sh
+
+<span class="c"># Bootstrap PostgreSQL, Supabase engine, and secure local relays</span>
 ./setup-local.sh</code></pre>
-                </li>
-                <li>
-                    <h3>3. Fill required Android keys</h3>
-                    <p>Add SDK, Supabase, signaling, TURN, and Ntfy keys in <code>enclave-ui/local.properties</code>.</p>
-                </li>
-                <li>
-                    <h3>4. Build app</h3>
-                    <pre><code>cd enclave-ui
-./gradlew assembleDebug</code></pre>
-                </li>
-                <li>
-                    <h3>5. Production hardening</h3>
-                    <p>Configure DNS + Nginx TLS + Coturn + PM2 as documented in <a href="../SETUP_GUIDE.md">SETUP_GUIDE.md</a>.</p>
-                </li>
-            </ol>
-        </div>
-    </section>
+              </div>
 
-    <section class="section section-reveal">
-        <div class="glass-container">
-            <h2 class="section-title">Workspace docs</h2>
-            <div class="doc-links">
-                <a href="../README.md">README.md</a>
-                <a href="../SETUP_GUIDE.md">SETUP_GUIDE.md</a>
-                <a href="../REPO_STRUCTURE.md">REPO_STRUCTURE.md</a>
+              <!-- Tab 3 -->
+              <div class="terminal-tab-content" id="term-tab-3" role="tabpanel" aria-labelledby="tab-3" style="display:none">
+                <div class="term-instruction">
+                  <h4>Step 3: Configure Android client environment variables</h4>
+                  <p>Open <code>enclave-ui/local.properties</code> and fill in your SDK path, self-hosted Supabase access credentials, Node.js WebSocket signaling server address, Coturn credentials, and private self-hosted Ntfy push configurations.</p>
+                </div>
+                <pre><code id="code-3" class="language-ini"><span class="c"># Android SDK paths and dynamic access variables</span>
+sdk.dir=/home/username/Android/Sdk
+SUPABASE_URL=https://your-supabase-instance.com
+SUPABASE_KEY=your-anon-key
+SIGNALING_SERVER_URL=wss://wss.yourdomain.com
+TURN_SERVER_URL=turn:your-vps-ip:3478
+NTFY_SERVER_URL=https://ntfy.yourdomain.com
+NTFY_USERNAME=your-ntfy-user
+NTFY_PASSWORD=your-ntfy-pass</code></pre>
+              </div>
+
+              <!-- Tab 4 -->
+              <div class="terminal-tab-content" id="term-tab-4" role="tabpanel" aria-labelledby="tab-4" style="display:none">
+                <div class="term-instruction">
+                  <h4>Step 4: Compile and install the Android app</h4>
+                  <p>Run the Gradle assembler directly from project directory to build a signed release bundle or a local debug build.</p>
+                </div>
+                <pre><code id="code-4" class="language-bash"><span class="c"># Navigate into the mobile Android client subdirectory</span>
+cd enclave-ui
+
+<span class="c"># Compile a local debug APK for testing</span>
+./gradlew assembleDebug
+
+<span class="c"># Or assemble a production-grade signed release APK</span>
+./gradlew assembleRelease</code></pre>
+              </div>
+
+              <!-- Tab 5 -->
+              <div class="terminal-tab-content" id="term-tab-5" role="tabpanel" aria-labelledby="tab-5" style="display:none">
+                <div class="term-instruction">
+                  <h4>Step 5: Cloud Deployment &amp; VPS Production Hardening</h4>
+                  <p>Map DNS, provision LetsEncrypt TLS encryption via Certbot certificates, lock down firewalls, and launch signaling endpoints under PM2.</p>
+                </div>
+                <pre><code id="code-5" class="language-bash"><span class="c"># Navigate into the self-hosted server stack folder</span>
+cd enclave-server
+
+<span class="c"># Execute deployment workflow script to deploy securely to your VPS</span>
+./deploy_to_cloud.sh</code></pre>
+                <p class="step-note" style="margin-top:14px;font-size:0.82rem;color:var(--text-400)">See the <a href="https://github.com/saifmukhtar/enclave/blob/main/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">complete SETUP_GUIDE.md on GitHub</a> for Coturn, Nginx server blocks, and Certbot automation.</p>
+              </div>
+
             </div>
-            <p class="muted-note">Use these docs together: overview, setup execution, and file-by-file navigation.</p>
+          </div>
         </div>
+      </div>
     </section>
 
-    <footer>
-        <p>&copy; 2026 Enclave. Licensed under GNU AGPLv3.</p>
-    </footer>
+    <!-- ═══════════════════════════════════════════════════
+         SECURITY MODEL
+    ═══════════════════════════════════════════════════ -->
+    <section id="security" class="section section-reveal" aria-labelledby="security-title">
+      <h2 class="section-title" id="security-title">Security Model</h2>
+      <div class="security-strip">
+        <div class="security-card" id="sec-whitelist">
+          <div class="security-icon" aria-hidden="true">🚫</div>
+          <h3>Client-Side Email Whitelist</h3>
+          <p>Registration on your Supabase instance is restricted to whitelisted email addresses — preventing any third party from joining your private instance.</p>
+        </div>
+        <div class="security-card" id="sec-deterministic">
+          <div class="security-icon" aria-hidden="true">🔗</div>
+          <h3>Deterministic Peer Pairing</h3>
+          <p>Pairing logic is deterministic and hardcoded client-side: User A always resolves User B, and vice versa. No ambiguity, no discovery surface.</p>
+        </div>
+        <div class="security-card" id="sec-lock">
+          <div class="security-icon" aria-hidden="true">🔒</div>
+          <h3>Permanent Lockdown</h3>
+          <p>Once both partners register, disable signups in Supabase Auth settings entirely. The database becomes permanently sealed against new accounts.</p>
+        </div>
+        <div class="security-card" id="sec-zk">
+          <div class="security-icon" aria-hidden="true">🛡️</div>
+          <h3>Zero-Knowledge Keys</h3>
+          <p>Encryption keys are derived locally and never transmitted. PBKDF2 key derivation from your master passphrase means only you can decrypt your vault and backups.</p>
+        </div>
+      </div>
 
-    <script src="script.js"></script>
+      <!-- Cryptographic Specification Deep-Dive (Signal Style) -->
+      <div class="spec-explorer-container" aria-label="Cryptographic Protocols Explorer">
+        <h3 class="spec-explorer-title">Open Cryptographic Protocol Specifications</h3>
+        <p class="spec-explorer-subtitle">Enclave leverages proven mathematical models to ensure that communication remains perfectly sovereign, zero-knowledge, and isolated from external networks.</p>
+        
+        <div class="spec-explorer">
+          <div class="spec-nav" role="tablist" aria-label="Crypto specifications">
+            <button class="spec-tab active" role="tab" aria-selected="true" aria-controls="spec-tab-x3dh" id="spec-head-x3dh">
+              <span class="spec-tab-badge">01</span> X3DH Key Exchange
+            </button>
+            <button class="spec-tab" role="tab" aria-selected="false" aria-controls="spec-tab-ratchet" id="spec-head-ratchet">
+              <span class="spec-tab-badge">02</span> Double Ratchet
+            </button>
+            <button class="spec-tab" role="tab" aria-selected="false" aria-controls="spec-tab-zk" id="spec-head-zk">
+              <span class="spec-tab-badge">03</span> Zero-Knowledge Vault
+            </button>
+            <button class="spec-tab" role="tab" aria-selected="false" aria-controls="spec-tab-silent" id="spec-head-silent">
+              <span class="spec-tab-badge">04</span> Sovereign Wakes
+            </button>
+          </div>
+
+          <div class="spec-content">
+            <!-- X3DH -->
+            <div class="spec-panel active" id="spec-tab-x3dh" role="tabpanel" aria-labelledby="spec-head-x3dh">
+              <h4>Extended Triple Diffie-Hellman (X3DH)</h4>
+              <p>Before A communicates with B, they negotiate a shared master key using the <strong>X3DH key exchange protocol</strong>. This protocol provides high identity verification security, forward secrecy, and complete cryptographic deniability.</p>
+              <div class="spec-tags"><span>Curve25519</span><span>SHA-256</span><span>Identity Keys</span></div>
+              <ul class="spec-bullets">
+                <li>Uses ephemeral keypairs for mathematical isolation of key derivation paths.</li>
+                <li>Signed PreKeys prevent man-in-the-middle spoofing vectors.</li>
+                <li>One-Time Prekeys allow asynchronous encrypted pairing.</li>
+              </ul>
+            </div>
+
+            <!-- Double Ratchet -->
+            <div class="spec-panel" id="spec-tab-ratchet" role="tabpanel" aria-labelledby="spec-head-ratchet" style="display:none">
+              <h4>Double Ratchet Key Rotation</h4>
+              <p>Once keys are exchanged, messages are ratcheted using a dual-state <strong>KDF Chain Ratchet</strong> (Diffie-Hellman + Symmetric ratcheting). This ensures that every single message payload is sealed with a unique, self-destructing key.</p>
+              <div class="spec-tags"><span>HKDF-SHA256</span><span>AES-256-CBC</span><span>HMAC-SHA256</span></div>
+              <ul class="spec-bullets">
+                <li><strong>Forward Secrecy</strong>: Passive listeners cannot deduce past messages using present keys.</li>
+                <li><strong>Break-in Secrecy</strong>: Key compromise automatically heals inside subsequent roundtrips.</li>
+                <li>Out-of-order message handling is supported via pre-calculated ratchet skips.</li>
+              </ul>
+            </div>
+
+            <!-- Zero Knowledge -->
+            <div class="spec-panel" id="spec-tab-zk" role="tabpanel" aria-labelledby="spec-head-zk" style="display:none">
+              <h4>Zero-Knowledge Vault Backup &amp; Storage</h4>
+              <p>All sensitive gallery and database assets are sealed behind hardware-accelerated local encryption. Master key derives on-device via <strong>PBKDF2</strong>, ensuring data in transit is opaque to your self-hosted servers.</p>
+              <div class="spec-tags"><span>AES-256-GCM</span><span>PBKDF2</span><span>Keystore HSM</span></div>
+              <ul class="spec-bullets">
+                <li>Local storage locked down inside an encrypted WAL Room SQLite database.</li>
+                <li>Passphrase is salted and iterated 100,000 times before AES-256-GCM envelope sealing.</li>
+                <li>Supports biometric auth tied directly to Android Keystore Hardware Backed keys.</li>
+              </ul>
+            </div>
+
+            <!-- Sovereign Wakes -->
+            <div class="spec-panel" id="spec-tab-silent" role="tabpanel" aria-labelledby="spec-head-silent" style="display:none">
+              <h4>Sovereign Notification Wakes</h4>
+              <p>Avoids centralized Google FCM gateways. Uses an isolated, continuous secure <strong>Ntfy relay</strong> to trigger silent system wakeups and sync incoming E2EE keys instantly.</p>
+              <div class="spec-tags"><span>Ntfy</span><span>WebSocket Relay</span><span>Foreground Wakes</span></div>
+              <ul class="spec-bullets">
+                <li>Silent background sync wakes client logic instantly upon inbound payloads.</li>
+                <li>Absolutely zero tracking metadata or telemetry exposed to third-party providers.</li>
+                <li>Encrypted payload flags ensure that only notifications are shown client-side.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         OPEN-SOURCE CREDITS
+    ═══════════════════════════════════════════════════ -->
+    <section id="credits" class="section section-reveal" aria-labelledby="credits-title">
+      <div class="glass-container">
+        <div class="credits-header">
+          <img src="enclave.png" alt="Enclave logo" class="credits-logo" width="64" height="64" loading="lazy">
+          <h2 class="section-title" id="credits-title">Open-Source Credits</h2>
+          <p class="section-lead">Enclave is built on the shoulders of excellent open-source projects. We owe our cryptographic foundations, UI patterns, and infrastructure tools entirely to these communities.</p>
+        </div>
+
+        <div class="credits-grid" role="list" aria-label="Open-source projects used in Enclave">
+
+          <a href="https://github.com/signalapp/Signal-Android" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-signal-android" role="listitem" aria-label="Signal Android — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🔐</div>
+            <div class="credit-info">
+              <strong>Signal Android</strong>
+              <small>E2EE Double Ratchet session model, backup &amp; restore logic, encrypted database schemas</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/signalapp/libsignal" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-libsignal" role="listitem" aria-label="Libsignal — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">⚗️</div>
+            <div class="credit-info">
+              <strong>Libsignal</strong>
+              <small>Cryptographic engine — PreKey bundles, identity key signatures, X3DH key exchange, Session Cipher</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/binwiederhier/ntfy" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-ntfy" role="listitem" aria-label="Ntfy — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🔔</div>
+            <div class="credit-info">
+              <strong>Ntfy</strong>
+              <small>Self-hosted private push notification server — zero reliance on proprietary push infrastructure</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/element-hq/element-x-android" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-element" role="listitem" aria-label="Element X Android — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">📐</div>
+            <div class="credit-info">
+              <strong>Element X Android</strong>
+              <small>Vector stroke batching, multi-colored UI drawing, Matrix/WebRTC audio-visual calling logic</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/FossifyOrg/Gallery" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-fossify" role="listitem" aria-label="Fossify Gallery — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🖼️</div>
+            <div class="credit-info">
+              <strong>Fossify Gallery</strong>
+              <small>Media pickers, secure vault patterns, custom image viewer and lightbox zoom overlays</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/DawinderGill/MusicPlayer-JetpackCompose" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-musicplayer" role="listitem" aria-label="Music Player Compose — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🎵</div>
+            <div class="credit-info">
+              <strong>Music Player Compose</strong>
+              <small>Customized media players, in-memory audio waveform rendering patterns</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/android/camera-samples" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-camera" role="listitem" aria-label="Camera Samples — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">📷</div>
+            <div class="credit-info">
+              <strong>Camera Samples</strong>
+              <small>Native CameraX integration patterns for in-memory secret media recording and photo capture</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/supabase/supabase" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-supabase" role="listitem" aria-label="Supabase — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🗄️</div>
+            <div class="credit-info">
+              <strong>Supabase</strong>
+              <small>Self-hosted PostgreSQL, Gotrue Auth, PostgREST, Realtime listeners, and private object storage</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://github.com/coturn/coturn" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-coturn" role="listitem" aria-label="Coturn — view on GitHub">
+            <div class="credit-icon" aria-hidden="true">🌐</div>
+            <div class="credit-info">
+              <strong>Coturn</strong>
+              <small>STUN/TURN relay server enabling peer connection establishment behind complex NAT environments</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://webrtc.org/" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-webrtc" role="listitem" aria-label="WebRTC — visit webrtc.org">
+            <div class="credit-icon" aria-hidden="true">📡</div>
+            <div class="credit-info">
+              <strong>WebRTC</strong>
+              <small>Open standard for real-time peer-to-peer audio, video, and data communication</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://developer.android.com/compose" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-compose" role="listitem" aria-label="Jetpack Compose — Android developer documentation">
+            <div class="credit-icon" aria-hidden="true">🎨</div>
+            <div class="credit-info">
+              <strong>Jetpack Compose</strong>
+              <small>Android's modern declarative UI toolkit — powers the entire Enclave UI layer</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <a href="https://www.docker.com/" target="_blank" rel="noopener noreferrer" class="credit-card" id="credit-docker" role="listitem" aria-label="Docker — visit docker.com">
+            <div class="credit-icon" aria-hidden="true">📦</div>
+            <div class="credit-info">
+              <strong>Docker</strong>
+              <small>Container orchestration for the entire self-hosted backend stack — reproducible deployments</small>
+            </div>
+            <span class="credit-arrow" aria-hidden="true">↗</span>
+          </a>
+
+        </div>
+
+        <p class="credits-note">All projects are used in accordance with their respective open-source licenses. Enclave is itself licensed under <a href="https://github.com/saifmukhtar/enclave/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GNU AGPLv3</a>.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         WORKSPACE DOCS
+    ═══════════════════════════════════════════════════ -->
+    <section id="docs" class="section section-reveal" aria-labelledby="docs-title">
+      <div class="glass-container">
+        <h2 class="section-title" id="docs-title">Workspace Documentation</h2>
+        <p class="section-lead">Three complementary documents cover every aspect of Enclave's design and operation.</p>
+        <div class="doc-links" role="list">
+          <a href="https://github.com/saifmukhtar/enclave/blob/main/README.md" target="_blank" rel="noopener noreferrer" class="doc-link-card" id="doc-readme" role="listitem">
+            <span class="doc-link-icon" aria-hidden="true">📖</span>
+            <strong>README.md</strong>
+            <small>Feature dictionary, Presence Engine deep-dive, quick start guide</small>
+          </a>
+          <a href="https://github.com/saifmukhtar/enclave/blob/main/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer" class="doc-link-card" id="doc-setup" role="listitem">
+            <span class="doc-link-icon" aria-hidden="true">⚙️</span>
+            <strong>SETUP_GUIDE.md</strong>
+            <small>VPS deployment, Nginx, Certbot, Coturn, PM2 configuration</small>
+          </a>
+          <a href="https://github.com/saifmukhtar/enclave/blob/main/REPO_STRUCTURE.md" target="_blank" rel="noopener noreferrer" class="doc-link-card" id="doc-repo" role="listitem">
+            <span class="doc-link-icon" aria-hidden="true">🗂️</span>
+            <strong>REPO_STRUCTURE.md</strong>
+            <small>Full package architecture map and workflow patterns</small>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════════ -->
+  <footer id="site-footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="enclave.png" alt="Enclave logo" class="footer-logo" width="48" height="48" loading="lazy">
+        <div>
+          <span class="footer-name">Enclave</span>
+          <span class="footer-tagline">Cryptographic Sovereignty for Couples</span>
+        </div>
+      </div>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer" aria-label="Enclave source code on GitHub">GitHub Repo</a>
+        <a href="https://github.com/saifmukhtar" target="_blank" rel="noopener noreferrer" aria-label="Saif Mukhtar's GitHub profile">@saifmukhtar</a>
+        <a href="https://github.com/saifmukhtar/enclave/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPLv3 License</a>
+        <a href="https://github.com/saifmukhtar/enclave/blob/main/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer">Setup Guide</a>
+        <a href="https://github.com/saifmukhtar/enclave/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+      </nav>
+      <p class="footer-copy">
+        Built by <a href="https://github.com/saifmukhtar" target="_blank" rel="noopener noreferrer" aria-label="Saif Mukhtar on GitHub">Saif Mukhtar</a> &nbsp;·&nbsp;
+        Source on <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer" aria-label="Enclave repository on GitHub">GitHub</a> &nbsp;·&nbsp;
+        Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU AGPLv3</a><br>
+        Inspired by <a href="https://github.com/signalapp/Signal-Android" target="_blank" rel="noopener noreferrer">Signal Android</a>,
+        <a href="https://github.com/signalapp/libsignal" target="_blank" rel="noopener noreferrer">Libsignal</a>,
+        <a href="https://github.com/element-hq/element-x-android" target="_blank" rel="noopener noreferrer">Element X</a>,
+        and the open-source community.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Keyboard Command Palette (Linear style) -->
+  <dialog id="command-palette" class="command-palette-dialog" aria-labelledby="palette-search-input">
+    <div class="palette-inner">
+      <div class="palette-header">
+        <svg class="palette-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="palette-search-input" placeholder="Type a command or search..." aria-label="Search site commands">
+        <kbd class="palette-esc-kbd">ESC</kbd>
+      </div>
+      <div class="palette-body">
+        <div class="palette-group">
+          <span class="palette-group-title">Navigation Links</span>
+          <div class="palette-items" role="list">
+            <button class="palette-item active" data-action="scroll" data-target="#motivation" role="listitem">
+              <span class="item-icon">🏡</span>
+              <span class="item-name">Why Enclave?</span>
+              <span class="item-shortcut">G then W</span>
+            </button>
+            <button class="palette-item" data-action="scroll" data-target="#features" role="listitem">
+              <span class="item-icon">⚡</span>
+              <span class="item-name">Explore Core Features</span>
+              <span class="item-shortcut">G then F</span>
+            </button>
+            <button class="palette-item" data-action="scroll" data-target="#presence-engine" role="listitem">
+              <span class="item-icon">📳</span>
+              <span class="item-name">Presence Engine Playground</span>
+              <span class="item-shortcut">G then P</span>
+            </button>
+            <button class="palette-item" data-action="scroll" data-target="#architecture" role="listitem">
+              <span class="item-icon">📐</span>
+              <span class="item-name">System Architecture</span>
+              <span class="item-shortcut">G then A</span>
+            </button>
+            <button class="palette-item" data-action="scroll" data-target="#setup" role="listitem">
+              <span class="item-icon">💻</span>
+              <span class="item-name">Setup Guide &amp; VPS Deploy</span>
+              <span class="item-shortcut">G then S</span>
+            </button>
+            <button class="palette-item" data-action="scroll" data-target="#credits" role="listitem">
+              <span class="item-icon">👥</span>
+              <span class="item-name">Open-Source Credits</span>
+              <span class="item-shortcut">G then C</span>
+            </button>
+          </div>
+        </div>
+        <div class="palette-group">
+          <span class="palette-group-title">Sovereign Resources</span>
+          <div class="palette-items" role="list">
+            <a href="https://github.com/saifmukhtar/enclave" target="_blank" rel="noopener noreferrer" class="palette-item" role="listitem">
+              <span class="item-icon">📦</span>
+              <span class="item-name">View GitHub Repository</span>
+              <span class="item-shortcut">↗</span>
+            </a>
+            <a href="https://github.com/saifmukhtar/enclave/blob/main/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer" class="palette-item" role="listitem">
+              <span class="item-icon">📖</span>
+              <span class="item-name">Open SETUP_GUIDE.md</span>
+              <span class="item-shortcut">↗</span>
+            </a>
+            <a href="https://github.com/saifmukhtar/enclave/blob/main/REPO_STRUCTURE.md" target="_blank" rel="noopener noreferrer" class="palette-item" role="listitem">
+              <span class="item-icon">🗂️</span>
+              <span class="item-name">Open REPO_STRUCTURE.md</span>
+              <span class="item-shortcut">↗</span>
+            </a>
+            <button class="palette-item" data-action="copy" data-target="code-1" role="listitem">
+              <span class="item-icon">📋</span>
+              <span class="item-name">Copy Git Clone Script</span>
+              <span class="item-shortcut">Ctrl+C</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="palette-footer">
+        <span>Use <kbd>↑</kbd> <kbd>↓</kbd> keys to navigate, <kbd>Enter</kbd> to select, <kbd>Esc</kbd> to close.</span>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Copy toast notification -->
+  <div class="copy-toast" id="copy-toast" role="status" aria-live="polite" aria-atomic="true">Copied to clipboard!</div>
+
+  <script src="script.js"></script>
 </body>
 </html>

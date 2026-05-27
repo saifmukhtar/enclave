@@ -54,14 +54,8 @@ graph TD
 ```bash
 cp enclave-ui/local.properties.example enclave-ui/local.properties
 cp enclave-server/.env.example enclave-server/.env
-cp enclave-server/signaling-server/firebase-adminsdk.json.example enclave-server/signaling-server/firebase-adminsdk.json
 ```
 
-Optional (only if you use Firebase services in the Android app):
-
-```bash
-cp enclave-ui/app/google-services.json.example enclave-ui/app/google-services.json
-```
 
 ### 2) Start local backend + apply local defaults
 
