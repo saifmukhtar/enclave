@@ -512,10 +512,6 @@ realm=${DOMAIN}
 use-auth-secret
 static-auth-secret=${COTURN_SECRET}
 
-# TLS certificates (managed by Certbot — will be valid after Step 12)
-cert=/etc/letsencrypt/live/${DOMAIN_API}/fullchain.pem
-pkey=/etc/letsencrypt/live/${DOMAIN_API}/privkey.pem
-
 # Security hardening
 no-tcp-relay
 no-multicast-peers
@@ -658,15 +654,10 @@ sleep 8
 
 if docker ps --format '{{.Names}}' | grep -q enclave-ntfy; then
   step "Creating ntfy user: ${NTFY_USERNAME}..."
-  docker exec enclave-ntfy ntfy user add --role=user "${NTFY_USERNAME}" 2>/dev/null \
-    || warn "User may already exist — attempting password update"
   
-  # Update password — try both ntfy CLI argument styles
-  docker exec enclave-ntfy sh -c \
-    "ntfy user change-pass --password='${NTFY_PASSWORD}' '${NTFY_USERNAME}'" 2>/dev/null \
-    || docker exec -i enclave-ntfy sh -c \
-    "printf '%s\n%s\n' '${NTFY_PASSWORD}' '${NTFY_PASSWORD}' | ntfy user change-pass '${NTFY_USERNAME}'" 2>/dev/null \
-    || warn "Could not set ntfy password automatically. Run manually: docker exec -it enclave-ntfy ntfy user change-pass ${NTFY_USERNAME}"
+  # Securely pass password via environment variable directly to ntfy CLI inside Docker
+  docker exec -e NTFY_PASSWORD="${NTFY_PASSWORD}" enclave-ntfy ntfy user add --role=user "${NTFY_USERNAME}" 2>/dev/null \
+    || warn "Could not create ntfy user automatically. Check logs or run manually."
   
   # Grant publish + subscribe access to all topics
   docker exec enclave-ntfy ntfy access "${NTFY_USERNAME}" "*" read-write 2>/dev/null || true
@@ -688,7 +679,7 @@ echo ""
 
 step "Installing npm dependencies..."
 cd "${INSTALL_DIR}/signaling-server"
-npm ci --silent
+npm install --silent
 ok "npm dependencies installed"
 
 step "Compiling TypeScript to JavaScript..."
@@ -863,6 +854,10 @@ if [[ "$_dns_ready" =~ ^[Yy]$ ]]; then
     | crontab -
   ok "Auto-renewal cron configured (runs daily at 3 AM)"
 
+  step "Configuring Coturn with Let's Encrypt TLS certificates..."
+  echo "cert=/etc/letsencrypt/live/${DOMAIN_API}/fullchain.pem" >> /etc/turnserver.conf
+  echo "pkey=/etc/letsencrypt/live/${DOMAIN_API}/privkey.pem" >> /etc/turnserver.conf
+  
   step "Starting Coturn with TLS certificates now active..."
   systemctl restart coturn && systemctl enable coturn
   ok "Coturn running with TLS on port 5349"
@@ -876,8 +871,6 @@ else
   warn "Then restart Coturn: systemctl restart coturn"
 
   step "Starting Coturn in HTTP-only mode (no TLS certs yet)..."
-  # Temporarily remove TLS cert lines from turnserver.conf so coturn doesn't fail
-  sed -i '/^cert=/d; /^pkey=/d' /etc/turnserver.conf
   systemctl restart coturn && systemctl enable coturn || true
   ok "Coturn started (will need restart after SSL is set up)"
 fi
@@ -993,7 +986,7 @@ NTFY_PASSWORD=${NTFY_PASSWORD}
   Restart signaling     : pm2 restart enclave-signaling
   View signaling logs   : pm2 logs enclave-signaling
   Renew SSL certs       : certbot renew
-  Re-run full setup     : bash ${INSTALL_DIR}/setup_droplet.sh
+  Re-run full setup     : curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
 ================================================================================
 SUMMARY_EOF
 

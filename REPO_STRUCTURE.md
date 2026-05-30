@@ -124,3 +124,11 @@ This document explains the workspace layout and the role of each major file/dire
 - **Add database schema feature:** `enclave-server/volumes/db/init/*.sql`
 - **Modify signaling behavior:** `enclave-server/signaling-server/server.ts`
 - **Add Android UI features:** `enclave-ui/app/src/main/java/com/enclave/app/ui/*`
+
+---
+
+## 🤝 Credits & Open Source
+
+Maintained by **Saif Mukhtar** ([@saifmukhtar](https://github.com/saifmukhtar) | [saifmukhtar.dev](https://saifmukhtar.dev)).
+
+Powered by [Signal Protocol](https://github.com/signalapp/libsignal), [Supabase](https://supabase.com), [WebRTC](https://webrtc.org), and [Ntfy](https://ntfy.sh). See the [README](README.md) for full credits and AGPLv3 License details.

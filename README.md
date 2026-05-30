@@ -1,37 +1,45 @@
-# Enclave
-
-A privacy-first communication ecosystem for couples, with a self-hosted backend and an Android client.
-
 <div align="center">
   <img src="enclave.png" width="120" alt="Enclave Logo" />
+  <h1>Enclave</h1>
   <p><strong>Android 14+ client · Signal-based E2EE · Self-hosted Supabase + Signaling + TURN</strong></p>
+  
+  [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+  [![Android](https://img.shields.io/badge/Android-14+-3DDC84.svg?logo=android)](#)
+  [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](#)
 </div>
 
----
-
-## What Enclave includes
-
-- **`enclave-ui/`**: Kotlin + Jetpack Compose Android app.
-- **`enclave-server/`**: Dockerized backend (Supabase stack + Ntfy) and signaling server integration.
-- **`enclave-page/`**: Static website/landing page.
-- **Root docs**:
-  - [`SETUP_GUIDE.md`](SETUP_GUIDE.md): complete local and VPS setup flow.
-  - [`REPO_STRUCTURE.md`](REPO_STRUCTURE.md): workspace/file map.
+> [!NOTE]
+> A privacy-first communication ecosystem for couples, featuring a self-hosted backend and a specialized Android client. 
 
 ---
 
-## Core features
+## 📑 Table of Contents
 
-- **End-to-end encrypted chat** (Signal-style key/session model)
-- **Encrypted media sharing**
-- **WebRTC calls** via self-hosted signaling + TURN
-- **Private vault + backups**
-- **Lounge/status experiences** (stories, shared interactions)
-- **Self-hosted notifications** through Ntfy
+- [Core Features](#-core-features)
+- [Architecture Overview](#-architecture-overview)
+- [1-Click Production Deployment (Recommended)](#-1-click-production-deployment-recommended)
+- [Local Development Setup](#-local-development-setup)
+- [Advanced Production Deployment (Manual)](#-advanced-production-deployment-manual)
+- [Troubleshooting & Commands](#-troubleshooting--commands)
+- [Credits & Open Source Acknowledgements](#-credits--open-source-acknowledgements)
 
 ---
 
-## Architecture overview
+## ⚡ Core Features
+
+- 💬 **End-to-end encrypted chat** (Signal-style key/session model)
+- 🖼️ **Encrypted media sharing**
+- 📞 **WebRTC calls** via self-hosted signaling + TURN
+- 🗃️ **Private vault + backups**
+- 🏡 **Lounge/status experiences** (stories, shared interactions)
+- 🔔 **Self-hosted notifications** through Ntfy
+
+---
+
+## 📐 Architecture Overview
+
+> [!TIP]
+> See the detailed [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) and [REPO_STRUCTURE.md](REPO_STRUCTURE.md) for a deeper dive.
 
 ```mermaid
 graph TD
@@ -45,122 +53,94 @@ graph TD
 
 ---
 
-## Quick start (local development)
+## 🚀 1-Click Production Deployment (Recommended)
 
-> Full details: [`SETUP_GUIDE.md`](SETUP_GUIDE.md)
+The easiest way to deploy the entire production backend (Supabase, WebRTC, Ntfy, Nginx, SSL) is using the automated script on a fresh **Ubuntu 22.04 or 24.04** server. 
 
-### 1) Prepare config files
-
-```bash
-cp enclave-ui/local.properties.example enclave-ui/local.properties
-cp enclave-server/.env.example enclave-server/.env
-```
-
-
-### 2) Start local backend + apply local defaults
-
-```bash
-chmod +x setup-local.sh
-./setup-local.sh
-```
-
-This script checks Docker, starts the backend stack, verifies health endpoints, and updates local Android endpoints to emulator loopback (`10.0.2.2`).
-
-### 3) Complete Android `local.properties`
-
-`enclave-ui/app/build.gradle.kts` requires these keys to exist:
-
-- `sdk.dir`
-- `TURN_SERVER_URL`
-- `TURN_USERNAME`
-- `TURN_PASSWORD`
-- `SIGNALING_SERVER_URL`
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `NTFY_SERVER_URL`
-- `NTFY_USERNAME`
-- `NTFY_PASSWORD`
-
-### 4) Build app
-
-```bash
-cd enclave-ui
-./gradlew assembleDebug
-```
-
-### 5) Validate signaling server (optional but recommended)
-
-```bash
-cd enclave-server/signaling-server
-npm install
-npm run typecheck
-npm run build
-```
-
----
-
-## Production Deployment (Recommended)
-
-The easiest way to deploy the entire production backend (Supabase, WebRTC, Ntfy, Nginx, SSL) is using the automated script on a fresh Ubuntu 22.04 or 24.04 server. 
-
-Make sure you have your DNS records pointing to your server IP before running this:
+> [!IMPORTANT]
+> Make sure you have your DNS records pointing to your server IP before running this script. Disable Cloudflare proxying (orange cloud).
 
 ```bash
 curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
 ```
 
-Use [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for detailed configuration options.
+This script will prompt you for your root domain and automatically provision `api.enclave.*`, `wss.enclave.*`, and `ntfy.enclave.*`.
 
 ---
 
-## Manual Production Deployment (Advanced)
+## 💻 Local Development Setup
 
-If you prefer to deploy manually without the automated script:
+For local testing and Android development without a public domain. Full details are in [`SETUP_GUIDE.md`](SETUP_GUIDE.md).
 
-1. Provision Ubuntu VPS and DNS (`api.enclave.<domain>`, `wss.enclave.<domain>`, `ntfy.enclave.<domain>`).
-2. Install Docker, Node.js, PM2, Nginx, Certbot, Coturn.
-3. Copy `enclave-server/` to VPS and configure `.env`.
-4. Start backend with `docker compose up -d`.
-5. Build/run signaling server with PM2.
-6. Configure Nginx TLS reverse proxy and firewall.
----
-
-## Common commands
-
-### Local stack
-
+### 1) Start local backend
 ```bash
-# From repo root
+cp enclave-ui/local.properties.example enclave-ui/local.properties
+cp enclave-server/.env.example enclave-server/.env
+chmod +x setup-local.sh
 ./setup-local.sh
 ```
 
-### Backend stack (manual)
-
+### 2) Build Android App
+Configure your SDK path in `enclave-ui/local.properties`, then:
 ```bash
-cd enclave-server
-docker compose up -d
-docker compose ps
-```
-
-### Signaling server
-
-```bash
-cd enclave-server/signaling-server
-npm install
-npm run build
-npm start
+cd enclave-ui
+./gradlew assembleDebug
 ```
 
 ---
 
-## Repository guide
+## 🛠️ Advanced Production Deployment (Manual)
 
-- Setup guide: [`SETUP_GUIDE.md`](SETUP_GUIDE.md)
-- Workspace/file map: [`REPO_STRUCTURE.md`](REPO_STRUCTURE.md)
-- Landing page source: [`enclave-page/`](enclave-page)
+> [!WARNING]
+> This section is for advanced users who want to manually deploy the stack without the 1-click script.
+
+1. **Provision DNS:** Create A records for `api.enclave.<domain>`, `wss.enclave.<domain>`, `ntfy.enclave.<domain>` pointing to your VPS.
+2. **Install Dependencies:** Docker, Node.js, PM2, Nginx, Certbot, Coturn.
+3. **Copy Server Files:** `rsync` the `enclave-server/` folder to `/opt/enclave-server`.
+4. **Configure Secrets:** Manually generate cryptographic keys and populate `/opt/enclave-server/.env`.
+5. **Deploy Backend:** Run `docker compose up -d` in the server directory.
+6. **Signaling Server:** Run `npm install && npm run build` in `signaling-server/`, then run with PM2.
+7. **Nginx & SSL:** Configure Nginx reverse proxies for ports 8000 (API), 8085 (WSS), 2586 (Ntfy) and run Certbot.
+8. **Coturn & Firewall:** Update `/etc/turnserver.conf` and open UFW ports (80, 443, 3478, 5349, and UDP 49152:65535).
 
 ---
 
-## License
+## 🩺 Troubleshooting & Commands
 
-Licensed under **GNU AGPLv3**. See [`LICENSE`](LICENSE).
+### Common Issues
+- **Gradle fails due to missing keys:** Confirm all required `local.properties` keys are present.
+- **WebSocket disconnects in production:** Confirm Nginx `Upgrade` + `Connection` headers and timeout settings.
+- **TURN not working on mobile data:** Verify Coturn ports and UDP relay range are open in UFW.
+
+### Useful Commands
+```bash
+# View backend stack
+docker compose -f enclave-server/docker-compose.yml ps
+
+# Restart signaling server
+pm2 restart enclave-signaling
+
+# Renew SSL certificates
+certbot renew
+```
+
+---
+
+## 👥 Credits & Open Source Acknowledgements
+
+Enclave is built upon the incredible work of the open-source community. We stand on the shoulders of giants.
+
+### Maintainer & Architect
+- **Saif Mukhtar** 
+  - GitHub: [@saifmukhtar](https://github.com/saifmukhtar)
+  - Portfolio: [saifmukhtar.dev](https://saifmukhtar.dev)
+
+### Core Libraries & Technologies
+- 🔐 **Signal Protocol** & **Libsignal**: The absolute gold standard for E2EE cryptography.
+- 🗄️ **Supabase**: Powering our auth, realtime, and Postgres infrastructure.
+- 📡 **WebRTC** & **Coturn**: Enabling seamless, private, high-quality media traversal.
+- 🔔 **Ntfy**: Sovereign, self-hosted push notifications.
+- 🎨 **Jetpack Compose** & **Element X Android**: Modern UI/UX patterns.
+- 📦 **Docker** & **PM2**: Resilient infrastructure deployment.
+
+> **License:** Enclave is proudly licensed under the **GNU AGPLv3**.
