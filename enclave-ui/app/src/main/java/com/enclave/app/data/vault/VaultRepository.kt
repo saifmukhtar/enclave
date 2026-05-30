@@ -35,8 +35,8 @@ class VaultRepository(
 ) {
 
     private fun getSharedVaultKey(): ByteArray? {
-        val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-        val keyBase64 = prefs.getString("vault_key", null) ?: return null
+        val cryptoManager = com.enclave.app.crypto.CryptoManager(context)
+        val keyBase64 = cryptoManager.loadVaultKey() ?: return null
         return try {
             android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
         } catch (e: Exception) {
@@ -89,6 +89,82 @@ class VaultRepository(
             }
         } else {
             encryptedFileManager.writeSecureFile(fileName, data)
+        }
+    }
+
+    suspend fun readSecureFile(fileName: String): ByteArray = withContext(Dispatchers.IO) {
+        val vaultKey = getSharedVaultKey()
+        if (vaultKey != null) {
+            try {
+                val rawFile = encryptedFileManager.getRawFile(fileName)
+                val encryptedBytes = rawFile.readBytes()
+                com.enclave.app.crypto.VaultCipher.decrypt(encryptedBytes, vaultKey)
+            } catch (e: Exception) {
+                val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+                stream.use { it.readBytes() }
+            }
+        } else {
+            val stream: InputStream = encryptedFileManager.getSecureInputStream(fileName)
+            stream.use { it.readBytes() }
+        }
+    }
+
+    suspend fun saveToVault(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+        thumbnailBytes: ByteArray? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val mediaId = UUID.randomUUID().toString()
+            val prefix = if (mimeType.startsWith("video/")) "video" else "image"
+            val ext = fileName.substringAfterLast('.', "bin")
+            val newFileName = "${prefix}_${System.currentTimeMillis()}.$ext"
+            saveSecureFile(newFileName, bytes)
+
+            var thumbnailPath = ""
+            if (thumbnailBytes != null) {
+                val thumbName = "thumb_${System.currentTimeMillis()}.jpg"
+                saveSecureFile(thumbName, thumbnailBytes)
+                thumbnailPath = thumbName
+            }
+
+            val entity = MediaMetadataEntity(
+                mediaId = mediaId,
+                messageId = "",
+                localEncryptedPath = newFileName,
+                mimeType = mimeType,
+                sizeBytes = bytes.size.toLong(),
+                isEphemeral = false,
+                expiresAt = null,
+                folderName = "General",
+                thumbnailPath = thumbnailPath
+            )
+            mediaMetadataDao.insertMedia(entity)
+
+            val vaultKey = getSharedVaultKey()
+            if (vaultKey != null) {
+                try {
+                    bundleRepository.uploadVaultFile(newFileName, encryptedFileManager.getRawFile(newFileName).readBytes())
+                    if (thumbnailPath.isNotEmpty()) {
+                        bundleRepository.uploadVaultFile(thumbnailPath, encryptedFileManager.getRawFile(thumbnailPath).readBytes())
+                    }
+                    bundleRepository.insertVaultMetadata(
+                        mediaId = mediaId,
+                        localPath = newFileName,
+                        mimeType = mimeType,
+                        sizeBytes = bytes.size.toLong(),
+                        folderName = "General",
+                        thumbnailPath = thumbnailPath
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("VaultRepository", "Cloud sync failed for saved file", e)
+                }
+            }
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("VaultRepository", "Failed to save file to Vault", e)
+            false
         }
     }
 
@@ -244,118 +320,133 @@ class VaultRepository(
         try {
             val urisToDelete = mutableListOf<Uri>()
             uris.forEachIndexed { index, uri ->
-                val inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream != null) {
-                    val bytes = inputStream.readBytes()
-                    inputStream.close()
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val bytes = inputStream.readBytes()
+                        inputStream.close()
 
-                    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                    val isVideo = mimeType.startsWith("video/")
+                        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                        val isVideo = mimeType.startsWith("video/")
 
-                    // 1. Strip EXIF & Photoshop metadata for JPEGs
-                    val finalBytes = if (!isVideo && (mimeType.contains("jpeg") || mimeType.contains("jpg"))) {
-                        ExifStripper.stripJpegExif(bytes)
-                    } else {
-                        bytes
-                    }
-
-                    val prefix = if (isVideo) "video" else "image"
-                    val ext = if (isVideo) "mp4" else "jpg"
-                    val fileName = "${prefix}_${System.currentTimeMillis()}_$index.$ext"
-                    saveSecureFile(fileName, finalBytes)
-
-                    // 2. Generate Video Thumbnail cleanly via MediaMetadataRetriever
-                    var thumbnailPath = ""
-                    if (isVideo) {
-                        val retriever = MediaMetadataRetriever()
-                        try {
-                            retriever.setDataSource(context, uri)
-                            val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                            if (bitmap != null) {
-                                val bos = ByteArrayOutputStream()
-                                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, bos)
-                                val thumbBytes = bos.toByteArray()
-                                val thumbName = "thumb_${System.currentTimeMillis()}_$index.jpg"
-                                saveSecureFile(thumbName, thumbBytes)
-                                thumbnailPath = thumbName
+                        // 1. Strip EXIF & Photoshop metadata for JPEGs
+                        val finalBytes = if (!isVideo && (mimeType.contains("jpeg") || mimeType.contains("jpg"))) {
+                            try {
+                                ExifStripper.stripJpegExif(bytes)
+                            } catch (e: Exception) {
+                                android.util.Log.e("VaultRepository", "Exif stripping failed, using raw bytes", e)
+                                bytes
                             }
-                        } catch (ex: Exception) {
-                            android.util.Log.e("Exception", "Error occurred", ex)
-                        } finally {
-                            retriever.release()
+                        } else {
+                            bytes
+                        }
+
+                        val prefix = if (isVideo) "video" else "image"
+                        val ext = if (isVideo) "mp4" else "jpg"
+                        val fileName = "${prefix}_${System.currentTimeMillis()}_$index.$ext"
+                        saveSecureFile(fileName, finalBytes)
+
+                        // 2. Generate Video Thumbnail cleanly via MediaMetadataRetriever
+                        var thumbnailPath = ""
+                        if (isVideo) {
+                            val retriever = MediaMetadataRetriever()
+                            try {
+                                retriever.setDataSource(context, uri)
+                                val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                if (bitmap != null) {
+                                    val bos = ByteArrayOutputStream()
+                                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, bos)
+                                    val thumbBytes = bos.toByteArray()
+                                    val thumbName = "thumb_${System.currentTimeMillis()}_$index.jpg"
+                                    saveSecureFile(thumbName, thumbBytes)
+                                    thumbnailPath = thumbName
+                                }
+                            } catch (ex: Exception) {
+                                android.util.Log.e("Exception", "Error occurred", ex)
+                            } finally {
+                                retriever.release()
+                            }
+                        }
+
+                        // 3. Insert Room Database Record
+                        val mediaId = UUID.randomUUID().toString()
+                        val entity = MediaMetadataEntity(
+                            mediaId = mediaId,
+                            messageId = "",
+                            localEncryptedPath = fileName,
+                            mimeType = mimeType,
+                            sizeBytes = finalBytes.size.toLong(),
+                            isEphemeral = false,
+                            expiresAt = null,
+                            folderName = folderName,
+                            thumbnailPath = thumbnailPath
+                        )
+                        mediaMetadataDao.insertMedia(entity)
+                        urisToDelete.add(uri)
+
+                        // 4. E2EE Collaborative Cloud Vault sync
+                        val vaultKey = getSharedVaultKey()
+                        if (vaultKey != null) {
+                            try {
+                                val mainBytes = encryptedFileManager.getRawFile(fileName).readBytes()
+                                bundleRepository.uploadVaultFile(fileName, mainBytes)
+
+                                if (thumbnailPath.isNotEmpty()) {
+                                    val thumbBytes = encryptedFileManager.getRawFile(thumbnailPath).readBytes()
+                                    bundleRepository.uploadVaultFile(thumbnailPath, thumbBytes)
+                                }
+
+                                bundleRepository.insertVaultMetadata(
+                                    mediaId = mediaId,
+                                    localPath = fileName,
+                                    mimeType = mimeType,
+                                    sizeBytes = finalBytes.size.toLong(),
+                                    folderName = folderName,
+                                    thumbnailPath = thumbnailPath
+                                )
+                            } catch (ex: Exception) {
+                                android.util.Log.e("VaultRepository", "Cooperative Cloud Vault sync failed for $fileName", ex)
+                            }
                         }
                     }
-
-                    // 3. Insert Room Database Record
-                    val mediaId = UUID.randomUUID().toString()
-                    val entity = MediaMetadataEntity(
-                        mediaId = mediaId,
-                        messageId = "",
-                        localEncryptedPath = fileName,
-                        mimeType = mimeType,
-                        sizeBytes = finalBytes.size.toLong(),
-                        isEphemeral = false,
-                        expiresAt = null,
-                        folderName = folderName,
-                        thumbnailPath = thumbnailPath
-                    )
-                    mediaMetadataDao.insertMedia(entity)
-                    urisToDelete.add(uri)
-
-                    // 4. E2EE Collaborative Cloud Vault sync
-                    val vaultKey = getSharedVaultKey()
-                    if (vaultKey != null) {
-                        try {
-                            val mainBytes = encryptedFileManager.getRawFile(fileName).readBytes()
-                            bundleRepository.uploadVaultFile(fileName, mainBytes)
-
-                            if (thumbnailPath.isNotEmpty()) {
-                                val thumbBytes = encryptedFileManager.getRawFile(thumbnailPath).readBytes()
-                                bundleRepository.uploadVaultFile(thumbnailPath, thumbBytes)
-                            }
-
-                            bundleRepository.insertVaultMetadata(
-                                mediaId = mediaId,
-                                localPath = fileName,
-                                mimeType = mimeType,
-                                sizeBytes = finalBytes.size.toLong(),
-                                folderName = folderName,
-                                thumbnailPath = thumbnailPath
-                            )
-                        } catch (ex: Exception) {
-                            android.util.Log.e("VaultRepository", "Cooperative Cloud Vault sync failed for $fileName", ex)
-                        }
-                    }
+                } catch (ex: Exception) {
+                    android.util.Log.e("VaultRepository", "Failed to import single media file: $uri", ex)
                 }
             }
 
+            var permissionIntent: android.content.IntentSender? = null
             if (urisToDelete.isNotEmpty()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     try {
                         val pendingIntent = MediaStore.createDeleteRequest(context.contentResolver, urisToDelete)
-                        return@withContext ImportResult.RequiresPermission(pendingIntent.intentSender)
+                        permissionIntent = pendingIntent.intentSender
                     } catch (e: Exception) {
                         android.util.Log.e("Exception", "Error occurred", e)
                     }
-                }
-
-                // Fallback for Android 10 and below or if createDeleteRequest fails
-                urisToDelete.forEach { uri ->
-                    try {
-                        context.contentResolver.delete(uri, null, null)
-                    } catch (e: Exception) {
-                        if (e is RecoverableSecurityException) {
-                            return@withContext ImportResult.RequiresPermission(
-                                e.userAction.actionIntent.intentSender
-                            )
-                        } else {
-                            android.util.Log.e("Exception", "Error occurred", e)
+                } else {
+                    // Fallback for Android 10 and below or if createDeleteRequest fails
+                    var capturedIntent: android.content.IntentSender? = null
+                    urisToDelete.forEach { uri ->
+                        try {
+                            context.contentResolver.delete(uri, null, null)
+                        } catch (e: Exception) {
+                            if (e is RecoverableSecurityException) {
+                                capturedIntent = e.userAction.actionIntent.intentSender
+                            } else {
+                                android.util.Log.e("Exception", "Error occurred", e)
+                            }
                         }
                     }
+                    permissionIntent = capturedIntent
                 }
             }
 
-            ImportResult.Success
+            val finalIntent = permissionIntent
+            if (finalIntent != null) {
+                ImportResult.RequiresPermission(finalIntent)
+            } else {
+                ImportResult.Success
+            }
         } catch (e: Exception) {
             android.util.Log.e("Exception", "Error occurred", e)
             ImportResult.Error(e)

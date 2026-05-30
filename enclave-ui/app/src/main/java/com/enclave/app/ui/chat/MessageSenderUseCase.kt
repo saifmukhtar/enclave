@@ -28,18 +28,24 @@ class MessageSenderUseCase(
         text: String,
         replyTarget: ChatMessage?,
         disappearingMode: Long,
-        isSecured: Boolean
+        isSecured: Boolean,
+        messageId: String = UUID.randomUUID().toString()
     ): Pair<String, String>? = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext null
         val hasSession = try { signalStore.containsSession(partnerAddress) } catch (e: Exception) { false }
         if (!hasSession && !isSecured) return@withContext null
 
         val plainTextToSend = if (replyTarget != null) {
+            val myProfile = database.userProfileDao().getProfileSync(myId)
+            val partnerProfile = database.userProfileDao().getProfileSync(partnerId)
+            val myName = myProfile?.username?.takeIf { it.isNotBlank() } ?: "You"
+            val partnerName = partnerProfile?.username?.takeIf { it.isNotBlank() } ?: "Partner"
+
             val payload = ReplyPayload(
                 body = text,
                 quotedMsgId = replyTarget.id,
                 quotedMsgText = replyTarget.text,
-                quotedMsgSender = if (replyTarget.isFromMe) "You" else "Partner"
+                quotedMsgSender = if (replyTarget.isFromMe) myName else partnerName
             )
             Json.encodeToString(payload)
         } else {
@@ -51,7 +57,6 @@ class MessageSenderUseCase(
 
         if (encryptionResult.isSuccess) {
             val ciphertext = encryptionResult.getOrThrow()
-            val messageId = UUID.randomUUID().toString()
             
             val currentExpire = disappearingMode
             val contentTypeHeader = if (currentExpire > 0) "TEXT;expire=$currentExpire" else "TEXT"

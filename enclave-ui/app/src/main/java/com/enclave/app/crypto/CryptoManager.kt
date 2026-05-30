@@ -21,6 +21,9 @@ import org.signal.libsignal.protocol.util.KeyHelper
  */
 class CryptoManager(private val context: Context) {
 
+    var isHardwareBacked: Boolean = true
+        private set
+
     // Using hardware-backed EncryptedSharedPreferences for Signal state with fallback
     private val sharedPreferences: SharedPreferences = try {
         val masterKey = MasterKey.Builder(context)
@@ -34,11 +37,33 @@ class CryptoManager(private val context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     } catch (e: Exception) {
-        android.util.Log.e("CryptoManager", "EncryptedSharedPreferences failed initialization", e)
-        throw SecurityException("Hardware-backed Keystore failed. Enclave cannot safely store keys. Error: ${e.message}", e)
+        android.util.Log.w("CryptoManager", "Hardware-backed EncryptedSharedPreferences failed initialization. Falling back to standard SharedPreferences (Software Encryption Mode).", e)
+        isHardwareBacked = false
+        context.getSharedPreferences("enclave_signal_state_fallback", Context.MODE_PRIVATE)
     }
 
     val signalStore = EnclaveSignalStore(sharedPreferences)
+
+    init {
+        if (!isHardwareBacked && !com.enclave.app.BuildConfig.DEBUG) {
+            throw SecurityException(
+                "Hardware-backed secure storage (EncryptedSharedPreferences/Android KeyStore) is unavailable. " +
+                "Enclave cannot operate safely on this device configuration in production mode."
+            )
+        }
+    }
+
+    fun storeVaultKey(keyBase64: String) {
+        sharedPreferences.edit().putString("vault_key", keyBase64).commit()
+    }
+
+    fun loadVaultKey(): String? {
+        return sharedPreferences.getString("vault_key", null)
+    }
+
+    fun hasVaultKey(): Boolean {
+        return sharedPreferences.contains("vault_key")
+    }
 
     /**
      * Initializes the device's Identity KeyPair and PreKeys for the first time.
@@ -83,8 +108,10 @@ class CryptoManager(private val context: Context) {
         return try {
             val sessionBuilder = SessionBuilder(signalStore, partnerAddress)
             sessionBuilder.process(bundle)
+            android.util.Log.d("CryptoManager", "Successfully built E2EE session for partner: ${partnerAddress.name}")
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("CryptoManager", "Failed to build E2EE session for partner: ${partnerAddress.name}. Error: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -98,6 +125,7 @@ class CryptoManager(private val context: Context) {
             val ciphertextMessage = sessionCipher.encrypt(plaintext)
             Result.success(ciphertextMessage.serialize())
         } catch (e: Exception) {
+            android.util.Log.e("CryptoManager", "Failed to encrypt message for partner: ${partnerAddress.name}. Error: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -118,9 +146,9 @@ class CryptoManager(private val context: Context) {
                 val signalMessage = SignalMessage(ciphertext)
                 sessionCipher.decrypt(signalMessage)
             }
-            
             Result.success(plaintext)
         } catch (e: Exception) {
+            android.util.Log.e("CryptoManager", "Failed to decrypt message from partner: ${partnerAddress.name}. Error: ${e.message}", e)
             Result.failure(e)
         }
     }

@@ -14,7 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,7 +35,7 @@ class NtfyListenerService : Service() {
         private const val ALERT_CHANNEL_ID = "enclave_alerts"
         private const val NOTIFICATION_ID = 2586
         private const val INITIAL_BACKOFF_MS = 5_000L
-        private const val MAX_BACKOFF_MS = 300_000L // 5 minutes max
+        private const val MAX_BACKOFF_MS = 30_000L // 30 seconds max for responsive push wakeups
     }
 
     private lateinit var okHttpClient: OkHttpClient
@@ -75,17 +75,26 @@ class NtfyListenerService : Service() {
     private fun connectWebSocket(topic: String) {
         if (isConnected) return
 
-        val serverUrl = BuildConfig.NTFY_SERVER_URL
+        val configManager = ConfigManager.getInstance(applicationContext)
+        val serverUrl = configManager.getNtfyServerUrl()
+        if (serverUrl.isNullOrBlank()) {
+            Log.w(TAG, "No ntfy server URL configured, cannot connect WebSocket")
+            return
+        }
+        val nonNullUrl: String = serverUrl
         // Convert http/https to ws/wss
-        val wsUrl = serverUrl.replaceFirst("http", "ws") + "/$topic/ws"
+        val wsUrl = nonNullUrl.replaceFirst("http", "ws") + "/$topic/ws"
 
         Log.d(TAG, "Connecting to ntfy WebSocket: $wsUrl (backoff=${currentBackoffMs}ms)")
 
-        val credentials = Credentials.basic(BuildConfig.NTFY_USERNAME, BuildConfig.NTFY_PASSWORD)
-        val request = Request.Builder()
-            .url(wsUrl)
-            .header("Authorization", credentials)
-            .build()
+        val user = configManager.getNtfyUsername() ?: ""
+        val pass = configManager.getNtfyPassword() ?: ""
+        val requestBuilder = Request.Builder().url(wsUrl)
+        if (user.isNotBlank() && pass.isNotBlank()) {
+            val credentials = Credentials.basic(user, pass)
+            requestBuilder.header("Authorization", credentials)
+        }
+        val request = requestBuilder.build()
 
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {

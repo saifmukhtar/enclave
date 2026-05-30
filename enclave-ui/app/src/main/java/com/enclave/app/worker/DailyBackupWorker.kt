@@ -3,9 +3,11 @@ package com.enclave.app.worker
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.vault.EncryptedFileManager
@@ -83,7 +85,11 @@ class DailyBackupWorker(
                 zos.closeEntry()
 
                 // B. Add preferences
-                val signalPrefs = applicationContext.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+                val signalPrefs = try {
+                    getEncryptedPrefs(applicationContext)
+                } catch (e: Exception) {
+                    applicationContext.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+                }
                 val appPrefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
                 val prefsJson = JSONObject().apply {
                     put("signal_state", serializePrefs(signalPrefs))
@@ -114,8 +120,9 @@ class DailyBackupWorker(
 
             // 4. Retrieve passphrase
             val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+            val cryptoManager = CryptoManager(applicationContext)
             val passphrase = prefs.getString("backup_passphrase", null)
-                ?: prefs.getString("vault_key", null)
+                ?: cryptoManager.loadVaultKey()
                 ?: "default_enclave_backup_key"
 
             // 5. Generate secure salt and IV for the ZIP file encryption
@@ -143,10 +150,16 @@ class DailyBackupWorker(
             }.array()
 
             // 7. Initialize Supabase Client
-            val cryptoManager = CryptoManager(applicationContext)
+            val configManager = ConfigManager.getInstance(applicationContext)
+            val sUrl = configManager.getSupabaseUrl()
+            val sKey = configManager.getSupabaseKey()
+            if (sUrl.isNullOrBlank() || sKey.isNullOrBlank()) {
+                return@withContext Result.failure()
+            }
+
             val supabase = createSupabaseClient(
-                supabaseUrl = BuildConfig.SUPABASE_URL,
-                supabaseKey = BuildConfig.SUPABASE_KEY
+                supabaseUrl = sUrl,
+                supabaseKey = sKey
             ) {
                 httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
                     config {
@@ -154,7 +167,7 @@ class DailyBackupWorker(
                         readTimeout(java.time.Duration.ofMinutes(5))
                         writeTimeout(java.time.Duration.ofMinutes(5))
                         val parsedHost = try {
-                            java.net.URI(BuildConfig.SUPABASE_URL).host
+                            java.net.URI(sUrl).host
                         } catch (e: Exception) {
                             null
                         }
@@ -222,6 +235,19 @@ class DailyBackupWorker(
         return SecretKeySpec(keyBytes, "AES")
     }
 
+    private fun getEncryptedPrefs(context: Context): android.content.SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            context,
+            "enclave_signal_state",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     private fun serializePrefs(prefs: android.content.SharedPreferences): String {
         val json = JSONObject()
         for ((key, value) in prefs.all) {
@@ -231,8 +257,8 @@ class DailyBackupWorker(
     }
 
     private fun getSharedVaultKey(context: Context): ByteArray? {
-        val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-        val keyBase64 = prefs.getString("vault_key", null) ?: return null
+        val cryptoManager = CryptoManager(context)
+        val keyBase64 = cryptoManager.loadVaultKey() ?: return null
         return try {
             Base64.decode(keyBase64, Base64.NO_WRAP)
         } catch (e: Exception) {

@@ -1,0 +1,49 @@
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const root = resolve(process.cwd());
+const publicDir = resolve(root, 'public');
+mkdirSync(publicDir, { recursive: true });
+
+const actualLogo = resolve(root, '..', 'enclave.png');
+
+const logo = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="120" fill="#FFF8FA"/>
+  <image href="/enclave.png" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
+</svg>`;
+
+const favicon = logo;
+
+const og = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="40" x2="1100" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8FA"/>
+      <stop offset="1" stop-color="#FDE4EA"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="260" y1="140" x2="920" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD9E3"/>
+      <stop offset="0.52" stop-color="#E05577"/>
+      <stop offset="1" stop-color="#8B2240"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="48" fill="url(#bg)"/>
+  <circle cx="972" cy="126" r="118" fill="#FFD9E3" opacity="0.65"/>
+  <circle cx="260" cy="500" r="148" fill="#E05577" opacity="0.09"/>
+  <rect x="104" y="96" width="992" height="438" rx="40" fill="white" opacity="0.55"/>
+  <g transform="translate(154 146)">
+    <rect width="180" height="180" rx="40" fill="#FFF8FA"/>
+    <image href="/enclave.png" x="0" y="0" width="180" height="180" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+  <text x="390" y="224" fill="#1A0812" font-size="66" font-family="Inter, Arial, sans-serif" font-weight="800">Enclave</text>
+  <text x="390" y="292" fill="#8F5B6B" font-size="32" font-family="Inter, Arial, sans-serif">Private communication for couples</text>
+  <text x="390" y="350" fill="#604152" font-size="24" font-family="Inter, Arial, sans-serif">Signal-grade E2EE · WebRTC · self-hosted</text>
+</svg>`;
+
+copyFileSync(actualLogo, resolve(publicDir, 'logo.png'));
+copyFileSync(actualLogo, resolve(publicDir, 'favicon.png'));
+copyFileSync(actualLogo, resolve(publicDir, 'apple-touch-icon.png'));
+writeFileSync(resolve(publicDir, 'logo.svg'), logo);
+writeFileSync(resolve(publicDir, 'favicon.svg'), favicon);
+writeFileSync(resolve(publicDir, 'og-image.svg'), og);

@@ -35,13 +35,6 @@ From repository root:
 ```bash
 cp enclave-ui/local.properties.example enclave-ui/local.properties
 cp enclave-server/.env.example enclave-server/.env
-cp enclave-server/signaling-server/firebase-adminsdk.json.example enclave-server/signaling-server/firebase-adminsdk.json
-```
-
-Optional Firebase app config (if needed by your build):
-
-```bash
-cp enclave-ui/app/google-services.json.example enclave-ui/app/google-services.json
 ```
 
 ### Step 2 — Start local backend stack

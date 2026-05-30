@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -58,6 +59,15 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isPartnerTyping by viewModel.partnerTyping.collectAsState()
     val messages by viewModel.messages.collectAsState()
+
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
     val partnerProfile by profileViewModel?.partnerProfile?.collectAsState()
         ?: remember { mutableStateOf(null) }
     val partnerStatus by loungeViewModel?.partnerStatus?.collectAsState()
@@ -146,6 +156,21 @@ fun ChatScreen(
         }
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+            takePictureLauncher.launch(null)
+        } else {
+            Toast.makeText(
+                context,
+                "Camera permission is required to take pictures",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     val pickFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -179,6 +204,8 @@ fun ChatScreen(
         ).show()
     }
 
+    val listState = rememberLazyListState()
+
     val driftTransition = rememberInfiniteTransition(label = "drifting_bg")
     val driftAnim by driftTransition.animateFloat(
         initialValue = 0f,
@@ -193,10 +220,20 @@ fun ChatScreen(
     var listLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(messages.size) {
         listLoaded = true
+        if (messages.isNotEmpty()) {
+            val latestMessage = messages.firstOrNull()
+            val isFromMe = latestMessage?.isFromMe == true
+            val isNearBottom = listState.firstVisibleItemIndex <= 2
+            if (isFromMe || isNearBottom) {
+                listState.animateScrollToItem(0)
+            }
+        }
     }
 
     // ── Scaffold ──────────────────────────────────────────────────────────────
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .imePadding()) {
         // Organic slow-drifting custom canvas gradient backdrop
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width
@@ -313,7 +350,55 @@ fun ChatScreen(
                     messages
                 }
 
+                // ViewModel emits sortedByDescending(timestamp) — newest first.
+                // reverseLayout=true makes index-0 (newest) render at the BOTTOM.
+                // DO NOT call .reversed() here — that would produce a double-inversion
+                // and put the newest messages at the TOP (the bug we just fixed).
+                val orderedMessages = displayMessages
+
+                val consecutiveMediaFlags = remember(orderedMessages) {
+                    val prevFlags = BooleanArray(orderedMessages.size)
+                    val nextFlags = BooleanArray(orderedMessages.size)
+                    for (i in orderedMessages.indices) {
+                        val current = orderedMessages[i]
+                        val isCurrentMedia = current.messageType == "MEDIA" || current.messageType == "MEDIA_IMAGE" || current.messageType == "MEDIA_VIDEO"
+                        if (isCurrentMedia) {
+                            var foundBelow = false
+                            for (j in (i + 1) until orderedMessages.size) {
+                                val other = orderedMessages[j]
+                                val isOtherMedia = other.messageType == "MEDIA" || other.messageType == "MEDIA_IMAGE" || other.messageType == "MEDIA_VIDEO"
+                                if (isOtherMedia) {
+                                    if (other.isFromMe == current.isFromMe) {
+                                        foundBelow = true
+                                    }
+                                    break
+                                } else if (other.messageType == "TEXT" && other.text.isNotEmpty()) {
+                                    break
+                                }
+                            }
+                            prevFlags[i] = foundBelow
+
+                            var foundAbove = false
+                            for (j in (i - 1) downTo 0) {
+                                val other = orderedMessages[j]
+                                val isOtherMedia = other.messageType == "MEDIA" || other.messageType == "MEDIA_IMAGE" || other.messageType == "MEDIA_VIDEO"
+                                if (isOtherMedia) {
+                                    if (other.isFromMe == current.isFromMe) {
+                                        foundAbove = true
+                                    }
+                                    break
+                                } else if (other.messageType == "TEXT" && other.text.isNotEmpty()) {
+                                    break
+                                }
+                            }
+                            nextFlags[i] = foundAbove
+                        }
+                    }
+                    Pair(prevFlags, nextFlags)
+                }
+
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -326,7 +411,7 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
-                    itemsIndexed(displayMessages.reversed()) { index, message ->
+                    itemsIndexed(orderedMessages, key = { _, msg -> msg.id }) { index, message ->
                         val delay = (index * 40).coerceAtMost(300)
                         val slideOffset by animateDpAsState(
                             targetValue = if (listLoaded) 0.dp else 40.dp,
@@ -345,6 +430,10 @@ fun ChatScreen(
                             label = "item_alpha"
                         )
 
+                        val isMediaType = message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO"
+                        val prevIsConsecutiveMedia = if (isMediaType) consecutiveMediaFlags.first[index] else false
+                        val nextIsConsecutiveMedia = if (isMediaType) consecutiveMediaFlags.second[index] else false
+
                         Box(
                             modifier = Modifier
                                 .offset(y = slideOffset)
@@ -356,6 +445,9 @@ fun ChatScreen(
                                 searchQuery = if (isSearchActive) searchQuery else "",
                                 isSelectionMode = isChatSelectionMode,
                                 isSelected = selectedMessages.contains(message),
+                                isGroupedMedia = isMediaType && (prevIsConsecutiveMedia || nextIsConsecutiveMedia),
+                                isGroupStart = isMediaType && prevIsConsecutiveMedia && !nextIsConsecutiveMedia,
+                                isGroupEnd = isMediaType && nextIsConsecutiveMedia && !prevIsConsecutiveMedia,
                                 onSelectedChange = { selected ->
                                     if (selected) {
                                         isChatSelectionMode = true
@@ -455,8 +547,16 @@ fun ChatScreen(
             AttachmentSheet(
                 onCamera = {
                     showAttachmentSheet = false
-                    com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
-                    takePictureLauncher.launch(null)
+                    val hasCamera = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.CAMERA
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (hasCamera) {
+                        com.enclave.app.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                        takePictureLauncher.launch(null)
+                    } else {
+                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                    }
                 },
                 onGallery = {
                     showAttachmentSheet = false

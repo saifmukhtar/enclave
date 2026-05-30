@@ -1,0 +1,37 @@
+name: Netlify PR Preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  netlify-preview:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.head.ref, '')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        working-directory: ./enclave-react
+        run: npm ci
+
+      - name: Build
+        working-directory: ./enclave-react
+        run: npm run build
+
+      - name: Deploy to Netlify (preview)
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "Netlify secrets not set; skipping preview deploy.";
+            exit 0;
+          fi
+          npx netlify-cli deploy --dir=enclave-react/dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN --message "PR preview $GITHUB_SHA" --prod=false

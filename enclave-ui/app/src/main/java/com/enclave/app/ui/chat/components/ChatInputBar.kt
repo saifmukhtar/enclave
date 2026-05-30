@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -18,9 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +53,20 @@ fun ChatInputBar(
 
     val replyTo by viewModel.replyToMessage.collectAsState()
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    // Helper: send and dismiss keyboard atomically
+    val doSend: () -> Unit = {
+        if (text.isNotBlank()) {
+            if (uiState !is ChatUiState.Secured && uiState !is ChatUiState.WaitingForPartner) {
+                Toast.makeText(context, "Cannot send message: Connection not secured.", Toast.LENGTH_SHORT).show()
+            } else {
+                viewModel.sendMessage(text)
+                text = ""
+            }
+        }
+    }
 
     LaunchedEffect(text) {
         if (text.isNotBlank()) {
@@ -62,10 +81,14 @@ fun ChatInputBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
-            .navigationBarsPadding(),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
+        val myProfile by viewModel.myProfile.collectAsState()
+        val partnerProfile by viewModel.partnerProfile.collectAsState()
+        val myUsername = myProfile?.username?.ifBlank { null } ?: "Me"
+        val partnerUsername = partnerProfile?.username?.ifBlank { null } ?: "Partner"
+
         Column(modifier = Modifier.fillMaxWidth()) {
             // Reply preview sits above the input row
             if (replyTo != null) {
@@ -87,7 +110,7 @@ fun ChatInputBar(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (replyTo!!.isFromMe) "You" else "Partner",
+                            text = if (replyTo!!.isFromMe) myUsername else partnerUsername,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                             color = RoseAccent
@@ -147,16 +170,7 @@ fun ChatInputBar(
                                 onRecordVoiceClick()
                             }
                         },
-                        onSendMessage = {
-                            if (text.isNotBlank()) {
-                                if (uiState !is ChatUiState.Secured && uiState !is ChatUiState.WaitingForPartner) {
-                                    Toast.makeText(context, "Cannot send message: Connection not secured.", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    viewModel.sendMessage(text)
-                                    text = ""
-                                }
-                            }
-                        },
+                        onSendMessage = doSend,
                         onSendLaterClick = { sendAt ->
                             if (text.isNotBlank()) {
                                 if (uiState !is ChatUiState.Secured && uiState !is ChatUiState.WaitingForPartner) {
@@ -375,8 +389,12 @@ private fun RowScope.StandardInputRow(
         ),
         keyboardOptions = KeyboardOptions(
             imeAction = ImeAction.Send,
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Text
         ),
+        keyboardActions = KeyboardActions(
+            onSend = { onSendMessage() }
+        ),
+        maxLines = 6,
         visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None
     )
 

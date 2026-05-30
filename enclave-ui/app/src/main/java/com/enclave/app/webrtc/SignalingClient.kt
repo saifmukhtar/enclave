@@ -109,6 +109,14 @@ class SignalingClient(
     }
 
     private val pendingMessagesQueue = java.util.concurrent.ConcurrentLinkedQueue<SignalMessageWrapper>()
+ 
+    private fun queuePendingMessage(msg: SignalMessageWrapper) {
+        if (pendingMessagesQueue.size >= 200) {
+            val dropped = pendingMessagesQueue.poll()
+            Log.w("SignalingClient", "Pending queue capacity exceeded (200 limit). Dropping oldest message of type: ${dropped?.type}")
+        }
+        pendingMessagesQueue.add(msg)
+    }
 
     private val _incomingSignalPayloads = MutableSharedFlow<EncryptedSignalPayload>(replay = 100, extraBufferCapacity = 100)
     val incomingSignalPayloads: SharedFlow<EncryptedSignalPayload> = _incomingSignalPayloads.asSharedFlow()
@@ -179,21 +187,30 @@ class SignalingClient(
                                 _incomingRawMessages.tryEmit(text)
                                 try {
                                     val msg = LenientJson.decodeFromString<SignalMessageWrapper>(text)
-                                    if (msg.type == "SIGNAL_PAYLOAD" && msg.payload != null) {
+                                    if (msg.type == "PING") {
+                                        val pongMsg = SignalMessageWrapper(
+                                            type = "PONG",
+                                            senderId = myId,
+                                            payload = msg.payload
+                                        )
+                                        sendRawMessage(Json.encodeToString(pongMsg))
+                                    } else if (msg.type == "SIGNAL_PAYLOAD" && msg.payload != null) {
                                         val ciphertextBytes = Base64.decode(msg.payload, Base64.NO_WRAP)
                                         val contentType = msg.contentType ?: "TEXT"
                                         _incomingSignalPayloads.tryEmit(
                                             EncryptedSignalPayload(ciphertextBytes, contentType, msg.messageId)
                                         )
                                     } else if (
-                                        msg.type == "WEBRTC_OFFER"  || msg.type == "OFFER"  ||
-                                        msg.type == "WEBRTC_ANSWER" || msg.type == "ANSWER" ||
-                                        msg.type == "ICE_CANDIDATE" ||
-                                        msg.type == "WEBRTC_HANGUP"
-                                    ) {
-                                        // Route all WebRTC signaling messages (including HANGUP)
-                                        _incomingWebRtcMessages.tryEmit(msg)
-                                    }
+                                         msg.type == "WEBRTC_OFFER"   || msg.type == "OFFER"   ||
+                                         msg.type == "WEBRTC_ANSWER"  || msg.type == "ANSWER"  ||
+                                         msg.type == "ICE_CANDIDATE"  ||
+                                         msg.type == "WEBRTC_HANGUP"  ||
+                                         msg.type == "DELIVERY_STATUS"||
+                                         msg.type == "WEBRTC_RINGING"
+                                     ) {
+                                         // Route all WebRTC signaling messages (including HANGUP, DELIVERY_STATUS and RINGING)
+                                         _incomingWebRtcMessages.tryEmit(msg)
+                                     }
                                 } catch (e: Exception) {
                                     Log.e("SignalingClient", "Failed to parse message", e)
                                 }
@@ -231,11 +248,11 @@ class SignalingClient(
                 session?.send(Frame.Text(Json.encodeToString(msg)))
             } catch (e: Exception) {
                 Log.w("SignalingClient", "Failed to send, queueing message: ${e.message}")
-                pendingMessagesQueue.add(msg)
+                queuePendingMessage(msg)
             }
         } else {
             Log.d("SignalingClient", "Session is offline, queueing encrypted message")
-            pendingMessagesQueue.add(msg)
+            queuePendingMessage(msg)
         }
     }
 
@@ -252,11 +269,11 @@ class SignalingClient(
                 session?.send(Frame.Text(frameText))
             } catch (e: Exception) {
                 Log.w("SignalingClient", "Failed to send WebRTC message $type, queueing: ${e.message}")
-                pendingMessagesQueue.add(msg)
+                queuePendingMessage(msg)
             }
         } else {
             Log.d("SignalingClient", "Session offline, queueing WebRTC message: $type")
-            pendingMessagesQueue.add(msg)
+            queuePendingMessage(msg)
         }
     }
 

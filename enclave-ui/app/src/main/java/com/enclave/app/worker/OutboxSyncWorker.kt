@@ -3,7 +3,7 @@ package com.enclave.app.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.webrtc.SignalingClient
 import io.github.jan.supabase.createSupabaseClient
@@ -28,20 +28,36 @@ class OutboxSyncWorker(
         val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
         val myId = prefs.getString("my_id", null) ?: return Result.failure()
 
+        val configManager = ConfigManager.getInstance(applicationContext)
+        val sUrl = configManager.getSupabaseUrl()
+        val sKey = configManager.getSupabaseKey()
+        if (sUrl.isNullOrBlank() || sKey.isNullOrBlank()) {
+            return Result.failure()
+        }
+
         // BUG-8 Fix: Use BuildConfig server URL (not a SharedPreferences fallback that was never written)
         // BUG-15 pattern: initialize Supabase and wait for session to provide auth token
         val supabase = createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_KEY
+            supabaseUrl = sUrl,
+            supabaseKey = sKey
         ) {
             install(Auth)
             install(Postgrest)
         }
         supabase.auth.sessionStatus.first { it is SessionStatus.Authenticated || it is SessionStatus.NotAuthenticated }
         val token = supabase.auth.currentSessionOrNull()?.accessToken
+        if (token == null) {
+            android.util.Log.e("OutboxSyncWorker", "Authentication token is missing or expired. Cannot proceed with sync.")
+            return Result.failure()
+        }
 
+        val sigUrl = configManager.getSignalingServerUrl()
+        if (sigUrl.isNullOrBlank()) {
+            android.util.Log.e("OutboxSyncWorker", "Signaling server URL is missing.")
+            return Result.failure()
+        }
         val signalingClient = SignalingClient(
-            url = BuildConfig.SIGNALING_SERVER_URL,
+            url = sigUrl,
             myId = myId,
             tokenProvider = { token }
         )
@@ -55,6 +71,7 @@ class OutboxSyncWorker(
         }
 
         if (!signalingClient.isConnected()) {
+            android.util.Log.w("OutboxSyncWorker", "Signaling client failed to connect within timeout. Scheduling retry.")
             signalingClient.destroy()
             return Result.retry()
         }
@@ -62,7 +79,13 @@ class OutboxSyncWorker(
         for (msg in pending) {
             try {
                 if (msg.type == "SIGNAL_PAYLOAD") {
-                    val ciphertext = Base64.decode(msg.payload, Base64.NO_WRAP)
+                    val ciphertext = try {
+                        Base64.decode(msg.payload, Base64.NO_WRAP)
+                    } catch (e: IllegalArgumentException) {
+                        android.util.Log.e("OutboxSyncWorker", "Corrupted base64 payload in message ${msg.id}. Skipping to prevent retry loop.", e)
+                        database.outboxDao().deleteById(msg.id)
+                        continue
+                    }
                     signalingClient.sendEncryptedMessage(
                         targetId = msg.targetId,
                         ciphertext = ciphertext,
@@ -86,6 +109,7 @@ class OutboxSyncWorker(
                     }
                 }
             } catch (e: Exception) {
+                android.util.Log.e("OutboxSyncWorker", "Transport error sending message ID ${msg.id}. Scheduling worker retry.", e)
                 signalingClient.destroy()
                 return Result.retry()
             }

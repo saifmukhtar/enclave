@@ -13,28 +13,6 @@ if (propertiesFile.exists()) {
     propertiesFile.inputStream().use { properties.load(it) }
 }
 
-fun getOrThrow(key: String): String {
-    val value = properties.getProperty(key)
-    if (value.isNullOrBlank()) {
-        throw GradleException(
-            "CRITICAL CONFIGURATION ERROR: The parameter '$key' is missing from 'local.properties'. " +
-            "FOR full security and FOSS sanitization, all sensitive coordinates (SIGNALING_SERVER_URL, " +
-            "TURN_SERVER_URL, TURN_USERNAME, TURN_PASSWORD, SUPABASE_URL, SUPABASE_KEY, NTFY_SERVER_URL) " +
-            "must be explicitly defined in 'local.properties' and cannot fall back to hardcoded defaults."
-        )
-    }
-    return value
-}
-
-val turnUrl = getOrThrow("TURN_SERVER_URL")
-val turnUser = getOrThrow("TURN_USERNAME")
-val turnPass = getOrThrow("TURN_PASSWORD")
-val signalingUrl = getOrThrow("SIGNALING_SERVER_URL")
-val supabaseUrl = getOrThrow("SUPABASE_URL")
-val supabaseKey = getOrThrow("SUPABASE_KEY")
-val ntfyServerUrl = getOrThrow("NTFY_SERVER_URL")
-val ntfyUsername = getOrThrow("NTFY_USERNAME")
-val ntfyPassword = getOrThrow("NTFY_PASSWORD")
 
 android {
     namespace = "com.enclave.app"
@@ -63,15 +41,8 @@ android {
         versionCode = 1
         versionName = "1.0"
         
-        buildConfigField("String", "SIGNALING_SERVER_URL", "\"$signalingUrl\"")
-        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
-        buildConfigField("String", "TURN_SERVER_URL", "\"$turnUrl\"")
-        buildConfigField("String", "TURN_USERNAME", "\"$turnUser\"")
-        buildConfigField("String", "TURN_PASSWORD", "\"$turnPass\"")
-        buildConfigField("String", "NTFY_SERVER_URL", "\"$ntfyServerUrl\"")
-        buildConfigField("String", "NTFY_USERNAME", "\"$ntfyUsername\"")
-        buildConfigField("String", "NTFY_PASSWORD", "\"$ntfyPassword\"")
+        // BuildConfig keys are no longer hardcoded at compile time.
+        // Server infrastructure details are loaded dynamically at runtime.
     }
 
     buildTypes {

@@ -112,7 +112,7 @@ class ChatSessionManager(
 
     private fun initializeSharedVaultKey(scope: CoroutineScope) {
         val prefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-        if (!prefs.contains("vault_key")) {
+        if (!cryptoManager.hasVaultKey()) {
             // BUG-11 Fix: Both devices find vault_key missing on first pair and each generate their
             // own key simultaneously. The last VAULT_KEY_SYNC to arrive silently overwrites the first,
             // making the earlier device's encrypted vault files permanently unreadable.
@@ -122,12 +122,12 @@ class ChatSessionManager(
             // The other device simply waits — it will receive VAULT_KEY_SYNC from its partner.
             val myId = prefs.getString("my_id", null) ?: return
             val amIKeyOwner = myId < partnerId  // lexicographic: exactly one side is always true
-
+ 
             if (amIKeyOwner) {
                 val keyBytes = ByteArray(32)
                 java.security.SecureRandom().nextBytes(keyBytes)
                 val keyBase64 = Base64.encodeToString(keyBytes, Base64.NO_WRAP)
-                prefs.edit().putString("vault_key", keyBase64).apply()
+                cryptoManager.storeVaultKey(keyBase64)
                 android.util.Log.d("ChatSessionManager", "Vault key owner: generating and syncing key to partner")
 
                 scope.launch(Dispatchers.IO) {

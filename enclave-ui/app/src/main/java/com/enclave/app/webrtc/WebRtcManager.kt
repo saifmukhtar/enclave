@@ -2,6 +2,7 @@ package com.enclave.app.webrtc
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.projection.MediaProjection
@@ -9,10 +10,12 @@ import android.os.Build
 import android.util.Log
 import org.webrtc.*
 import org.webrtc.audio.JavaAudioDeviceModule
+import com.enclave.app.data.config.ConfigManager
 
 class WebRtcManager(
     private val context: Context,
-    private val eglBaseContext: EglBase.Context
+    private val eglBaseContext: EglBase.Context,
+    private val isAudioOnly: Boolean = false
 ) {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     var peerConnection: PeerConnection? = null
@@ -23,6 +26,19 @@ class WebRtcManager(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    private val audioDeviceCallback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                handleAudioDeviceChange()
+            }
+            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                handleAudioDeviceChange()
+            }
+        }
+    } else {
+        null
+    }
 
     init {
         initWebRTC()
@@ -74,8 +90,15 @@ class WebRtcManager(
             .setVideoDecoderFactory(defaultVideoDecoderFactory)
             .createPeerConnectionFactory()
 
-        // Set default routing to speakerphone on launch
-        routeToSpeaker()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        }
+
+        if (isExternalAudioDeviceConnected()) {
+            routeToExternalDevice()
+        } else {
+            routeToEarpiece()
+        }
     }
 
     fun startLocalCapture() {
@@ -177,15 +200,21 @@ class WebRtcManager(
     }
 
     fun createPeerConnection(observer: PeerConnection.Observer) {
+        val configManager = ConfigManager.getInstance(context)
+        val turnUrl = configManager.getTurnServerUrl() ?: ""
+        val turnUser = configManager.getTurnUsername() ?: ""
+        val turnPass = configManager.getTurnPassword() ?: ""
+        
+        val selfHostedStun = turnUrl.replace("turn:", "stun:")
         val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder(com.enclave.app.BuildConfig.TURN_SERVER_URL)
-                .setUsername(com.enclave.app.BuildConfig.TURN_USERNAME)
-                .setPassword(com.enclave.app.BuildConfig.TURN_PASSWORD)
+            PeerConnection.IceServer.builder(selfHostedStun).createIceServer(),
+            PeerConnection.IceServer.builder(turnUrl)
+                .setUsername(turnUser)
+                .setPassword(turnPass)
                 .createIceServer(),
-            PeerConnection.IceServer.builder(com.enclave.app.BuildConfig.TURN_SERVER_URL + "?transport=tcp")
-                .setUsername(com.enclave.app.BuildConfig.TURN_USERNAME)
-                .setPassword(com.enclave.app.BuildConfig.TURN_PASSWORD)
+            PeerConnection.IceServer.builder(turnUrl + "?transport=tcp")
+                .setUsername(turnUser)
+                .setPassword(turnPass)
                 .createIceServer()
         )
 
@@ -257,17 +286,104 @@ class WebRtcManager(
         }
     }
 
+    private fun handleAudioDeviceChange() {
+        if (isExternalAudioDeviceConnected()) {
+            routeToExternalDevice()
+        } else {
+            routeToSpeaker()
+        }
+    }
+
+    fun isExternalAudioDeviceConnected(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            for (device in devices) {
+                if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                    device.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                    device.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                ) {
+                    return true
+                }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            if (audioManager.isWiredHeadsetOn || audioManager.isBluetoothScoOn) {
+                return true
+            }
+        }
+        return false
+    }
+
+    @Suppress("DEPRECATION")
+    private fun routeToExternalDevice() {
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val devices = audioManager.availableCommunicationDevices
+            val externalDevice = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+            }
+            if (externalDevice != null) {
+                audioManager.setCommunicationDevice(externalDevice)
+            }
+        } else {
+            audioManager.isSpeakerphoneOn = false
+            audioManager.stopBluetoothSco()
+            audioManager.isBluetoothScoOn = false
+        }
+    }
+
     @Suppress("DEPRECATION")
     fun close() {
-        try {
-            videoCapturer?.stopCapture()
-            videoCapturer?.dispose()
-        } catch (e: Exception) {
-            android.util.Log.e("Enclave", "Exception caught", e)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
+            try {
+                audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+            } catch (e: Exception) {
+                Log.e("WebRtcManager", "Failed to unregister AudioDeviceCallback", e)
+            }
         }
-        surfaceTextureHelper?.dispose()
-        peerConnection?.close()
-        peerConnectionFactory?.dispose()
+
+        val capturer = videoCapturer
+        val helper = surfaceTextureHelper
+        val pc = peerConnection
+        val factory = peerConnectionFactory
+
+        videoCapturer = null
+        surfaceTextureHelper = null
+        peerConnection = null
+        peerConnectionFactory = null
+
+        // Safe background thread native resource teardown to avoid blocking UI thread (ANR crash)
+        Thread {
+            try {
+                capturer?.stopCapture()
+                capturer?.dispose()
+            } catch (e: Exception) {
+                Log.e("WebRtcManager", "Failed to dispose capturer", e)
+            }
+            try {
+                helper?.dispose()
+            } catch (e: Exception) {
+                Log.e("WebRtcManager", "Failed to dispose helper", e)
+            }
+            try {
+                pc?.close()
+                pc?.dispose()
+            } catch (e: Exception) {
+                Log.e("WebRtcManager", "Failed to dispose peer connection", e)
+            }
+            try {
+                factory?.dispose()
+            } catch (e: Exception) {
+                Log.e("WebRtcManager", "Failed to dispose factory", e)
+            }
+        }.start()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         } else {

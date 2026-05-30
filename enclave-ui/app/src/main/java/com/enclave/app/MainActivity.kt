@@ -40,6 +40,13 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        val configManager = com.enclave.app.data.config.ConfigManager.getInstance(this)
+        if (!configManager.isConfigured()) {
+            startActivity(Intent(this, com.enclave.app.ui.bootstrap.BootstrapActivity::class.java))
+            finish()
+            return
+        }
         
         if (intent?.getBooleanExtra("AUTO_LAUNCH_KISS", false) == true) {
             autoLaunchKissState.value = true

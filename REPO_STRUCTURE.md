@@ -53,7 +53,6 @@ This document explains the workspace layout and the role of each major file/dire
 | `enclave-server/signaling-server/server.ts` | WebSocket signaling logic (session relay/events). |
 | `enclave-server/signaling-server/package.json` | Node scripts/dependencies (`typecheck`, `build`, `start`). |
 | `enclave-server/signaling-server/tsconfig.json` | TypeScript compiler configuration. |
-| `enclave-server/signaling-server/firebase-adminsdk.json.example` | Firebase admin credentials template. |
 
 ### Supabase and DB assets
 
@@ -88,7 +87,7 @@ This document explains the workspace layout and the role of each major file/dire
 | `.../ui/chat/` | E2EE chat UI + message workflows. |
 | `.../ui/call/` | Calling screens and call state logic. |
 | `.../ui/lounge/` | Shared lounge experiences and tabs. |
-| `.../ui/kiss/` | Kiss interaction module and related transport/audio/haptics. |
+| `.../ui/kiss/` | Presence Engine interaction module and related transport/audio/haptics. |
 | `.../ui/vault/` | Encrypted vault browsing and controls. |
 | `.../ui/profile/` | Profile and status-story interfaces. |
 | `.../crypto/` | Encryption utilities and Signal store adapters. |

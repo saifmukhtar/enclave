@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Base64
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.network.BundleRepository
 import io.github.jan.supabase.createSupabaseClient
@@ -68,10 +68,17 @@ class PreKeyRotationWorker(
                 }
             }
 
+            val configManager = ConfigManager.getInstance(applicationContext)
+            val sUrl = configManager.getSupabaseUrl()
+            val sKey = configManager.getSupabaseKey()
+            if (sUrl.isNullOrBlank() || sKey.isNullOrBlank()) {
+                return Result.failure()
+            }
+
             // 4. Initialize Supabase and upload new bundle
             val supabase = createSupabaseClient(
-                supabaseUrl = BuildConfig.SUPABASE_URL,
-                supabaseKey = BuildConfig.SUPABASE_KEY
+                supabaseUrl = sUrl,
+                supabaseKey = sKey
             ) {
                 httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
                     config {
@@ -79,7 +86,7 @@ class PreKeyRotationWorker(
                         readTimeout(java.time.Duration.ofMinutes(5))
                         writeTimeout(java.time.Duration.ofMinutes(5))
                         val parsedHost = try {
-                            java.net.URI(BuildConfig.SUPABASE_URL).host
+                            java.net.URI(sUrl).host
                         } catch (e: Exception) {
                             null
                         }

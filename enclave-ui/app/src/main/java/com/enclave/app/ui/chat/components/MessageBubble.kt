@@ -22,6 +22,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -39,6 +42,9 @@ import com.enclave.app.ui.chat.ChatMessage
 import com.enclave.app.ui.chat.ChatViewModel
 import com.enclave.app.ui.theme.*
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+
+private val timeFormatter = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
 
 // ─── Swipe-to-Reply Message Bubble ───────────────────────────────────────────
 
@@ -50,12 +56,17 @@ fun SwipeToReplyMessageBubble(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectedChange: (Boolean) -> Unit = {},
+    // Consecutive-media grouping helpers
+    isGroupedMedia: Boolean = false,
+    isGroupStart: Boolean = false,
+    isGroupEnd: Boolean = false,
     onMediaClick: () -> Unit
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     val isPressed = remember { mutableStateOf(false) }
     val scaleFactor by animateFloatAsState(
@@ -73,306 +84,502 @@ fun SwipeToReplyMessageBubble(
         }
     }
 
-    val bubbleShape = RoundedCornerShape(
-        topStart = 24.dp,
-        topEnd = 24.dp,
-        bottomStart = if (message.isFromMe) 24.dp else 4.dp,
-        bottomEnd = if (message.isFromMe) 4.dp else 24.dp
+    // Bubble corner radii — square where the group joins, rounded at group boundaries
+    val cornerFull = 24.dp
+    val cornerSquare = 4.dp
+    val bubbleShape = if (isGroupedMedia) {
+        if (message.isFromMe) {
+            RoundedCornerShape(
+                topStart = cornerFull,
+                topEnd = if (isGroupStart) cornerFull else cornerSquare,
+                bottomStart = cornerFull,
+                bottomEnd = if (isGroupEnd) cornerFull else cornerSquare
+            )
+        } else {
+            RoundedCornerShape(
+                topStart = if (isGroupStart) cornerFull else cornerSquare,
+                topEnd = cornerFull,
+                bottomStart = if (isGroupEnd) cornerFull else cornerSquare,
+                bottomEnd = cornerFull
+            )
+        }
+    } else {
+        RoundedCornerShape(
+            topStart = cornerFull,
+            topEnd = cornerFull,
+            bottomStart = if (message.isFromMe) cornerFull else 4.dp,
+            bottomEnd = if (message.isFromMe) 4.dp else cornerFull
+        )
+    }
+
+    // Media messages (image/video with no reply quote) bleed edge-to-edge in the bubble
+    val isFullBleedMedia = message.quotedMsgId == null &&
+        (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO")
+
+    var offsetX by remember { mutableStateOf(0f) }
+    val replyOffsetAnim by animateFloatAsState(
+        targetValue = offsetX,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "reply_offset"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (isSelected) Color(0xFFE598A7).copy(alpha = 0.2f) else Color.Transparent)
-            .pointerInput(isSelectionMode) {
-                if (!isSelectionMode) {
-                    detectTapGestures(
-                        onLongPress = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            showContextMenu = true
-                        }
-                    )
-                }
-            },
-        contentAlignment = if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+    val customDensity = remember(currentDensity) {
+        androidx.compose.ui.unit.Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale.coerceAtMost(1.15f)
+        )
+    }
+
+    CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides customDensity
     ) {
         Box(
-            contentAlignment = if (message.isFromMe) Alignment.BottomStart else Alignment.BottomEnd
-        ) {
-            Box(
-                modifier = Modifier
-                    .graphicsLayer(
-                        scaleX = scaleFactor,
-                        scaleY = scaleFactor,
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                            pivotFractionX = if (message.isFromMe) 1.0f else 0.0f,
-                            pivotFractionY = 1.0f
-                        )
-                    )
-                    .widthIn(max = 280.dp)
-                    .border(
-                        width = 1.dp,
-                        color = if (message.isFromMe) Color.Transparent else Color(0xFFFFE4E8),
-                        shape = bubbleShape
-                    )
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = if (message.isFromMe) {
-                                listOf(RoseAccent, RoseDeep)
-                            } else {
-                                listOf(Color.White, Color(0xFFFFF9FA))
-                            }
-                        ),
-                        shape = bubbleShape
-                    )
-                    .pointerInput(isSelectionMode) {
-                        detectTapGestures(
-                            onPress = {
-                                isPressed.value = true
-                                try {
-                                    awaitRelease()
-                                } finally {
-                                    isPressed.value = false
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isSelected) Color(0xFFE598A7).copy(alpha = 0.2f) else Color.Transparent)
+                .pointerInput(isSelectionMode) {
+                    if (!isSelectionMode) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                val triggered = if (message.isFromMe) {
+                                    offsetX < -120f
+                                } else {
+                                    offsetX > 120f
                                 }
+                                if (triggered) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.setReplyToMessage(message)
+                                }
+                                offsetX = 0f
                             },
+                            onDragCancel = {
+                                offsetX = 0f
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                offsetX = if (message.isFromMe) {
+                                    (offsetX + dragAmount).coerceIn(-180f, 0f)
+                                } else {
+                                    (offsetX + dragAmount).coerceIn(0f, 180f)
+                                }
+                            }
+                        )
+                    }
+                }
+                .pointerInput(isSelectionMode) {
+                    if (!isSelectionMode) {
+                        detectTapGestures(
                             onLongPress = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                if (isSelectionMode) {
-                                    onSelectedChange(!isSelected)
+                                showContextMenu = true
+                            }
+                        )
+                    }
+                },
+            contentAlignment = if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
+        ) {
+            val swipeProgress = if (message.isFromMe) {
+                (replyOffsetAnim / -180f).coerceIn(0f, 1f)
+            } else {
+                (replyOffsetAnim / 180f).coerceIn(0f, 1f)
+            }
+
+            if (swipeProgress > 0.05f) {
+                Box(
+                    modifier = Modifier
+                        .align(if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart)
+                        .padding(horizontal = 8.dp)
+                        .graphicsLayer {
+                            alpha = swipeProgress
+                            scaleX = 0.5f + (swipeProgress * 0.5f)
+                            scaleY = 0.5f + (swipeProgress * 0.5f)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(RoseAccent.copy(alpha = 0.8f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            contentDescription = "Reply",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier.offset { IntOffset(replyOffsetAnim.roundToInt(), 0) },
+                contentAlignment = if (message.isFromMe) Alignment.BottomStart else Alignment.BottomEnd
+            ) {
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scaleFactor
+                            scaleY = scaleFactor
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                                pivotFractionX = if (message.isFromMe) 1.0f else 0.0f,
+                                pivotFractionY = 1.0f
+                            )
+                        }
+                        .widthIn(max = 280.dp)
+                        .clip(bubbleShape)
+                        .border(
+                            width = 1.dp,
+                            color = if (message.isFromMe) Color.Transparent else Color(0xFFFFE4E8),
+                            shape = bubbleShape
+                        )
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = if (message.isFromMe) {
+                                    listOf(RoseAccent, RoseDeep)
                                 } else {
-                                    showContextMenu = true
+                                    listOf(Color.White, Color(0xFFFFF9FA))
                                 }
-                            },
-                            onTap = {
-                                if (isSelectionMode) {
-                                    onSelectedChange(!isSelected)
-                                } else {
-                                    if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE") {
-                                        onMediaClick()
-                                    } else if (message.messageType == "RECORDED_KISS") {
-                                        viewModel.playRecordedKiss(message.id)
+                            ),
+                            shape = bubbleShape
+                        )
+                        .pointerInput(isSelectionMode) {
+                            detectTapGestures(
+                                onPress = {
+                                    isPressed.value = true
+                                    try {
+                                        awaitRelease()
+                                    } finally {
+                                        isPressed.value = false
+                                    }
+                                },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (isSelectionMode) {
+                                        onSelectedChange(!isSelected)
+                                    } else {
+                                        showContextMenu = true
+                                    }
+                                },
+                                onTap = {
+                                    if (isSelectionMode) {
+                                        onSelectedChange(!isSelected)
+                                    } else {
+                                        if (message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE") {
+                                            onMediaClick()
+                                        } else if (message.messageType == "RECORDED_KISS") {
+                                            viewModel.playRecordedKiss(message.id)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        .padding(
+                            start = if (isFullBleedMedia) 0.dp else 12.dp,
+                            end = if (isFullBleedMedia) 0.dp else 12.dp,
+                            top = if (isFullBleedMedia) 0.dp else 8.dp,
+                            bottom = if (isFullBleedMedia) 0.dp else 8.dp
+                        )
+                ) {
+                    val contentColor = if (message.isFromMe) Color.White else CharcoalText
+                    Box {
+                        Column(horizontalAlignment = Alignment.End) {
+                            // Quoted reply preview (only possible when !isFullBleedMedia by definition)
+                            if (message.quotedMsgId != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (message.isFromMe) Color.White.copy(alpha = 0.15f) else CharcoalText.copy(alpha = 0.05f))
+                                        .padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                                        contentDescription = null,
+                                        tint = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        val myProfile by viewModel.myProfile.collectAsState()
+                                        val partnerProfile by viewModel.partnerProfile.collectAsState()
+                                        val partnerUsername = partnerProfile?.username?.ifBlank { null } ?: "Partner"
+                                        val myUsername = myProfile?.username?.ifBlank { null } ?: "Me"
+                                        val resolvedQuotedSender = when (message.quotedMsgSender) {
+                                            "You", "Me" -> myUsername
+                                            "Partner" -> partnerUsername
+                                            else -> message.quotedMsgSender ?: partnerUsername
+                                        }
+                                        Text(
+                                            text = resolvedQuotedSender,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            color = if (message.isFromMe) Color.White else CharcoalText
+                                        )
+                                        Text(
+                                            text = message.quotedMsgText ?: "",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontSize = 10.sp,
+                                            color = if (message.isFromMe) Color.White.copy(alpha = 0.8f) else CharcoalText.copy(alpha = 0.8f)
+                                        )
                                     }
                                 }
                             }
-                        )
-                    }
-                    .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    // Quoted reply preview
-                    if (message.quotedMsgId != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 6.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (message.isFromMe) Color.White.copy(alpha = 0.15f) else CharcoalText.copy(alpha = 0.05f))
-                                .padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Reply,
-                                contentDescription = null,
-                                tint = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f),
-                                modifier = Modifier.size(12.dp)
+
+                            // Message content body
+                            MessageContent(
+                                message = message,
+                                searchQuery = searchQuery,
+                                viewModel = viewModel,
+                                isSelectionMode = isSelectionMode,
+                                onMediaClick = onMediaClick,
+                                contentColor = contentColor
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Column {
+
+                            // For non-media messages: timestamp sits below content
+                            if (!isFullBleedMedia) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Text(
+                                        text = timeFormatter.format(java.util.Date(message.timestamp)),
+                                        fontSize = 9.sp,
+                                        color = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f)
+                                    )
+                                    if (message.isFromMe) {
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        val (tickIcon, tickTint) = when (message.deliveryStatus) {
+                                            "READ" -> Pair(Icons.Default.DoneAll, Color(0xFFFFF0F2))
+                                            "DELIVERED" -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.8f))
+                                            else -> Pair(Icons.Default.Check, Color.White.copy(alpha = 0.5f))
+                                        }
+                                        Icon(
+                                            imageVector = tickIcon,
+                                            contentDescription = message.deliveryStatus,
+                                            tint = tickTint,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // For full-bleed media: timestamp is overlaid at bottom-right with shadow
+                        if (isFullBleedMedia) {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 9.dp, bottom = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
                                 Text(
-                                    text = message.quotedMsgSender ?: "Partner",
-                                    fontWeight = FontWeight.Bold,
+                                    text = timeFormatter.format(java.util.Date(message.timestamp)),
                                     fontSize = 9.sp,
-                                    color = if (message.isFromMe) Color.White else CharcoalText
+                                    color = Color.White,
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                            color = Color.Black.copy(alpha = 0.75f),
+                                            blurRadius = 6f
+                                        )
+                                    )
                                 )
-                                Text(
-                                    text = message.quotedMsgText ?: "",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontSize = 10.sp,
-                                    color = if (message.isFromMe) Color.White.copy(alpha = 0.8f) else CharcoalText.copy(alpha = 0.8f)
-                                )
+                                if (message.isFromMe) {
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    val (tickIcon, tickTint) = when (message.deliveryStatus) {
+                                        "READ" -> Pair(Icons.Default.DoneAll, Color.White)
+                                        "DELIVERED" -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.85f))
+                                        else -> Pair(Icons.Default.Check, Color.White.copy(alpha = 0.65f))
+                                    }
+                                    Icon(
+                                        imageVector = tickIcon,
+                                        contentDescription = message.deliveryStatus,
+                                        tint = tickTint,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                }
                             }
                         }
                     }
-
-                    // Message content body
-                    val contentColor = if (message.isFromMe) Color.White else CharcoalText
-                    MessageContent(
-                        message = message,
-                        searchQuery = searchQuery,
-                        viewModel = viewModel,
-                        onMediaClick = onMediaClick,
-                        contentColor = contentColor
-                    )
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // Timestamp + delivery tick
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = java.text.SimpleDateFormat(
-                                "hh:mm a",
-                                java.util.Locale.getDefault()
-                            ).format(java.util.Date(message.timestamp)),
-                            fontSize = 9.sp,
-                            color = if (message.isFromMe) Color.White.copy(alpha = 0.7f) else CharcoalText.copy(alpha = 0.5f)
-                        )
-                        if (message.isFromMe) {
-                            Spacer(modifier = Modifier.width(3.dp))
-                            val (tickIcon, tickTint) = when (message.deliveryStatus) {
-                                "READ" -> Pair(Icons.Default.DoneAll, Color(0xFFFFF0F2))
-                                "DELIVERED" -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.8f))
-                                else -> Pair(Icons.Default.Check, Color.White.copy(alpha = 0.5f))
-                            }
-                            Icon(
-                                imageVector = tickIcon,
-                                contentDescription = message.deliveryStatus,
-                                tint = tickTint,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                    }
                 }
-            }
 
-            // Emoji reaction badge
-            if (message.reaction.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .offset(
-                            x = if (message.isFromMe) (-8).dp else 8.dp,
-                            y = 6.dp
-                        )
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .border(1.dp, Color(0xFFFFE4E8), CircleShape)
-                        .clickable {
-                            viewModel.toggleReaction(message.id, message.reaction)
-                        }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(text = message.reaction, fontSize = 11.sp)
-                }
-            }
-        }
-
-        // Context menu
-        DropdownMenu(
-            expanded = showContextMenu,
-            onDismissRequest = { showContextMenu = false },
-            modifier = Modifier
-                .background(Color.White.copy(alpha = 0.95f))
-                .width(180.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                listOf("❤️", "👍", "😂", "😮", "😢", "🙏").forEach { emoji ->
-                    Text(
-                        text = emoji,
-                        fontSize = 18.sp,
+                // Emoji reaction badge
+                if (message.reaction.isNotEmpty()) {
+                    Box(
                         modifier = Modifier
+                            .offset(
+                                x = if (message.isFromMe) (-8).dp else 8.dp,
+                                y = 6.dp
+                            )
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(1.dp, Color(0xFFFFE4E8), CircleShape)
                             .clickable {
-                                viewModel.toggleReaction(message.id, emoji)
-                                showContextMenu = false
+                                viewModel.toggleReaction(message.id, message.reaction)
                             }
-                            .padding(4.dp)
-                    )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(text = message.reaction, fontSize = 11.sp)
+                    }
                 }
             }
-            HorizontalDivider(color = CharcoalText.copy(alpha = 0.08f), thickness = 1.dp)
-            DropdownMenuItem(
-                text = { Text("Reply", color = CharcoalText) },
-                leadingIcon = {
-                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = CharcoalText)
-                },
-                onClick = {
-                    viewModel.setReplyToMessage(message)
-                    showContextMenu = false
+
+            // Context menu
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.95f))
+                    .width(180.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    listOf("❤️", "👍", "😂", "😮", "😢", "🙏").forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            fontSize = 18.sp,
+                            modifier = Modifier
+                                .clickable {
+                                    viewModel.toggleReaction(message.id, emoji)
+                                    showContextMenu = false
+                                }
+                                .padding(4.dp)
+                        )
+                    }
                 }
-            )
-            if (message.messageType == "TEXT") {
+                HorizontalDivider(color = CharcoalText.copy(alpha = 0.08f), thickness = 1.dp)
                 DropdownMenuItem(
-                    text = { Text("Copy", color = CharcoalText) },
+                    text = { Text("Reply", color = CharcoalText) },
                     leadingIcon = {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CharcoalText)
+                        Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = CharcoalText)
                     },
                     onClick = {
-                        clipboardManager.setText(AnnotatedString(message.text))
+                        viewModel.setReplyToMessage(message)
                         showContextMenu = false
                     }
                 )
+                if (message.messageType == "TEXT") {
+                    DropdownMenuItem(
+                        text = { Text("Copy", color = CharcoalText) },
+                        leadingIcon = {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CharcoalText)
+                        },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.text))
+                            showContextMenu = false
+                        }
+                    )
+                }
+                val isSavableMedia = message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO"
+                if (isSavableMedia) {
+                    val coroutineScope = rememberCoroutineScope()
+                    DropdownMenuItem(
+                        text = { Text("Save to Vault", color = CharcoalText) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Save, contentDescription = null, tint = CharcoalText)
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            coroutineScope.launch {
+                                val bytes = viewModel.getMediaBytes(message.id)
+                                if (bytes != null) {
+                                    val mime = if (message.messageType == "MEDIA_VIDEO") "video/mp4" else "image/jpeg"
+                                    var thumb: ByteArray? = null
+                                    if (message.messageType == "MEDIA_VIDEO") {
+                                        thumb = viewModel.generateVideoThumbnail(context, bytes)
+                                    }
+                                    val ok = viewModel.saveToVault("chat_${message.id}", mime, bytes, thumb)
+                                    if (ok) {
+                                        android.widget.Toast.makeText(context, "Saved to Vault successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Failed to save to Vault", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    android.widget.Toast.makeText(context, "Failed to load decrypted media bytes", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Select", color = CharcoalText) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = CharcoalText)
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        onSelectedChange(true)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = Color.Red) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                    },
+                    onClick = {
+                        showContextMenu = false
+                        showDeleteConfirmation = true
+                    }
+                )
             }
-            DropdownMenuItem(
-                text = { Text("Select", color = CharcoalText) },
-                leadingIcon = {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = CharcoalText)
-                },
-                onClick = {
-                    showContextMenu = false
-                    onSelectedChange(true)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Delete", color = Color.Red) },
-                leadingIcon = {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
-                },
-                onClick = {
-                    showContextMenu = false
-                    showDeleteConfirmation = true
-                }
-            )
-        }
 
-        // Delete confirmation dialog
-        if (showDeleteConfirmation) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirmation = false },
-                title = {
-                    Text("Delete Message", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
-                },
-                text = {
-                    Text("Are you sure you want to delete this message?")
-                },
-                confirmButton = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (message.isFromMe) {
+            // Delete confirmation dialog
+            if (showDeleteConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirmation = false },
+                    title = {
+                        Text("Delete Message", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
+                    },
+                    text = {
+                        Text("Are you sure you want to delete this message?")
+                    },
+                    confirmButton = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (message.isFromMe) {
+                                TextButton(
+                                    onClick = {
+                                        viewModel.deleteMessage(message.id, forEveryone = true)
+                                        showDeleteConfirmation = false
+                                    }
+                                ) {
+                                    Text("Delete for Everyone", color = Color.Red, fontWeight = FontWeight.Bold)
+                                }
+                            }
                             TextButton(
                                 onClick = {
-                                    viewModel.deleteMessage(message.id, forEveryone = true)
+                                    viewModel.deleteMessage(message.id, forEveryone = false)
                                     showDeleteConfirmation = false
                                 }
                             ) {
-                                Text("Delete for Everyone", color = Color.Red, fontWeight = FontWeight.Bold)
+                                Text("Delete for Me", color = Color.Red)
+                            }
+                            TextButton(onClick = { showDeleteConfirmation = false }) {
+                                Text("Cancel", color = CharcoalText)
                             }
                         }
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteMessage(message.id, forEveryone = false)
-                                showDeleteConfirmation = false
-                            }
-                        ) {
-                            Text("Delete for Me", color = Color.Red)
-                        }
-                        TextButton(onClick = { showDeleteConfirmation = false }) {
-                            Text("Cancel", color = CharcoalText)
-                        }
-                    }
-                },
-                dismissButton = null,
-                containerColor = BlushBackground
-            )
+                    },
+                    dismissButton = null,
+                    containerColor = BlushBackground
+                )
+            }
         }
     }
 }
@@ -384,14 +591,15 @@ private fun MessageContent(
     message: ChatMessage,
     searchQuery: String,
     viewModel: ChatViewModel,
+    isSelectionMode: Boolean,
     onMediaClick: () -> Unit,
     contentColor: Color
 ) {
     when (message.messageType) {
         "RECORDED_KISS" -> KissMessageContent(message = message, viewModel = viewModel)
         "VOICE" -> VoiceMessageContent(message = message, viewModel = viewModel)
-        "MEDIA", "MEDIA_IMAGE" -> ImageMessageContent(message = message, viewModel = viewModel, onMediaClick = onMediaClick)
-        "MEDIA_VIDEO" -> VideoMessageContent(onMediaClick = onMediaClick)
+        "MEDIA", "MEDIA_IMAGE" -> ImageMessageContent(message = message, viewModel = viewModel, isSelectionMode = isSelectionMode, onMediaClick = onMediaClick)
+        "MEDIA_VIDEO" -> VideoMessageContent(message = message, viewModel = viewModel, isSelectionMode = isSelectionMode, onMediaClick = onMediaClick)
         "MEDIA_AUDIO" -> AudioFileMessageContent(message = message, viewModel = viewModel)
         "MEDIA_FILE" -> FileMessageContent(onMediaClick = onMediaClick)
         else -> TextMessageContent(message = message, searchQuery = searchQuery, contentColor = contentColor)
@@ -486,6 +694,11 @@ fun LightboxOverlay(message: ChatMessage, viewModel: ChatViewModel, onClose: () 
     }
     var isVideoPrepared by remember { mutableStateOf(false) }
 
+    // Pinch-to-zoom state
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
     LaunchedEffect(message.id) {
         isLoading = true
         val bytes = viewModel.getMediaBytes(message.id)
@@ -553,9 +766,7 @@ fun LightboxOverlay(message: ChatMessage, viewModel: ChatViewModel, onClose: () 
                                 setOnPreparedListener { start() }
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     Text("Failed to load video", color = Color.White)
@@ -573,20 +784,80 @@ fun LightboxOverlay(message: ChatMessage, viewModel: ChatViewModel, onClose: () 
                     androidx.compose.foundation.Image(
                         bitmap = bmp.asImageBitmap(),
                         contentDescription = "Decrypted Image",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    if (scale > 1f) {
+                                        offsetX += pan.x
+                                        offsetY += pan.y
+                                    } else {
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                }
+                            }
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offsetX,
+                                translationY = offsetY
+                            )
                     )
                 } ?: Text("Failed to decrypt image", color = Color.White)
             }
         }
-        IconButton(
-            onClick = onClose,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 40.dp, end = 20.dp)
+                .padding(top = 40.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            val isSavableMedia = message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO"
+            if (isSavableMedia) {
+                var isSavingToVault by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+                IconButton(
+                    onClick = {
+                        if (isSavingToVault) return@IconButton
+                        isSavingToVault = true
+                        scope.launch {
+                            val bytes = viewModel.getMediaBytes(message.id)
+                            if (bytes != null) {
+                                val mime = if (message.messageType == "MEDIA_VIDEO") "video/mp4" else "image/jpeg"
+                                var thumb: ByteArray? = null
+                                if (message.messageType == "MEDIA_VIDEO") {
+                                    thumb = viewModel.generateVideoThumbnail(context, bytes)
+                                }
+                                val ok = viewModel.saveToVault("chat_${message.id}", mime, bytes, thumb)
+                                if (ok) {
+                                    android.widget.Toast.makeText(context, "Saved to Vault successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Failed to save to Vault", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                android.widget.Toast.makeText(context, "Failed to load decrypted media bytes", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            isSavingToVault = false
+                        }
+                    },
+                    enabled = !isSavingToVault
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save to Vault",
+                        tint = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            IconButton(
+                onClick = onClose
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
     }
 }

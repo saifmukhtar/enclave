@@ -1,0 +1,26 @@
+name: Lighthouse CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to run Lighthouse against'
+        required: true
+        default: 'https://enclave.saifmukhtar.dev'
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Lighthouse
+        uses: treosh/lighthouse-ci-action@v9
+        with:
+          urls: ${{ github.event.inputs.url }}
+          config: |
+            ci:
+              collect:
+                numberOfRuns: 1
+              assert:
+                assertions:
+                  categories:performance: warn
+                  categories:accessibility: warn

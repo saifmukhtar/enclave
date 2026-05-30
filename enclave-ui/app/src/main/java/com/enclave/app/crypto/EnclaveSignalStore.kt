@@ -2,9 +2,6 @@ package com.enclave.app.crypto
 
 import android.content.SharedPreferences
 import android.util.Base64
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.signal.libsignal.protocol.IdentityKey
 import org.signal.libsignal.protocol.IdentityKeyPair
 import org.signal.libsignal.protocol.SignalProtocolAddress
@@ -18,8 +15,6 @@ import java.util.concurrent.ConcurrentHashMap
 class EnclaveSignalStore(
     private val prefs: SharedPreferences
 ) : SignalProtocolStore {
-
-    private val ioScope = CoroutineScope(Dispatchers.IO)
 
     // In-memory caches for fast Double Ratchet reads/writes (to prevent UI stutter)
     private val sessionCache = ConcurrentHashMap<String, ByteArray>()
@@ -43,18 +38,22 @@ class EnclaveSignalStore(
     }
 
     override fun saveIdentity(address: SignalProtocolAddress, identityKey: IdentityKey): Boolean {
-        prefs.edit().putString("identity_${address.name}", Base64.encodeToString(identityKey.serialize(), Base64.NO_WRAP)).apply()
-        return true
+        return prefs.edit().putString("identity_${address.name}", Base64.encodeToString(identityKey.serialize(), Base64.NO_WRAP)).commit()
     }
 
     override fun isTrustedIdentity(address: SignalProtocolAddress, identityKey: IdentityKey, direction: IdentityKeyStore.Direction): Boolean {
         val serialized = Base64.encodeToString(identityKey.serialize(), Base64.NO_WRAP)
         val trusted = prefs.getString("identity_${address.name}", null)
-        return if (trusted == null || trusted != serialized) {
-            prefs.edit().putString("identity_${address.name}", serialized).apply()
-            true
-        } else {
-            true
+        return when {
+            trusted == null -> {
+                prefs.edit().putString("identity_${address.name}", serialized).commit()
+                true
+            }
+            trusted == serialized -> true
+            else -> {
+                android.util.Log.e("EnclaveSignalStore", "IDENTITY KEY MISMATCH for ${address.name}. Possible MITM attack. Rejecting.")
+                false
+            }
         }
     }
 
@@ -99,7 +98,7 @@ class EnclaveSignalStore(
         val current = getPreKeyIds().toMutableSet()
         if (current.add(id.toString())) {
             preKeyIdsCache = current
-            prefs.edit().putStringSet("prekey_ids_list", current).apply()
+            prefs.edit().putStringSet("prekey_ids_list", current).commit()
         }
     }
 
@@ -108,7 +107,7 @@ class EnclaveSignalStore(
         val current = getPreKeyIds().toMutableSet()
         if (current.remove(id.toString())) {
             preKeyIdsCache = current
-            prefs.edit().putStringSet("prekey_ids_list", current).apply()
+            prefs.edit().putStringSet("prekey_ids_list", current).commit()
         }
     }
 
@@ -129,7 +128,7 @@ class EnclaveSignalStore(
             }
         }
         if (migrated.isNotEmpty()) {
-            prefs.edit().putStringSet("signed_prekey_ids_list", migrated).apply()
+            prefs.edit().putStringSet("signed_prekey_ids_list", migrated).commit()
         }
         signedPreKeyIdsCache = migrated
         return migrated
@@ -140,7 +139,7 @@ class EnclaveSignalStore(
         val current = getSignedPreKeyIds().toMutableSet()
         if (current.add(id.toString())) {
             signedPreKeyIdsCache = current
-            prefs.edit().putStringSet("signed_prekey_ids_list", current).apply()
+            prefs.edit().putStringSet("signed_prekey_ids_list", current).commit()
         }
     }
 
@@ -149,7 +148,7 @@ class EnclaveSignalStore(
         val current = getSignedPreKeyIds().toMutableSet()
         if (current.remove(id.toString())) {
             signedPreKeyIdsCache = current
-            prefs.edit().putStringSet("signed_prekey_ids_list", current).apply()
+            prefs.edit().putStringSet("signed_prekey_ids_list", current).commit()
         }
     }
 
@@ -166,7 +165,7 @@ class EnclaveSignalStore(
         val current = getSessionKeys().toMutableSet()
         if (current.add(key)) {
             sessionKeysCache = current
-            prefs.edit().putStringSet("session_keys_list", current).apply()
+            prefs.edit().putStringSet("session_keys_list", current).commit()
         }
     }
 
@@ -175,7 +174,7 @@ class EnclaveSignalStore(
         val current = getSessionKeys().toMutableSet()
         if (current.remove(key)) {
             sessionKeysCache = current
-            prefs.edit().putStringSet("session_keys_list", current).apply()
+            prefs.edit().putStringSet("session_keys_list", current).commit()
         }
     }
 
@@ -184,16 +183,14 @@ class EnclaveSignalStore(
         val serialized = record.serialize()
         sessionCache[key] = serialized
         addSessionKey(key)
-        ioScope.launch {
-            prefs.edit().putString(key, Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
-        }
+        prefs.edit().putString(key, Base64.encodeToString(serialized, Base64.NO_WRAP)).commit()
     }
 
     override fun deleteSession(address: SignalProtocolAddress) {
         val key = "session_${address.name}_${address.deviceId}"
         sessionCache.remove(key)
         removeSessionKey(key)
-        ioScope.launch { prefs.edit().remove(key).apply() }
+        prefs.edit().remove(key).commit()
     }
 
     override fun containsSession(address: SignalProtocolAddress): Boolean {
@@ -219,12 +216,10 @@ class EnclaveSignalStore(
             val current = getSessionKeys().toMutableSet()
             current.removeAll(toRemove)
             sessionKeysCache = current
-            ioScope.launch {
-                val editor = prefs.edit()
-                editor.putStringSet("session_keys_list", current)
-                toRemove.forEach { editor.remove(it) }
-                editor.apply()
-            }
+            val editor = prefs.edit()
+            editor.putStringSet("session_keys_list", current)
+            toRemove.forEach { editor.remove(it) }
+            editor.commit()
         }
     }
 
@@ -254,9 +249,7 @@ class EnclaveSignalStore(
         val serialized = record.serialize()
         preKeyCache[preKeyId] = serialized
         addPreKeyId(preKeyId)
-        ioScope.launch {
-            prefs.edit().putString("prekey_$preKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
-        }
+        prefs.edit().putString("prekey_$preKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).commit()
     }
 
     override fun containsPreKey(preKeyId: Int): Boolean {
@@ -266,7 +259,7 @@ class EnclaveSignalStore(
     override fun removePreKey(preKeyId: Int) {
         preKeyCache.remove(preKeyId)
         removePreKeyId(preKeyId)
-        ioScope.launch { prefs.edit().remove("prekey_$preKeyId").apply() }
+        prefs.edit().remove("prekey_$preKeyId").commit()
     }
 
     // -- SignedPreKeyStore --
@@ -293,9 +286,7 @@ class EnclaveSignalStore(
         val serialized = record.serialize()
         signedPreKeyCache[signedPreKeyId] = serialized
         addSignedPreKeyId(signedPreKeyId)
-        ioScope.launch {
-            prefs.edit().putString("signed_prekey_$signedPreKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).apply()
-        }
+        prefs.edit().putString("signed_prekey_$signedPreKeyId", Base64.encodeToString(serialized, Base64.NO_WRAP)).commit()
     }
 
     override fun containsSignedPreKey(signedPreKeyId: Int): Boolean {
@@ -305,7 +296,7 @@ class EnclaveSignalStore(
     override fun removeSignedPreKey(signedPreKeyId: Int) {
         signedPreKeyCache.remove(signedPreKeyId)
         removeSignedPreKeyId(signedPreKeyId)
-        ioScope.launch { prefs.edit().remove("signed_prekey_$signedPreKeyId").apply() }
+        prefs.edit().remove("signed_prekey_$signedPreKeyId").commit()
     }
 
     // -- KyberPreKeyStore --

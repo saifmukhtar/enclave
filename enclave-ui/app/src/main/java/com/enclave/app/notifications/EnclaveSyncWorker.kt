@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.first
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.local.MIGRATION_7_8
@@ -70,10 +70,17 @@ class EnclaveSyncWorker(
 
         val encryptedFileManager = EncryptedFileManager(applicationContext)
 
+        val configManager = ConfigManager.getInstance(applicationContext)
+        val sUrl = configManager.getSupabaseUrl()
+        val sKey = configManager.getSupabaseKey()
+        if (sUrl.isNullOrBlank() || sKey.isNullOrBlank()) {
+            return Result.failure()
+        }
+
         // Initialize Supabase Auth to fetch cached user session tokens for signaling authentication
         val supabase = createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_KEY
+            supabaseUrl = sUrl,
+            supabaseKey = sKey
         ) {
             httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
                  config {
@@ -81,7 +88,7 @@ class EnclaveSyncWorker(
                     readTimeout(java.time.Duration.ofMinutes(5))
                     writeTimeout(java.time.Duration.ofMinutes(5))
                     val parsedHost = try {
-                        java.net.URI(BuildConfig.SUPABASE_URL).host
+                        java.net.URI(sUrl).host
                     } catch (e: Exception) {
                         null
                     }
@@ -114,14 +121,25 @@ class EnclaveSyncWorker(
         val bundleRepository = BundleRepository(supabase, cryptoManager.signalStore, cryptoManager)
         val vaultRepository = VaultRepository(applicationContext, encryptedFileManager, database.mediaMetadataDao(), bundleRepository)
 
+        val sigUrl = configManager.getSignalingServerUrl()
+        if (sigUrl.isNullOrBlank()) {
+            Log.e("EnclaveSyncWorker", "Sync failed: Signaling server URL is missing.")
+            return Result.failure()
+        }
+        val token = supabase.auth.currentSessionOrNull()?.accessToken
+        if (token == null) {
+            Log.w("EnclaveSyncWorker", "Sync aborted: Supabase token is null or expired.")
+            return Result.failure()
+        }
         val signalingClient = SignalingClient(
-            url = BuildConfig.SIGNALING_SERVER_URL,
+            url = sigUrl,
             myId = myId,
-            tokenProvider = { supabase.auth.currentSessionOrNull()?.accessToken }
+            tokenProvider = { token }
         )
-        signalingClient.connect()
 
         try {
+            Log.d("EnclaveSyncWorker", "Connecting to signaling server...")
+            signalingClient.connect()
             withTimeoutOrNull<Unit>(5000) {
                 coroutineScope {
                     launch {
@@ -213,9 +231,8 @@ class EnclaveSyncWorker(
 
                         if (baseType == "VAULT_KEY_SYNC") {
                             val keyBase64 = android.util.Base64.encodeToString(decryptedBytes, android.util.Base64.NO_WRAP)
-                            applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-                                .edit().putString("vault_key", keyBase64).apply()
-                            Log.d("EnclaveSyncWorker", "Successfully received and saved shared E2EE vault key from partner.")
+                            cryptoManager.storeVaultKey(keyBase64)
+                            Log.d("EnclaveSyncWorker", "Successfully received and saved shared E2EE vault key from partner securely.")
                             return@collect
                         }
 
@@ -316,6 +333,14 @@ class EnclaveSyncWorker(
                 }
                 }
             }
+            // Sync the Collaborative Vault in the background
+            try {
+                vaultRepository.syncSharedVault()
+                Log.d("EnclaveSyncWorker", "Collaborative Vault successfully synchronized in background sync worker.")
+            } catch (e: Exception) {
+                Log.e("EnclaveSyncWorker", "Collaborative Vault sync failed in background", e)
+            }
+
             // Also sync partner profile for the Companion Widget
             try {
                 if (partnerId.isNotBlank()) {
@@ -337,10 +362,17 @@ class EnclaveSyncWorker(
             } catch (e: Exception) {
                 Log.e("EnclaveSyncWorker", "Failed to sync partner profile for widget", e)
             }
-        } catch (e: Exception) {
-            Log.e("EnclaveSyncWorker", "Sync failed", e)
+        } catch (e: java.net.ConnectException) {
+            Log.e("EnclaveSyncWorker", "Sync failed: Network connection refused.", e)
             return Result.retry()
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            Log.w("EnclaveSyncWorker", "Sync timed out during connection or message retrieval.", e)
+            return Result.retry()
+        } catch (e: Exception) {
+            Log.e("EnclaveSyncWorker", "Sync failed with unhandled exception", e)
+            return Result.failure()
         } finally {
+            Log.d("EnclaveSyncWorker", "Closing signaling client connection.")
             signalingClient.close()
         }
 
@@ -362,13 +394,30 @@ class EnclaveSyncWorker(
         }
     }
 
-    private fun showDecryptedNotification(text: String) {
+    private suspend fun showDecryptedNotification(text: String) {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
 
+        val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
+        val partnerId = prefs.getString("partner_id", null)?.takeIf { it.isNotBlank() }
+        var partnerUsername = "Partner"
+        if (partnerId != null) {
+            try {
+                val db = EnclaveDatabase.getInstance(applicationContext)
+                val profile = db.userProfileDao().getProfileSync(partnerId)
+                if (profile != null && !profile.username.isNullOrBlank()) {
+                    partnerUsername = profile.username
+                }
+            } catch (e: Exception) {
+                Log.e("EnclaveSyncWorker", "Error fetching partner profile for notification", e)
+            }
+        }
+
+        val formattedText = text.replace("Partner", partnerUsername)
+
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle("🔒 Secure Message Received")
-            .setContentText(if (text.contains("🔒 Encrypted Image")) "Encrypted Image Received" else text)
+            .setContentTitle("🔒 $partnerUsername")
+            .setContentText(if (formattedText.contains("🔒 Encrypted Image")) "Encrypted Image Received" else formattedText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setColor(0xFFFCE2E6.toInt()) // Blush Soft Pink Accent Styling
             .setAutoCancel(true)

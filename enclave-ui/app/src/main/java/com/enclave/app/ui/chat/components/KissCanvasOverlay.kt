@@ -7,6 +7,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.VibrationEffect
 import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -277,10 +278,31 @@ fun KissGestureCanvasOverlay(
         } else null
     }
 
+    val activeColor1 = animateColorAsState(
+        targetValue = when {
+            isMutual -> Color(0xFF2B0A1A)
+            localActive || remoteActive -> Color(0xFF140718)
+            else -> Color(0xFF0D0610)
+        },
+        animationSpec = tween(1000), label = "color1"
+    )
+    val activeColor2 = animateColorAsState(
+        targetValue = when {
+            isMutual -> Color(0xFF1F0510)
+            localActive || remoteActive -> Color(0xFF0B020E)
+            else -> Color(0xFF07020A)
+        },
+        animationSpec = tween(1000), label = "color2"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0610)),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(activeColor1.value, activeColor2.value)
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         Canvas(
@@ -383,12 +405,14 @@ fun KissGestureCanvasOverlay(
             }
 
             if (isMutual) {
+                val wave = kotlin.math.sin(System.currentTimeMillis() * 0.003).toFloat()
+                val shimmer = 0.4f + 0.3f * kotlin.math.cos(System.currentTimeMillis() * 0.005).toFloat()
                 listOf(
-                    Offset(w * 0.2f, h * 0.3f), Offset(w * 0.8f, h * 0.25f),
-                    Offset(w * 0.15f, h * 0.7f), Offset(w * 0.85f, h * 0.65f),
-                    Offset(w * 0.5f, h * 0.15f), Offset(w * 0.5f, h * 0.85f)
+                    Offset(w * 0.2f, h * (0.3f + wave * 0.02f)), Offset(w * 0.8f, h * (0.25f - wave * 0.02f)),
+                    Offset(w * 0.15f, h * (0.7f - wave * 0.03f)), Offset(w * 0.85f, h * (0.65f + wave * 0.03f)),
+                    Offset(w * 0.35f, h * (0.15f + wave * 0.01f)), Offset(w * 0.65f, h * (0.85f - wave * 0.01f))
                 ).forEach { pos ->
-                    drawCircle(color = Color(0xFFFFD700).copy(alpha = 0.55f), radius = 6f * mutualPulseState.value, center = pos)
+                    drawCircle(color = Color(0xFFFFD700).copy(alpha = shimmer), radius = 8f * mutualPulseState.value, center = pos)
                 }
             }
         }

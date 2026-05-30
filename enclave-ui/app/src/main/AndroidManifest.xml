@@ -59,6 +59,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Dynamic Credentials Onboarding Setup -->
+        <activity
+            android:name=".ui.bootstrap.BootstrapActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
+
         <!-- Music playback foreground service (Media3 / ExoPlayer) -->
         <service
             android:name=".media.MusicPlaybackService"

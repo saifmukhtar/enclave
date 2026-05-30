@@ -2,6 +2,8 @@ package com.enclave.app.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -18,11 +20,26 @@ import javax.crypto.spec.SecretKeySpec
 
 object BackupManager {
 
-    private const val ITERATIONS = 10000
-    private const val KEY_LENGTH = 256
+    private fun getEncryptedPrefs(context: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            context,
+            "enclave_signal_state",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
 
-    private fun deriveKeyFromPassphrase(passphrase: String, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH)
+    private const val ITERATIONS_LEGACY = 10000
+    private const val ITERATIONS_V2 = 600000
+    private const val KEY_LENGTH = 256
+    private val MAGIC_HEADER = byteArrayOf('E'.code.toByte(), 'N'.code.toByte(), 'C'.code.toByte(), 'V'.code.toByte())
+
+    private fun deriveKeyFromPassphrase(passphrase: String, salt: ByteArray, iterations: Int): SecretKeySpec {
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, iterations, KEY_LENGTH)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         val keyBytes = factory.generateSecret(spec).encoded
         return SecretKeySpec(keyBytes, "AES")
@@ -68,14 +85,18 @@ object BackupManager {
             }
 
             // 2. Locate Database file
-            val dbFile = context.getDatabasePath("enclave_secure.db")
+            val dbFile = context.getDatabasePath("enclave_db")
             if (!dbFile.exists()) {
                 return@withContext Result.failure(Exception("Database file does not exist"))
             }
             val dbBytes = dbFile.readBytes()
 
             // 3. Package SharedPreferences (Signal state & general app preferences)
-            val signalPrefs = context.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+            val signalPrefs = try {
+                getEncryptedPrefs(context)
+            } catch (e: Exception) {
+                context.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+            }
             val appPrefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
             
             val prefsData = JSONObject().apply {
@@ -102,7 +123,7 @@ object BackupManager {
             }
 
             // 6. Derive symmetric key and encrypt the packet
-            val secretKey = deriveKeyFromPassphrase(passphrase, salt)
+            val secretKey = deriveKeyFromPassphrase(passphrase, salt, ITERATIONS_V2)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val spec = GCMParameterSpec(128, iv)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
@@ -111,6 +132,8 @@ object BackupManager {
 
             // 7. Write combined headers and payload to public SAF Output Stream
             outputStream.use { out ->
+                out.write(MAGIC_HEADER)
+                out.write(2) // Version 2
                 out.write(salt)
                 out.write(iv)
                 out.write(encryptedBytes)
@@ -136,13 +159,31 @@ object BackupManager {
                 return@withContext Result.failure(Exception("Invalid backup file format"))
             }
 
-            // 2. Extract salt, IV, and ciphertext
-            val salt = combined.copyOfRange(0, 16)
-            val iv = combined.copyOfRange(16, 28)
-            val ciphertext = combined.copyOfRange(28, combined.size)
+            // 2. Check for magic header and version
+            val isV2 = combined.size > 5 + 28 && 
+                    combined[0] == MAGIC_HEADER[0] &&
+                    combined[1] == MAGIC_HEADER[1] &&
+                    combined[2] == MAGIC_HEADER[2] &&
+                    combined[3] == MAGIC_HEADER[3]
 
-            // 3. Derive key and decrypt payload
-            val secretKey = deriveKeyFromPassphrase(passphrase, salt)
+            val (iterations, offset) = if (isV2) {
+                val version = combined[4].toInt()
+                if (version == 2) {
+                    Pair(ITERATIONS_V2, 5)
+                } else {
+                    return@withContext Result.failure(Exception("Unsupported backup version: $version"))
+                }
+            } else {
+                Pair(ITERATIONS_LEGACY, 0)
+            }
+
+            // 3. Extract salt, IV, and ciphertext
+            val salt = combined.copyOfRange(offset, offset + 16)
+            val iv = combined.copyOfRange(offset + 16, offset + 28)
+            val ciphertext = combined.copyOfRange(offset + 28, combined.size)
+
+            // 4. Derive key and decrypt payload
+            val secretKey = deriveKeyFromPassphrase(passphrase, salt, iterations)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val spec = GCMParameterSpec(128, iv)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
@@ -165,7 +206,7 @@ object BackupManager {
             database.close()
 
             // 6. Overwrite the database file
-            val dbFile = context.getDatabasePath("enclave_secure.db")
+            val dbFile = context.getDatabasePath("enclave_db")
             dbFile.writeBytes(dbBytes)
 
             // 7. Clear existing WAL and SHM files
@@ -177,7 +218,11 @@ object BackupManager {
             // 8. Restore SharedPreferences
             val prefsJson = JSONObject(prefsData)
             
-            val signalPrefs = context.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+            val signalPrefs = try {
+                getEncryptedPrefs(context)
+            } catch (e: Exception) {
+                context.getSharedPreferences("enclave_signal_state", Context.MODE_PRIVATE)
+            }
             val appPrefs = context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
 
             deserializePrefs(signalPrefs, prefsJson.getString("signal_state"))

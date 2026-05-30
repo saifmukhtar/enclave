@@ -54,7 +54,7 @@ class StoryViewModel(
                             msg.payload?.let { payload ->
                                 try {
                                     val story = LenientJson.decodeFromString<StorySharePayload>(payload)
-                                    val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 2)
+                                    val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
                                     val encryptedBytes = android.util.Base64.decode(story.encryptedContent, android.util.Base64.NO_WRAP)
                                     val decryptedResult = cryptoManager.decryptMessage(partnerAddress, encryptedBytes)
                                     if (decryptedResult.isSuccess) {
@@ -98,7 +98,7 @@ class StoryViewModel(
                 val storyId = UUID.randomUUID().toString()
                 val textBytes = text.toByteArray(Charsets.UTF_8)
                 val localEncrypted = cryptoManager.encryptLocal(textBytes)
-                val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 2)
+                val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
                 val partnerEncryptedResult = cryptoManager.encryptMessage(partnerAddress, textBytes)
                 if (partnerEncryptedResult.isFailure) {
                     android.util.Log.e("StoryVM", "Failed to encrypt story for partner using Double Ratchet")
@@ -144,7 +144,7 @@ class StoryViewModel(
             try {
                 val storyId = UUID.randomUUID().toString()
                 val localEncrypted = cryptoManager.encryptLocal(mediaBytes)
-                val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 2)
+                val partnerAddress = org.signal.libsignal.protocol.SignalProtocolAddress(partnerId, 1)
                 val partnerEncryptedResult = cryptoManager.encryptMessage(partnerAddress, mediaBytes)
                 if (partnerEncryptedResult.isFailure) {
                     android.util.Log.e("StoryVM", "Failed to encrypt media story for partner")

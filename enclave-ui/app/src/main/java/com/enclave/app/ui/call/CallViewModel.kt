@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.json.JSONObject
 import org.webrtc.*
 import java.util.UUID
@@ -30,10 +33,14 @@ enum class CallState {
     IDLE, RINGING_OUTGOING, RINGING_INCOMING, CONNECTING, ACTIVE
 }
 
+enum class RingingState {
+    IDLE, CALLING, RINGING, UNREACHABLE
+}
+
 class CallViewModel(
     application: Application,
     private val signalingClient: SignalingClient,
-    private val partnerId: String,
+    val partnerId: String,
     private val callLogDao: CallLogDao? = null
 ) : AndroidViewModel(application) {
 
@@ -41,6 +48,13 @@ class CallViewModel(
 
     private val _callState = MutableStateFlow(CallState.IDLE)
     val callState: StateFlow<CallState> = _callState.asStateFlow()
+
+    private val _ringingState = MutableStateFlow(RingingState.IDLE)
+    val ringingState: StateFlow<RingingState> = _ringingState.asStateFlow()
+
+    private var toneGenerator: android.media.ToneGenerator? = null
+    private var offlineTimeoutJob: kotlinx.coroutines.Job? = null
+    private var callingToneJob: kotlinx.coroutines.Job? = null
 
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
@@ -65,6 +79,9 @@ class CallViewModel(
     // 2. Screen Sharing States & Events
     private val _isScreenSharing = MutableStateFlow(false)
     val isScreenSharing: StateFlow<Boolean> = _isScreenSharing.asStateFlow()
+
+    private val _isCameraEnabled = MutableStateFlow(true)
+    val isCameraEnabled: StateFlow<Boolean> = _isCameraEnabled.asStateFlow()
 
     private val _requestScreenShare = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val requestScreenShare: SharedFlow<Unit> = _requestScreenShare.asSharedFlow()
@@ -144,12 +161,46 @@ class CallViewModel(
                             _callState.value = CallState.RINGING_INCOMING
                             currentDirection = "INCOMING"
                             currentCallType = incomingCallType
+                            
+                            // Send ringing feedback instantly back to caller
+                            viewModelScope.launch {
+                                signalingClient.sendWebRtcMessage(partnerId, "WEBRTC_RINGING", "")
+                            }
                         }
                     }
                     "WEBRTC_ANSWER", "ANSWER" -> {
                         val payload = msg.payload
                         if (payload != null && (_callState.value == CallState.RINGING_OUTGOING || _callState.value == CallState.CONNECTING)) {
+                            cancelOfflineTimeoutTimer()
+                            startRingingTone() // Keep ringing until active
                             setRemoteSdp(payload)
+                        }
+                    }
+                    "WEBRTC_RINGING" -> {
+                        if (_callState.value == CallState.RINGING_OUTGOING) {
+                            cancelOfflineTimeoutTimer()
+                            _ringingState.value = RingingState.RINGING
+                            startRingingTone()
+                        }
+                    }
+                    "DELIVERY_STATUS" -> {
+                        val payloadStr = msg.payload
+                        if (payloadStr != null && _callState.value == CallState.RINGING_OUTGOING) {
+                            try {
+                                val json = JSONObject(payloadStr)
+                                val delivered = json.optBoolean("delivered", false)
+                                val typeTarget = json.optString("type", "")
+                                if (typeTarget == "WEBRTC_OFFER" || typeTarget == "OFFER") {
+                                    if (delivered) {
+                                        _ringingState.value = RingingState.RINGING
+                                        startRingingTone()
+                                    } else {
+                                        _ringingState.value = RingingState.CALLING
+                                        startCallingBeeps()
+                                        startOfflineTimeoutTimer()
+                                    }
+                                }
+                            } catch (_: Exception) {}
                         }
                     }
                     "ICE_CANDIDATE" -> {
@@ -178,6 +229,60 @@ class CallViewModel(
         }
     }
 
+    private fun playTone(toneType: Int, durationMs: Int = -1) {
+        stopTone()
+        try {
+            toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_VOICE_CALL, 100)
+            toneGenerator?.startTone(toneType, durationMs)
+        } catch (e: Exception) {
+            Log.e("CallViewModel", "Failed to play tone", e)
+        }
+    }
+
+    private fun stopTone() {
+        try {
+            toneGenerator?.stopTone()
+            toneGenerator?.release()
+        } catch (_: Exception) {}
+        toneGenerator = null
+    }
+
+    private fun startCallingBeeps() {
+        callingToneJob?.cancel()
+        callingToneJob = viewModelScope.launch(Dispatchers.Main) {
+            while (isActive && _ringingState.value == RingingState.CALLING) {
+                playTone(android.media.ToneGenerator.TONE_SUP_PIP, 400)
+                delay(2000)
+            }
+        }
+    }
+
+    private fun startRingingTone() {
+        callingToneJob?.cancel()
+        callingToneJob = viewModelScope.launch(Dispatchers.Main) {
+            playTone(android.media.ToneGenerator.TONE_SUP_RINGTONE)
+        }
+    }
+
+    private fun startOfflineTimeoutTimer() {
+        offlineTimeoutJob?.cancel()
+        offlineTimeoutJob = viewModelScope.launch(Dispatchers.Main) {
+            delay(10000) // 10 seconds timeout
+            if (_ringingState.value == RingingState.CALLING) {
+                _ringingState.value = RingingState.UNREACHABLE
+                callingToneJob?.cancel()
+                playTone(android.media.ToneGenerator.TONE_SUP_CONGESTION, 3000)
+                delay(3000)
+                cleanup("MISSED")
+            }
+        }
+    }
+
+    private fun cancelOfflineTimeoutTimer() {
+        offlineTimeoutJob?.cancel()
+        offlineTimeoutJob = null
+    }
+
     /**
      * Start a call. Pass "AUDIO" for audio-only, "VIDEO" for video call (default).
      */
@@ -188,8 +293,9 @@ class CallViewModel(
         _isAudioOnly.value = callType == "AUDIO"
         _callState.value = CallState.RINGING_OUTGOING
 
-        val manager = WebRtcManager(getApplication(), eglContext)
+        val manager = WebRtcManager(getApplication(), eglContext, callType == "AUDIO")
         webRtcManager = manager
+        _isSpeakerphoneOn.value = if (manager.isExternalAudioDeviceConnected()) false else (callType != "AUDIO")
 
         if (callType == "AUDIO") {
             manager.startAudioOnlyCapture()
@@ -223,8 +329,9 @@ class CallViewModel(
         _callState.value = CallState.CONNECTING
         _isAudioOnly.value = incomingCallType == "AUDIO"
 
-        val manager = WebRtcManager(getApplication(), eglContext)
+        val manager = WebRtcManager(getApplication(), eglContext, incomingCallType == "AUDIO")
         webRtcManager = manager
+        _isSpeakerphoneOn.value = if (manager.isExternalAudioDeviceConnected()) false else (incomingCallType != "AUDIO")
 
         if (incomingCallType == "AUDIO") {
             manager.startAudioOnlyCapture()
@@ -269,6 +376,9 @@ class CallViewModel(
         callStartTime = System.currentTimeMillis()
         _callState.value = CallState.ACTIVE
         acquireProximityLockAndSensors()
+        callingToneJob?.cancel()
+        callingToneJob = null
+        stopTone()
     }
 
     private fun acquireProximityLockAndSensors() {
@@ -327,6 +437,31 @@ class CallViewModel(
         if (nextVal) webRtcManager?.routeToSpeaker() else webRtcManager?.routeToEarpiece()
     }
 
+    fun toggleCameraEnabled() {
+        val manager = webRtcManager ?: return
+        val nextVal = !_isCameraEnabled.value
+        _isCameraEnabled.value = nextVal
+
+        if (nextVal) {
+            if (manager.localVideoTrack == null) {
+                manager.startLocalCapture()
+                _localVideoTrack.value = manager.localVideoTrack
+                manager.localVideoTrack?.let { track ->
+                    manager.peerConnection?.addTrack(track, listOf("stream_val"))
+                }
+                viewModelScope.launch {
+                    signalingClient.sendWebRtcMessage(partnerId, "PROFILE_UPDATE", "{\"videoEnabled\":true}")
+                }
+            } else {
+                manager.localVideoTrack?.setEnabled(true)
+            }
+            _isAudioOnly.value = false
+        } else {
+            manager.localVideoTrack?.setEnabled(false)
+            _isAudioOnly.value = (currentCallType == "AUDIO")
+        }
+    }
+
     private fun setRemoteSdp(sdp: String) {
         val remoteDesc = SessionDescription(SessionDescription.Type.ANSWER, sdp)
         webRtcManager?.peerConnection?.setRemoteDescription(object : SimpleSdpObserver() {
@@ -380,6 +515,13 @@ class CallViewModel(
 
     private fun cleanup(status: String = "MISSED") {
         releaseProximityLockAndSensors()
+        
+        callingToneJob?.cancel()
+        callingToneJob = null
+        offlineTimeoutJob?.cancel()
+        offlineTimeoutJob = null
+        stopTone()
+        _ringingState.value = RingingState.IDLE
 
         // Log the call to Room database
         if (_callState.value != CallState.IDLE) {

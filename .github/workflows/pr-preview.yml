@@ -1,0 +1,45 @@
+name: PR Preview Build
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ./enclave-react
+        run: npm ci
+
+      - name: Build site
+        working-directory: ./enclave-react
+        run: npm run build
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview-${{ github.sha }}
+          path: enclave-react/dist
+
+      - name: Comment preview available
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request.number;
+            const url = `Artifact available in this workflow run: ${{ github.run_id }}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body: `A preview build has been created. Download the artifact from the Actions run (Artifacts -> site-preview-${context.sha.slice(0,7)}).`
+            });

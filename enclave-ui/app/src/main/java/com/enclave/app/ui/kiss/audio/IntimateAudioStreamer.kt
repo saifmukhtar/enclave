@@ -7,6 +7,7 @@ import android.os.Build
 import android.util.Log
 import org.webrtc.*
 import org.webrtc.audio.JavaAudioDeviceModule
+import com.enclave.app.data.config.ConfigManager
 
 /**
  * Manages a bidirectional, low-latency live audio streaming connection using WebRTC.
@@ -135,15 +136,21 @@ class IntimateAudioStreamer(
     }
 
     private fun createPeerConnection() {
+        val configManager = ConfigManager.getInstance(context)
+        val turnUrl = configManager.getTurnServerUrl() ?: ""
+        val turnUser = configManager.getTurnUsername() ?: ""
+        val turnPass = configManager.getTurnPassword() ?: ""
+
+        val selfHostedStun = turnUrl.replace("turn:", "stun:")
         val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder(com.enclave.app.BuildConfig.TURN_SERVER_URL)
-                .setUsername(com.enclave.app.BuildConfig.TURN_USERNAME)
-                .setPassword(com.enclave.app.BuildConfig.TURN_PASSWORD)
+            PeerConnection.IceServer.builder(selfHostedStun).createIceServer(),
+            PeerConnection.IceServer.builder(turnUrl)
+                .setUsername(turnUser)
+                .setPassword(turnPass)
                 .createIceServer(),
-            PeerConnection.IceServer.builder(com.enclave.app.BuildConfig.TURN_SERVER_URL + "?transport=tcp")
-                .setUsername(com.enclave.app.BuildConfig.TURN_USERNAME)
-                .setPassword(com.enclave.app.BuildConfig.TURN_PASSWORD)
+            PeerConnection.IceServer.builder(turnUrl + "?transport=tcp")
+                .setUsername(turnUser)
+                .setPassword(turnPass)
                 .createIceServer()
         )
 

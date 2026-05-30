@@ -83,6 +83,32 @@ async function fetchTargetPushToken(targetId: string): Promise<string | null> {
   }
 }
 
+async function setOfflineInSupabase(userId: string): Promise<void> {
+  if (!userId || userId.startsWith('session:')) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        is_online: false,
+        last_seen: new Date().toISOString()
+      })
+    });
+    if (!res.ok) {
+      console.warn(`[Supabase] Offline update for user ${userId} returned status ${res.status}`);
+    } else {
+      console.log(`[Supabase] Marked user ${userId} as offline successfully`);
+    }
+  } catch (err) {
+    console.error(`[Supabase] Failed to update offline status for user ${userId}:`, err);
+  }
+}
+
 async function sendPushNotification(targetToken: string, payload: Record<string, string>) {
   const ntfyUrl = process.env.NTFY_SERVER_URL;
   const ntfyUser = process.env.NTFY_USERNAME;
@@ -196,6 +222,13 @@ function parseInboundMessage(raw: RawData): any {
     return { type: 'REGISTER', senderId: parsed.senderId.trim() };
   }
 
+  if (parsed.type === 'PONG') {
+    if (!isNonEmptyString(parsed.senderId)) {
+      throw new Error('Invalid PONG: senderId is required');
+    }
+    return { type: 'PONG', senderId: parsed.senderId.trim(), payload: parsed.payload };
+  }
+
   // For all other message types (SIGNAL_PAYLOAD, WEBRTC_OFFER, WEBRTC_ANSWER,
   // ICE_CANDIDATE, WEBRTC_HANGUP, TYPING_STATUS, READ_RECEIPT, PROFILE_UPDATE,
   // KISS_*, LOUNGE_*, MUSIC_SYNC, etc.), just validate senderId + targetId.
@@ -230,15 +263,36 @@ function safeSend(ws: WebSocket, payload: unknown): boolean {
 }
 
 function closeAndCleanup(record: ClientRecord, code = 1000, reason = 'normal closure'): void {
-  clientsBySocket.delete(record.ws);
-
   const mapped = clientsById.get(record.id);
   if (mapped?.sessionId === record.sessionId) {
+    // Notify other registered clients that this user went offline BEFORE deleting from maps
+    for (const [otherId, otherRecord] of clientsById.entries()) {
+      if (otherId !== record.id && otherRecord.ws.readyState === WebSocket.OPEN) {
+        safeSend(otherRecord.ws, {
+          type: 'PROFILE_UPDATE',
+          senderId: record.id,
+          targetId: otherId,
+          payload: JSON.stringify({
+            username: '',
+            displayName: '',
+            bio: '',
+            avatarUrl: '',
+            isOnline: false,
+            lastSeen: Date.now(),
+          }),
+        });
+      }
+    }
+    setOfflineInSupabase(record.id).catch(err => console.error("Failed to update offline status in Supabase", err));
     clientsById.delete(record.id);
   }
 
+  clientsBySocket.delete(record.ws);
+
   if (record.ws.readyState === WebSocket.OPEN || record.ws.readyState === WebSocket.CONNECTING) {
-    record.ws.close(code, reason);
+    try {
+      record.ws.close(code, reason);
+    } catch (_) {}
   }
 }
 
@@ -333,6 +387,10 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       const message = parseInboundMessage(raw);
       record.lastSeenAt = Date.now();
 
+      if (message.type === 'PONG') {
+        return;
+      }
+
       if (message.type === 'REGISTER') {
         if (!record.token) {
           console.warn(`[register] Missing auth token for connection session=${record.sessionId}`);
@@ -412,25 +470,27 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         message.type === 'LOUNGE_PROFILE_UPDATE' ||
         message.type === 'LOUNGE_LETTER_SEND';
 
-      if (!delivered && shouldQueue) {
-        // Add to offline queue
-        let queue = offlineQueues.get(message.targetId);
-        if (!queue) {
-          queue = { items: [], lastUpdatedAt: Date.now() };
-          offlineQueues.set(message.targetId, queue);
-        }
-        queue.lastUpdatedAt = Date.now();
-        if (queue.items.length < 100) {
-          queue.items.push({
-            message: {
-              ...message,
+      if (!delivered) {
+        if (shouldQueue) {
+          // Add to offline queue
+          let queue = offlineQueues.get(message.targetId);
+          if (!queue) {
+            queue = { items: [], lastUpdatedAt: Date.now() };
+            offlineQueues.set(message.targetId, queue);
+          }
+          queue.lastUpdatedAt = Date.now();
+          if (queue.items.length < 100) {
+            queue.items.push({
+              message: {
+                ...message,
+                serverTs: Date.now(),
+              },
               serverTs: Date.now(),
-            },
-            serverTs: Date.now(),
-          });
-          console.log(`[offline-queue] Queued ${message.type} for offline target ${message.targetId} (queue: ${queue.items.length})`);
-        } else {
-          console.warn(`[offline-queue] Queue full for target ${message.targetId}, dropping message`);
+            });
+            console.log(`[offline-queue] Queued ${message.type} for offline target ${message.targetId} (queue: ${queue.items.length})`);
+          } else {
+            console.warn(`[offline-queue] Queue full for target ${message.targetId}, dropping message`);
+          }
         }
 
         // Push notification for E2EE signals, lounge letters, status stories, and mutual kiss triggers
@@ -438,11 +498,14 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
           message.type === 'SIGNAL_PAYLOAD' ||
           message.type === 'LOUNGE_LETTER_SEND' ||
           message.type === 'STORY_SHARE' ||
-          message.type === 'KISS_WORKFLOW_TRIGGER'
+          message.type === 'KISS_WORKFLOW_TRIGGER' ||
+          message.type === 'WEBRTC_OFFER' ||
+          message.type === 'OFFER'
         ) {
           fetchTargetPushToken(message.targetId).then(token => {
             if (token) {
-              sendPushNotification(token, { action: 'sync', type: message.type });
+              const pushType = (message.type === 'WEBRTC_OFFER' || message.type === 'OFFER') ? 'incoming_call' : 'sync';
+              sendPushNotification(token, { action: pushType, type: message.type });
             } else {
               console.log(`No registered push token found for target ${message.targetId}`);
             }
@@ -487,24 +550,6 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   ws.on('close', (code, reason) => {
     const current = clientsBySocket.get(ws);
     if (current) {
-      // Notify partner that this user went offline
-      for (const [otherId, otherRecord] of clientsById.entries()) {
-        if (otherId !== current.id && otherRecord.ws.readyState === WebSocket.OPEN) {
-          safeSend(otherRecord.ws, {
-            type: 'PROFILE_UPDATE',
-            senderId: current.id,
-            targetId: otherId,
-            payload: JSON.stringify({
-              username: '',
-              displayName: '',
-              bio: '',
-              avatarUrl: '',
-              isOnline: false,
-              lastSeen: Date.now(),
-            }),
-          });
-        }
-      }
       closeAndCleanup(current, code, reason.toString() || 'closed');
     }
     console.log(`[disconnect] session=${sessionId} code=${code} active=${clientsBySocket.size}`);
@@ -557,8 +602,8 @@ const heartbeatTimer = setInterval(() => {
 
 heartbeatTimer.unref();
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Enclave signaling server listening on 0.0.0.0:${PORT}`);
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`Enclave signaling server listening on 127.0.0.1:${PORT}`);
 });
 
 // Graceful shutdown handlers

@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://enclave.saifmukhtar.dev/sitemap.xml

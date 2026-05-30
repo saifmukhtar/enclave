@@ -14,6 +14,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE messageType IN ('MEDIA', 'MEDIA_IMAGE', 'MEDIA_VIDEO') ORDER BY timestamp DESC")
     fun getMediaMessages(): Flow<List<MessageEntity>>
 
+    @Query("SELECT * FROM messages WHERE messageType IN ('MEDIA', 'MEDIA_IMAGE', 'MEDIA_VIDEO') ORDER BY timestamp DESC")
+    suspend fun getLastMediaMessagesOnly(): List<MessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMessage(message: MessageEntity): Long
 

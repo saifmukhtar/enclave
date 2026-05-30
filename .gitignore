@@ -15,7 +15,7 @@ Thumbs.db
 *.tmp
 *.log
 *.codex
-
+.remember/
 # IDEs and Editors (Android Studio, VS Code, etc.)
 .idea/
 .agents/

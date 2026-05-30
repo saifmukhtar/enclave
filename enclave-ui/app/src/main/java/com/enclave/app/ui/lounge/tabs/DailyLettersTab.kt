@@ -189,6 +189,11 @@ fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Fac
                                 .background(accentStripBrush)
                         )
 
+                        val myProfile by viewModel.myProfile.collectAsState()
+                        val partnerProfile by viewModel.partnerProfile.collectAsState()
+                        val myUsername = myProfile?.username?.ifBlank { null } ?: "You"
+                        val partnerUsername = partnerProfile?.username?.ifBlank { null } ?: "Partner"
+
                         Row(
                             modifier = Modifier
                                 .weight(1f)
@@ -198,7 +203,7 @@ fun DailyLettersTab(loungeMediaFactory: androidx.lifecycle.ViewModelProvider.Fac
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (letter.senderId == viewModel.myId) "From You" else "From Partner",
+                                    text = if (letter.senderId == viewModel.myId) "From $myUsername" else "From $partnerUsername",
                                     fontSize = 12.sp,
                                     color = com.enclave.app.ui.theme.RoseDeep,
                                     fontWeight = FontWeight.Bold,

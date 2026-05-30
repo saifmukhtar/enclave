@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -90,6 +91,14 @@ class ChatViewModel(
     private val _navigateToVault = MutableSharedFlow<Unit>()
     val navigateToVault = _navigateToVault.asSharedFlow()
 
+    private val bitmapCache = object : android.util.LruCache<String, android.graphics.Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtMost(32 * 1024)
+    ) {
+        override fun sizeOf(key: String, value: android.graphics.Bitmap): Int {
+            return value.byteCount / 1024
+        }
+    }
+
     private val voiceMemoController = VoiceMemoController(context, cryptoManager)
 
     private val _activePlaybackKiss = MutableStateFlow<RecordedKissPayload?>(null)
@@ -112,19 +121,45 @@ class ChatViewModel(
     private var recordingJob: Job? = null
     private var isChatActive = false
 
-    // Decrypt messages strictly on background thread, reusing local cache hits for 60fps performance
-    val messages: StateFlow<List<ChatMessage>> = messageDecryptorUseCase.getDecryptedMessagesFlow()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // Optimistic UI: messages inserted here appear immediately, before the DB flow emits.
+    private val _pendingMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+
+    // Decrypt messages strictly on background thread, reusing local cache hits for 60fps performance.
+    // Merged with _pendingMessages for optimistic send UI.
+    val messages: StateFlow<List<ChatMessage>> =
+        messageDecryptorUseCase.getDecryptedMessagesFlow()
+            .combine(_pendingMessages) { dbList, pending ->
+                val dbIds = dbList.map { it.id }.toSet()
+                val stillPending = pending.filter { it.id !in dbIds }
+                (stillPending + dbList).sortedByDescending { it.timestamp }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     val mediaMessages: StateFlow<List<ChatMessage>> = messageDecryptorUseCase.getDecryptedMediaMessagesFlow()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    val myProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getMyProfile()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val partnerProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getPartnerProfile()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     init {
@@ -179,14 +214,31 @@ class ChatViewModel(
     fun sendMessage(text: String) {
         viewModelScope.launch {
             val replyTarget = _replyToMessage.value
-            _replyToMessage.value = null // Clear active reply state
-            
-            val isSecured = uiState.value is ChatUiState.Secured
-            
-            val result = messageSenderUseCase.sendMessage(text, replyTarget, disappearingMode.value, isSecured)
+            _replyToMessage.value = null
+
+            val isSecured = uiState.value is ChatUiState.Secured || uiState.value is ChatUiState.WaitingForPartner
+
+            // ── Optimistic UI: add to pending list immediately ──
+            val optimisticId = UUID.randomUUID().toString()
+            val optimisticMsg = ChatMessage(
+                id            = optimisticId,
+                text          = text,
+                isFromMe      = true,
+                timestamp     = System.currentTimeMillis(),
+                deliveryStatus = "SENDING",
+                messageType   = "TEXT"
+            )
+            _pendingMessages.value = _pendingMessages.value + optimisticMsg
+
+            val result = messageSenderUseCase.sendMessage(text, replyTarget, disappearingMode.value, isSecured, optimisticId)
             if (result != null) {
                 messageDecryptorUseCase.injectCache(result.first, result.second)
             }
+
+            // Slight settling delay so Room database has time to emit the written entity
+            // before we clean up the optimistic UI state, avoiding the flicker gap!
+            delay(150)
+            _pendingMessages.value = _pendingMessages.value.filter { it.id != optimisticId }
         }
     }
 
@@ -224,9 +276,8 @@ class ChatViewModel(
 
                 if (baseType == "VAULT_KEY_SYNC") {
                     val keyBase64 = Base64.encodeToString(decryptedBytes, Base64.NO_WRAP)
-                    context.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
-                        .edit().putString("vault_key", keyBase64).apply()
-                    android.util.Log.d("ChatViewModel", "Successfully received and saved shared E2EE vault key from partner.")
+                    cryptoManager.storeVaultKey(keyBase64)
+                    android.util.Log.d("ChatViewModel", "Successfully received and saved shared E2EE vault key from partner securely.")
                     return@launch
                 }
 
@@ -323,6 +374,19 @@ class ChatViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val msgEntity = database.messageDao().getMessageById(messageId)
             if (msgEntity != null) {
+                val baseType = msgEntity.messageType
+                if (baseType == "MEDIA" || baseType == "MEDIA_IMAGE" || baseType == "MEDIA_VIDEO" || baseType == "MEDIA_AUDIO" || baseType == "MEDIA_FILE" || baseType == "VOICE") {
+                    try {
+                        val fileNameBytes = cryptoManager.decryptLocal(msgEntity.encryptedPayload)
+                        val fileName = String(fileNameBytes, Charsets.UTF_8)
+                        val rawFile = vaultRepository.encryptedFileManager.getRawFile(fileName)
+                        if (rawFile.exists()) {
+                            rawFile.delete()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatViewModel", "Failed to delete secure file for manual deleted message ${msgEntity.id}", e)
+                    }
+                }
                 database.messageDao().deleteMessage(messageId)
                 if (forEveryone && msgEntity.senderId == myId) {
                     val msg = SignalMessageWrapper(
@@ -586,7 +650,7 @@ class ChatViewModel(
             try {
                 val fileNameBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
                 val fileName = String(fileNameBytes, Charsets.UTF_8)
-                val fileBytes = vaultRepository.encryptedFileManager.readSecureFile(fileName)
+                val fileBytes = vaultRepository.readSecureFile(fileName)
                 
                 launch(Dispatchers.Main) {
                     _activePlayingVoiceMessageId.value = messageId
@@ -643,12 +707,81 @@ class ChatViewModel(
                 val entity = database.messageDao().getMessageById(messageId) ?: return@withContext null
                 val fileNameBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
                 val fileName = String(fileNameBytes, Charsets.UTF_8)
-                vaultRepository.encryptedFileManager.readSecureFile(fileName)
+                vaultRepository.readSecureFile(fileName)
             } catch (e: Exception) {
                 android.util.Log.e("Enclave", "Exception caught", e)
                 null
             }
         }
+    }
+
+    suspend fun getMediaBitmap(messageId: String, isThumbnail: Boolean = false): android.graphics.Bitmap? {
+        val cacheKey = if (isThumbnail) "${messageId}_thumb" else messageId
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val cached = bitmapCache.get(cacheKey)
+            if (cached != null) {
+                return@withContext cached
+            }
+            try {
+                val bytes = getMediaBytes(messageId) ?: return@withContext null
+                val finalBytes = if (isThumbnail) {
+                    generateVideoThumbnail(context, bytes) ?: return@withContext null
+                } else {
+                    bytes
+                }
+                
+                // Decode sub-sampled image to fit chat bubble boundaries (max 480px width/height)
+                val bitmap = decodeSampledBitmapFromByteArray(finalBytes, 480, 480)
+                if (bitmap != null) {
+                    bitmapCache.put(cacheKey, bitmap)
+                }
+                bitmap
+            } catch (e: Exception) {
+                android.util.Log.e("Enclave", "Failed to load/decode bitmap for $cacheKey", e)
+                null
+            }
+        }
+    }
+
+    private fun decodeSampledBitmapFromByteArray(
+        data: ByteArray,
+        reqWidth: Int,
+        reqHeight: Int
+    ): android.graphics.Bitmap? {
+        return try {
+            val options = android.graphics.BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size, options)
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight)
+            options.inJustDecodeBounds = false
+            android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size, options)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun calculateInSampleSize(
+        options: android.graphics.BitmapFactory.Options,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Int {
+        val height = options.outHeight
+        val width = options.outWidth
+        var inSampleSize = 1
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
+    fun getCachedBitmap(messageId: String, isThumbnail: Boolean = false): android.graphics.Bitmap? {
+        val cacheKey = if (isThumbnail) "${messageId}_thumb" else messageId
+        return bitmapCache.get(cacheKey)
     }
 
     fun openDecryptedFile(messageId: String, context: android.content.Context) {
@@ -657,7 +790,7 @@ class ChatViewModel(
                 val entity = database.messageDao().getMessageById(messageId) ?: return@launch
                 val fileNameBytes = cryptoManager.decryptLocal(entity.encryptedPayload)
                 val fileName = String(fileNameBytes, Charsets.UTF_8)
-                val decryptedBytes = vaultRepository.encryptedFileManager.readSecureFile(fileName)
+                val decryptedBytes = vaultRepository.readSecureFile(fileName)
                 
                 // Write to cache directory
                 val cacheFile = java.io.File(context.cacheDir, "shared_$fileName")
@@ -681,10 +814,13 @@ class ChatViewModel(
                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, mimeType)
                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                
+                val chooser = android.content.Intent.createChooser(intent, "Open file with...").apply {
                     addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 
-                context.startActivity(intent)
+                context.startActivity(chooser)
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "Failed to open decrypted file", e)
             }
@@ -702,6 +838,36 @@ class ChatViewModel(
                 android.util.Log.e("ChatViewModel", "Failed to export chat media", e)
             }
         }
+    }
+
+    fun generateVideoThumbnail(context: Context, videoBytes: ByteArray): ByteArray? {
+        val tempFile = java.io.File(context.cacheDir, "temp_thumb_gen.mp4")
+        return try {
+            tempFile.writeBytes(videoBytes)
+            val retriever = android.media.MediaMetadataRetriever()
+            retriever.setDataSource(tempFile.absolutePath)
+            val bitmap = retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            retriever.release()
+            if (bitmap != null) {
+                val bos = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+                bos.toByteArray()
+            } else null
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Thumbnail generation failed", e)
+            null
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
+    suspend fun saveToVault(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+        thumbnailBytes: ByteArray? = null
+    ): Boolean {
+        return vaultRepository.saveToVault(fileName, mimeType, bytes, thumbnailBytes)
     }
 
     // --- Secure Encrypted Message Search ---

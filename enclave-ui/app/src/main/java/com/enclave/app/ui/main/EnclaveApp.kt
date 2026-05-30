@@ -14,9 +14,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
-import com.enclave.app.BuildConfig
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.data.local.EnclaveDatabase
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.data.vault.EncryptedFileManager
 import com.enclave.app.data.vault.VaultRepository
 import com.enclave.app.media.MusicSyncController
@@ -57,10 +57,14 @@ fun EnclaveApp(
 
     val cryptoManager = remember { CryptoManager(activity) }
 
+    val configManager = remember { ConfigManager.getInstance(context) }
+    val sUrl = remember { configManager.getSupabaseUrl() ?: "" }
+    val sKey = remember { configManager.getSupabaseKey() ?: "" }
+
     val supabase = remember {
         createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_KEY
+            supabaseUrl = sUrl,
+            supabaseKey = sKey
         ) {
             httpEngine = io.ktor.client.engine.okhttp.OkHttp.create {
                  config {
@@ -68,7 +72,7 @@ fun EnclaveApp(
                     readTimeout(java.time.Duration.ofMinutes(5))
                     writeTimeout(java.time.Duration.ofMinutes(5))
                     val parsedHost = try {
-                        java.net.URI(BuildConfig.SUPABASE_URL).host
+                        java.net.URI(sUrl).host
                     } catch (e: Exception) {
                         null
                     }
@@ -267,9 +271,10 @@ fun EnclaveApp(
     val vaultRepository = remember { VaultRepository(context, encryptedFileManager, database.mediaMetadataDao(), bundleRepository) }
     val vaultViewModel = remember { VaultViewModel(vaultRepository) }
 
+    val sigUrl = remember { configManager.getSignalingServerUrl() ?: "" }
     val signalingClient = remember(myId) {
         SignalingClient(
-            url = BuildConfig.SIGNALING_SERVER_URL,
+            url = sigUrl,
             myId = myId,
             tokenProvider = { supabase.auth.currentSessionOrNull()?.accessToken }
         )
@@ -281,7 +286,8 @@ fun EnclaveApp(
                 if (event == Lifecycle.Event.ON_START) {
                     signalingClient.connect()
                 } else if (event == Lifecycle.Event.ON_STOP) {
-                    signalingClient.close()
+                    // Do not close signalingClient on ON_STOP! Keep connection open in background
+                    // to receive messages and phone calls when the app is minimized.
                 }
             }
         }

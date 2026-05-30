@@ -1,66 +1,29 @@
 ## Enclave Client Configuration Template
-## Copy this file to 'local.properties' and fill in your custom credentials.
+## Copy this file to 'local.properties' to configure your local compilation environment.
 ## Do NOT commit 'local.properties' to version control.
 
 # Path to the local Android SDK installation directory
 sdk.dir=/path/to/your/Android/Sdk
 
 ################################################################################
-# CONFIGURATION PROFILES
-# Uncomment the section you want to use, comment out the others
-################################################################################
-
-# ============================================================================
-# PRODUCTION SETUP (for your custom domain - ACTIVE BY DEFAULT)
-# Replace placeholders with your own domain, TURN, and Supabase credentials
-# ============================================================================
-TURN_SERVER_URL=turn:your-turn-server-domain-or-ip.com:3478
-TURN_USERNAME=your_production_turn_username
-TURN_PASSWORD=your_production_turn_password
-SIGNALING_SERVER_URL=wss://wss.your-domain.com
-SUPABASE_URL=https://api.your-domain.com
-SUPABASE_KEY=your_supabase_anon_public_key_placeholder
-
-# ============================================================================
-# PRODUCTION SETUP - LOCAL DOMAIN MAPPING (alternative)
-# Use this if you've mapped your domain to 127.0.0.1 in /etc/hosts
-# Uncomment these lines and comment out the above to use
-# ============================================================================
-# TURN_SERVER_URL=turn:api.your-domain.com:3478
-# TURN_USERNAME=your_production_turn_username
-# TURN_PASSWORD=your_production_turn_password
-# SIGNALING_SERVER_URL=wss://wss.your-domain.com
-# SUPABASE_URL=https://api.your-domain.com
-# SUPABASE_KEY=your_supabase_anon_public_key_placeholder
-
-# ============================================================================
-# LOCAL DEVELOPMENT SETUP (for testing against localhost / physical dev machine)
-# Uncomment these lines and comment out PRODUCTION above to use
-# For Physical Device: Use your machine's IP address (e.g., 192.168.1.100)
-# ============================================================================
-# TURN_SERVER_URL=turn:192.168.1.100:3478
-# TURN_USERNAME=localdev
-# TURN_PASSWORD=localdevpass123
-# SIGNALING_SERVER_URL=ws://192.168.1.100:8085
-# SUPABASE_URL=http://192.168.1.100:8000
-# SUPABASE_KEY=your_supabase_anon_public_key_placeholder
-
-# ============================================================================
-# LOCAL DEVELOPMENT SETUP - ALTERNATIVE (if using 10.0.2.2 Android Emulator alias)
-# Uncomment these lines and comment out PRODUCTION above to use 10.0.2.2
-# ============================================================================
-# TURN_SERVER_URL=turn:10.0.2.2:3478
-# TURN_USERNAME=localdev
-# TURN_PASSWORD=localdevpass123
-# SIGNALING_SERVER_URL=ws://10.0.2.2:8085
-# SUPABASE_URL=http://10.0.2.2:8000
-# SUPABASE_KEY=your_supabase_anon_public_key_placeholder
-
-################################################################################
 # RELEASE SIGNING CONFIGURATION
 ################################################################################
-# Private Release Signing Configuration for Android APK signing
+# Private Release Signing Configuration for Android APK signing.
+# Leave blank to compile standard debug APKs.
 RELEASE_STORE_FILE=/path/to/your/release-key.jks
 RELEASE_STORE_PASSWORD=your_release_store_password
 RELEASE_KEY_ALIAS=your_release_key_alias
 RELEASE_KEY_PASSWORD=your_release_key_password
+
+#################################################################################
+# ADD YOUR SECRET AND PASTE IN THE APP DIRECTLY
+#################################################################################
+TURN_SERVER_URL=your_production_turn_url
+TURN_USERNAME=your_production_turn_username
+TURN_PASSWORD=your_production_turn_password
+SIGNALING_SERVER_URL=your_production_server_url
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+NTFY_SERVER_URL=your_ntfy_server_url
+NTFY_USERNAME=your_ntfy_username
+NTFY_PASSWORD=your_ntfy_password

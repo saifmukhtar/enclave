@@ -3,9 +3,11 @@ package com.enclave.app.ui.call
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -22,12 +24,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import org.webrtc.EglBase
 import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
@@ -41,8 +48,10 @@ fun VideoCallScreen(viewModel: CallViewModel) {
     val remoteVideoTrack by viewModel.remoteVideoTrack.collectAsState()
     val isMuted by viewModel.isMuted.collectAsState()
     val isSpeakerphoneOn by viewModel.isSpeakerphoneOn.collectAsState()
+    val isCameraEnabled by viewModel.isCameraEnabled.collectAsState()
+    val ringingState by viewModel.ringingState.collectAsState()
+    val isAudioOnly by viewModel.isAudioOnly.collectAsState()
     
-    // Picture-in-Picture State tracking
     val isInPiPMode by viewModel.isInPiPMode.collectAsState()
     val isScreenSharing by viewModel.isScreenSharing.collectAsState()
 
@@ -59,13 +68,28 @@ fun VideoCallScreen(viewModel: CallViewModel) {
         }
     }
 
+    // Dynamic high-fidelity Call Duration Timer
+    var callDurationSeconds by remember { mutableStateOf(0) }
+    LaunchedEffect(callState) {
+        if (callState == CallState.ACTIVE) {
+            callDurationSeconds = 0
+            while (true) {
+                delay(1000)
+                callDurationSeconds++
+            }
+        }
+    }
+    val minutes = callDurationSeconds / 60
+    val seconds = callDurationSeconds % 60
+    val durationText = String.format("%02d:%02d", minutes, seconds)
+
     AnimatedVisibility(
         visible = callState != CallState.IDLE,
         enter = fadeIn(),
         exit = fadeOut()
     ) {
         if (isInPiPMode) {
-            // 1. Picture-in-Picture Mode: Show ONLY the remote participant track
+            // --- 1. PICTURE-IN-PICTURE MODE ---
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -86,51 +110,183 @@ fun VideoCallScreen(viewModel: CallViewModel) {
                 }
             }
         } else {
-            // 2. Full UI Mode: Standard active/ringing screen layouts
+            // --- 2. FULL UI CALLING MODE ---
+            val isReallyAudioCall = isAudioOnly || !isCameraEnabled
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFFFF5F6)) // Minimalist Blush Canvas
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF2E171B), // Dark elegant rose
+                                Color(0xFF13090A)  // Near-black vault base
+                            )
+                        )
+                    )
             ) {
-                // Background video track or ringing screen
-                if (callState == CallState.ACTIVE && remoteVideoTrack != null) {
+                if (!isReallyAudioCall && callState == CallState.ACTIVE && remoteVideoTrack != null) {
+                    // Fullscreen Video Call rendering
                     VideoRenderer(
                         videoTrack = remoteVideoTrack,
                         eglBaseContext = viewModel.eglContext,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
+                    // Audio Call UI or Connecting state with premium pulsing aura
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            // Infinite breathing halo animation for the profile circle
+                            val infiniteTransition = rememberInfiniteTransition(label = "halo")
+                            val pulseScale1 by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 1.35f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(2200, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "scale1"
+                            )
+                            val pulseAlpha1 by infiniteTransition.animateFloat(
+                                initialValue = 0.4f,
+                                targetValue = 0f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(2200, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "alpha1"
+                            )
+                            val pulseScale2 by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 1.6f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(2200, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "scale2"
+                            )
+                            val pulseAlpha2 by infiniteTransition.animateFloat(
+                                initialValue = 0.25f,
+                                targetValue = 0f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(2200, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "alpha2"
+                            )
+
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.size(180.dp)
+                            ) {
+                                // Halo rings
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .scale(pulseScale2)
+                                        .graphicsLayer { alpha = pulseAlpha2 }
+                                        .background(Color(0xFFFFC5CF).copy(alpha = 0.3f), CircleShape)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(150.dp)
+                                        .scale(pulseScale1)
+                                        .graphicsLayer { alpha = pulseAlpha1 }
+                                        .background(Color(0xFFFFC5CF).copy(alpha = 0.5f), CircleShape)
+                                )
+                                
+                                // Large premium pink avatar placeholder
+                                Box(
+                                    modifier = Modifier
+                                        .size(110.dp)
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(Color(0xFFFFF0F2), Color(0xFFFFD5DD))
+                                            ),
+                                            CircleShape
+                                        )
+                                        .border(2.dp, Color(0xFFFFC5CF), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Avatar",
+                                        tint = Color(0xFF8C3E4A),
+                                        modifier = Modifier.size(54.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(32.dp))
+
                             Text(
                                 text = when (callState) {
-                                    CallState.RINGING_OUTGOING -> "Ringing..."
+                                    CallState.RINGING_OUTGOING -> when (ringingState) {
+                                        RingingState.CALLING -> "Calling..."
+                                        RingingState.RINGING -> "Ringing..."
+                                        RingingState.UNREACHABLE -> "Unreachable"
+                                        else -> "Calling..."
+                                    }
                                     CallState.RINGING_INCOMING -> "Incoming Secure Call"
                                     CallState.CONNECTING -> "Connecting..."
-                                    CallState.ACTIVE -> if (viewModel.isAudioOnly.collectAsState().value) "Secure Audio Call" else "Connecting Video..."
+                                    CallState.ACTIVE -> "Secure Audio Call"
                                     else -> ""
                                 },
                                 fontSize = 24.sp,
-                                color = Color(0xFF2A1B1D),
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFF5F6)
                             )
+                            
                             Spacer(modifier = Modifier.height(8.dp))
+                            
+                            if (callState == CallState.ACTIVE) {
+                                Text(
+                                    text = durationText,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFFFC5CF),
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                )
+                            }
+
                             Text(
-                                text = "Enclave End-to-End Encrypted",
-                                fontSize = 14.sp,
-                                color = Color(0xFF2A1B1D).copy(alpha = 0.6f)
+                                text = "🔒 End-to-End Encrypted",
+                                fontSize = 13.sp,
+                                color = Color(0xFFFFC5CF).copy(alpha = 0.7f)
                             )
                         }
                     }
                 }
 
-                // Floating Draggable Local Preview
-                if (localVideoTrack != null && callState != CallState.RINGING_INCOMING) {
+                // Camera Switch (Flip) Button — Top Right Corner (Exactly like WhatsApp & Signal)
+                if (!isReallyAudioCall && isCameraEnabled && callState == CallState.ACTIVE) {
+                    IconButton(
+                        onClick = { viewModel.toggleCamera() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 28.dp, end = 24.dp)
+                            .size(50.dp)
+                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cameraswitch,
+                            contentDescription = "Flip Lens",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Floating Draggable Local Camera Preview (only for Video Calls)
+                if (!isReallyAudioCall && localVideoTrack != null && callState != CallState.RINGING_INCOMING) {
                     var offsetX by remember { mutableStateOf(50f) }
-                    var offsetY by remember { mutableStateOf(50f) }
+                    var offsetY by remember { mutableStateOf(100f) }
 
                     Box(
                         modifier = Modifier
@@ -142,9 +298,10 @@ fun VideoCallScreen(viewModel: CallViewModel) {
                                     offsetY += dragAmount.y
                                 }
                             }
-                            .size(120.dp, 160.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFFFCE2E6)) // Soft Rose Base
+                            .size(110.dp, 150.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF2E171B))
+                            .border(1.5.dp, Color(0xFFFFC5CF).copy(alpha = 0.6f), RoundedCornerShape(20.dp))
                     ) {
                         VideoRenderer(
                             videoTrack = localVideoTrack,
@@ -154,24 +311,25 @@ fun VideoCallScreen(viewModel: CallViewModel) {
                     }
                 }
 
-                // Floating Dark Semi-Transparent Controls Bar (Crisp & High Contrast, No Blur)
+                // --- PREMIUM GLASSMORPHIC BOTTOM CONTROLS BAR ---
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 48.dp)
+                        .padding(bottom = 44.dp)
                         .fillMaxWidth(0.9f)
-                        .height(80.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF1E1E1E).copy(alpha = 0.9f)),
+                        .height(88.dp)
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(Color(0xFF2A1518).copy(alpha = 0.82f))
+                        .border(1.2.dp, Color(0xFFFFC5CF).copy(alpha = 0.22f), RoundedCornerShape(32.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         if (callState == CallState.RINGING_INCOMING) {
-                            // Accept Call
+                            // ACCEPT CALL BUTTON
                             IconButton(
                                 onClick = {
                                     val hasCamera = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -193,86 +351,90 @@ fun VideoCallScreen(viewModel: CallViewModel) {
                                     }
                                 },
                                 modifier = Modifier
-                                    .size(54.dp)
-                                    .background(Color(0xFF4CAF50), CircleShape)
+                                    .size(56.dp)
+                                    .background(Color(0xFF2E7D32), CircleShape)
                             ) {
-                                Icon(Icons.Default.Call, contentDescription = "Accept", tint = Color.White)
+                                Icon(Icons.Default.Call, contentDescription = "Accept", tint = Color.White, modifier = Modifier.size(28.dp))
                             }
 
-                            // Reject Call
+                            // REJECT CALL BUTTON
                             IconButton(
                                 onClick = { viewModel.rejectCall() },
                                 modifier = Modifier
-                                    .size(54.dp)
-                                    .background(Color(0xFFF44336), CircleShape)
+                                    .size(56.dp)
+                                    .background(Color(0xFFC62828), CircleShape)
                             ) {
-                                Icon(Icons.Default.CallEnd, contentDescription = "Reject", tint = Color.White)
+                                Icon(Icons.Default.CallEnd, contentDescription = "Reject", tint = Color.White, modifier = Modifier.size(28.dp))
                             }
                         } else {
-                            // Toggle Audio Mute
+                            // 1. MIC MUTE BUTTON
                             IconButton(
                                 onClick = { viewModel.toggleMute() },
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .background(if (isMuted) Color.White.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
+                                    .size(46.dp)
+                                    .background(if (isMuted) Color(0xFFE53935).copy(alpha = 0.35f) else Color.Transparent, CircleShape)
                             ) {
                                 Icon(
                                     imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                                     contentDescription = "Mute",
-                                    tint = Color.White
+                                    tint = if (isMuted) Color(0xFFFFB3B3) else Color(0xFFFFD5DD)
                                 )
                             }
 
-                            // Toggle Camera Front/Back Lens
-                            IconButton(
-                                onClick = { viewModel.toggleCamera() },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(Color.Transparent, CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Cameraswitch,
-                                    contentDescription = "Flip Lens",
-                                    tint = Color.White
-                                )
+                            // 2. CAMERA TOGGLE (VIDEO ONLY)
+                            if (!isAudioOnly) {
+                                IconButton(
+                                    onClick = { viewModel.toggleCameraEnabled() },
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .background(if (!isCameraEnabled) Color(0xFFC62828).copy(alpha = 0.3f) else Color.Transparent, CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                                        contentDescription = "Toggle Camera",
+                                        tint = Color(0xFFFFD5DD)
+                                    )
+                                }
                             }
 
-                            // Toggle Screen Share
-                            IconButton(
-                                onClick = { viewModel.toggleScreenShare() },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(if (isScreenSharing) Color.White.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = if (isScreenSharing) Icons.AutoMirrored.Filled.StopScreenShare else Icons.AutoMirrored.Filled.ScreenShare,
-                                    contentDescription = "Screen Share",
-                                    tint = Color.White
-                                )
+                            // 3. SCREEN SHARE (VIDEO ONLY)
+                            if (!isAudioOnly) {
+                                IconButton(
+                                    onClick = { viewModel.toggleScreenShare() },
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .background(if (isScreenSharing) Color(0xFFFFC5CF).copy(alpha = 0.3f) else Color.Transparent, CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isScreenSharing) Icons.AutoMirrored.Filled.StopScreenShare else Icons.AutoMirrored.Filled.ScreenShare,
+                                        contentDescription = "Screen Share",
+                                        tint = Color(0xFFFFD5DD)
+                                    )
+                                }
                             }
 
-                            // Toggle Speakerphone
+                            // 4. SPEAKERPHONE
                             IconButton(
                                 onClick = { viewModel.toggleSpeakerphone() },
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .background(if (isSpeakerphoneOn) Color.White.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
+                                    .size(46.dp)
+                                    .background(if (isSpeakerphoneOn) Color(0xFFFFC5CF).copy(alpha = 0.25f) else Color.Transparent, CircleShape)
                             ) {
                                 Icon(
                                     imageVector = if (isSpeakerphoneOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                     contentDescription = "Speakerphone",
-                                    tint = Color.White
+                                    tint = Color(0xFFFFD5DD)
                                 )
                             }
 
-                            // End Active Call
+                            // 5. END ACTIVE CALL BUTTON
                             IconButton(
                                 onClick = { viewModel.endCall() },
                                 modifier = Modifier
                                     .size(54.dp)
-                                    .background(Color(0xFFF44336), CircleShape)
+                                    .background(Color(0xFFC62828), CircleShape)
                             ) {
-                                Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White)
+                                Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White, modifier = Modifier.size(26.dp))
                             }
                         }
                     }
@@ -300,7 +462,7 @@ fun VideoRenderer(
             }
         },
         update = {
-            // Track binding and releasing is managed cleanly by the DisposableEffect lifecycle
+            // Track bindings are fully handled via DisposableEffect context lifecycle triggers
         },
         modifier = modifier
     )
@@ -323,6 +485,3 @@ fun VideoRenderer(
         }
     }
 }
-
-private val Color.Companion.white: Color
-    get() = Color(0xFFFFFFFF)

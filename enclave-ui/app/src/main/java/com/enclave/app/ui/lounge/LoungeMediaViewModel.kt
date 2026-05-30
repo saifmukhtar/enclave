@@ -13,6 +13,9 @@ import com.enclave.app.network.ScrapbookEntry
 import com.enclave.app.webrtc.SignalingClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -58,6 +61,22 @@ class LoungeMediaViewModel(
 
     // --- E2EE Shared Notes ---
     val encryptedNotesFlow = database.encryptedNoteDao().getAllNotesFlow()
+
+    val myProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getMyProfile()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val partnerProfile: StateFlow<com.enclave.app.data.local.UserProfileEntity?> = database.userProfileDao()
+        .getPartnerProfile()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
 
     init {
         refreshScrapbook()
@@ -190,7 +209,7 @@ class LoungeMediaViewModel(
     fun saveEncryptedNote(id: String = UUID.randomUUID().toString(), title: String, content: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val keyBase64 = getApplication<Application>().getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE).getString("vault_key", null)
+                val keyBase64 = cryptoManager.loadVaultKey()
                 if (keyBase64 == null) return@launch
                 val keyBytes = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
 
@@ -230,7 +249,7 @@ class LoungeMediaViewModel(
 
     fun decryptNoteField(encryptedBytes: ByteArray): String {
         return try {
-            val keyBase64 = getApplication<Application>().getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE).getString("vault_key", null)
+            val keyBase64 = cryptoManager.loadVaultKey()
                 ?: return "Locked"
             val keyBytes = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
             val decryptedBytes = com.enclave.app.crypto.VaultCipher.decrypt(encryptedBytes, keyBytes)

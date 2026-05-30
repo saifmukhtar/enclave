@@ -3,7 +3,7 @@ package com.enclave.app.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.enclave.app.BuildConfig
+import com.enclave.app.data.config.ConfigManager
 import com.enclave.app.crypto.CryptoManager
 import com.enclave.app.data.local.EnclaveDatabase
 import com.enclave.app.data.local.MessageEntity
@@ -33,11 +33,17 @@ class TimeCapsuleWorker(
         val prefs = applicationContext.getSharedPreferences("enclave_prefs", Context.MODE_PRIVATE)
         val myId = prefs.getString("my_id", null) ?: return Result.failure()
 
-        // BUG-8 Fix: Use BuildConfig server URL (not a SharedPreferences fallback that was never written)
+        val configManager = ConfigManager.getInstance(applicationContext)
+        val sUrl = configManager.getSupabaseUrl()
+        val sKey = configManager.getSupabaseKey()
+        if (sUrl.isNullOrBlank() || sKey.isNullOrBlank()) {
+            return Result.failure()
+        }
+
         // Initialize Supabase to fetch live auth token for signaling authentication
         val supabase = createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_KEY
+            supabaseUrl = sUrl,
+            supabaseKey = sKey
         ) {
             install(Auth)
             install(Postgrest)
@@ -46,8 +52,12 @@ class TimeCapsuleWorker(
         val token = supabase.auth.currentSessionOrNull()?.accessToken
 
         // Wait up to 5 mins if offline? Actually, WorkManager handles constraints like NetworkType.CONNECTED.
+        val sigUrl = configManager.getSignalingServerUrl()
+        if (sigUrl.isNullOrBlank()) {
+            return Result.failure()
+        }
         val signalingClient = SignalingClient(
-            url = BuildConfig.SIGNALING_SERVER_URL,
+            url = sigUrl,
             myId = myId,
             tokenProvider = { token }
         )

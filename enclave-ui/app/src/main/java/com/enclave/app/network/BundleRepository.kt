@@ -291,12 +291,16 @@ class BundleRepository(
                 .select { filter { eq("id", partnerId) } }
                 .decodeSingleOrNull<UserProfile>()
             profile?.let {
+                val lastSeenTs = it.last_seen?.let { ls ->
+                    try { java.time.Instant.parse(ls).toEpochMilli() } catch (e: Exception) { 0L }
+                } ?: 0L
                 UserProfileEntity(
                     userId = it.id,
                     username = it.username ?: "",
                     displayName = it.display_name ?: "",
                     bio = it.bio ?: "",
                     avatarUrl = it.avatar_url ?: "",
+                    lastSeen = lastSeenTs,
                     isOnline = it.is_online ?: false,
                     isMe = false,
                     loveLanguage = it.love_language ?: "",
@@ -319,12 +323,16 @@ class BundleRepository(
                 .select { filter { eq("id", currentUser.id) } }
                 .decodeSingleOrNull<UserProfile>()
             profile?.let {
+                val lastSeenTs = it.last_seen?.let { ls ->
+                    try { java.time.Instant.parse(ls).toEpochMilli() } catch (e: Exception) { 0L }
+                } ?: 0L
                 UserProfileEntity(
                     userId = it.id,
                     username = it.username ?: "",
                     displayName = it.display_name ?: currentUser.email?.substringBefore("@") ?: "",
                     bio = it.bio ?: "",
                     avatarUrl = it.avatar_url ?: "",
+                    lastSeen = lastSeenTs,
                     isOnline = true,
                     isMe = true,
                     loveLanguage = it.love_language ?: "",
@@ -586,6 +594,7 @@ class BundleRepository(
     // ─── Collaborative Zero-Knowledge E2EE Vault API ───────────────────────────
 
     suspend fun uploadVaultFile(fileName: String, fileBytes: ByteArray): String = withContext(Dispatchers.IO) {
+        awaitAuth()
         val myId = supabase.auth.currentUserOrNull()?.id
             ?: error("Not authenticated — cannot upload vault file")
         val path = "$myId/$fileName"
@@ -602,6 +611,7 @@ class BundleRepository(
         thumbnailPath: String
     ) = withContext(Dispatchers.IO) {
         try {
+            awaitAuth()
             val myId = supabase.auth.currentUserOrNull()?.id ?: return@withContext
             val meta = lounge_vault_metadata_upload(
                 media_id = mediaId,

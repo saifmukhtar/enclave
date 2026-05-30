@@ -99,19 +99,30 @@ npm run build
 
 ---
 
-## Production deployment summary
+## Production Deployment (Recommended)
 
-Use [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for full VPS instructions.
+The easiest way to deploy the entire production backend (Supabase, WebRTC, Ntfy, Nginx, SSL) is using the automated script on a fresh Ubuntu 22.04 or 24.04 server. 
 
-High-level flow:
+Make sure you have your DNS records pointing to your server IP before running this:
 
-1. Provision Ubuntu VPS and DNS (`api.<domain>`, `wss.<domain>`).
+```bash
+curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
+```
+
+Use [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for detailed configuration options.
+
+---
+
+## Manual Production Deployment (Advanced)
+
+If you prefer to deploy manually without the automated script:
+
+1. Provision Ubuntu VPS and DNS (`api.enclave.<domain>`, `wss.enclave.<domain>`, `ntfy.enclave.<domain>`).
 2. Install Docker, Node.js, PM2, Nginx, Certbot, Coturn.
 3. Copy `enclave-server/` to VPS and configure `.env`.
-4. Start backend with `deploy.sh`.
+4. Start backend with `docker compose up -d`.
 5. Build/run signaling server with PM2.
 6. Configure Nginx TLS reverse proxy and firewall.
-
 ---
 
 ## Common commands

@@ -210,7 +210,7 @@ fun MemoryTimelineTab(chatViewModel: com.enclave.app.ui.chat.ChatViewModel?) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(mediaMessages.sortedByDescending { it.timestamp }) { msg ->
+                items(mediaMessages.sortedByDescending { it.timestamp }.take(15)) { msg ->
                     MemoryTimelineItem(msg, chatViewModel)
                 }
             }
