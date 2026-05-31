@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { config } from '../config';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -75,7 +76,7 @@ export default function Header() {
             <Link to="/docs" className="nav-link">Docs</Link>
             <a
               className="nav-link"
-              href="https://github.com/saifmukhtar/enclave"
+              href={config.repoUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -128,7 +129,7 @@ export default function Header() {
         </Link>
         <a
           className="mobile-nav-link"
-          href="https://github.com/saifmukhtar/enclave"
+          href={config.repoUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => setMobileOpen(false)}

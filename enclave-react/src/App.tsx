@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import Footer from './components/Footer';
 import DocsLayout from './components/DocsLayout';
+import { config } from './config';
 
 // ── Data Types ──────────────────────────────────────────
 
@@ -185,7 +186,7 @@ const setupSteps: SetupStep[] = [
     title: 'Production Auto-Deploy',
     description:
       'The fastest way to deploy the entire stack (Supabase, WebRTC, Ntfy, Nginx, SSL) to a fresh Ubuntu Droplet.',
-    code: `curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash`,
+    code: `curl -fsSL ${config.installScriptUrl} | sudo bash`,
   },
 ];
 

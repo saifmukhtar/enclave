@@ -48,7 +48,7 @@ jobs:
           VITE_AUTHOR_NAME: ${{ github.repository_owner }}
           VITE_AUTHOR_URL: https://github.com/${{ github.repository_owner }}
           VITE_REPO_URL: https://github.com/${{ github.repository }}
-          VITE_INSTALL_SCRIPT_URL: https://install.enclave.${{ github.repository_owner }}.dev
+          VITE_INSTALL_SCRIPT_URL: https://enclave.${{ github.repository_owner }}.dev/install
       
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { config } from '../config';
 
 // Opacity-only fade — GPU composited, no layout thrash, battery safe
 const fadeIn = (delay = 0) => ({
@@ -19,7 +20,7 @@ export default function Hero() {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText('curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash');
+      await navigator.clipboard.writeText(`curl -fsSL ${config.installScriptUrl} | sudo bash`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -50,7 +51,7 @@ export default function Hero() {
               <a className="btn btn-primary" href="#setup">Start Self-Hosting</a>
               <a
                 className="btn btn-ghost"
-                href="https://github.com/saifmukhtar/enclave"
+                href={config.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -61,7 +62,7 @@ export default function Hero() {
             <div className="hero-install-box">
               <span className="hero-install-label">1-Click Production Deploy</span>
               <div className="hero-install-cmd">
-                <code>curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash</code>
+                <code>curl -fsSL {config.installScriptUrl} | sudo bash</code>
                 <button
                   className="hero-install-copy"
                   onClick={handleCopy}
