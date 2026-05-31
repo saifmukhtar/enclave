@@ -15,19 +15,20 @@ Builds:
     commit: v1.1.0
     subdir: apps/android
     srclibs:
-      - libsignal:
-          project: signalapp/libsignal
-          tag: v0.39.2
-          subdir: java
-          build:
-            - ./gradlew build
+      - libsignal@v0.39.2
     prebuild: |
-      # Create target libs directory
+      # Build the libsignal dependency from source inside the F-Droid srclibs workspace
+      cd $$libsignal$$/java
+      echo "sdk.dir=$ANDROID_HOME" > local.properties
+      ./gradlew build -x test
+      cd ../../apps/android
+      
+      # Create target libs directory inside Enclave main Android module
       mkdir -p app/libs
-      # Copy the source-built JNI AAR and Java Client JAR from srclibs
-      cp $$libsignal$$/java/android/build/outputs/aar/*.aar app/libs/
+      # Copy the freshly compiled FOSS JNI release AAR and java client JAR
+      cp $$libsignal$$/java/android/build/outputs/aar/*-release.aar app/libs/
       cp $$libsignal$$/java/client/build/libs/*.jar app/libs/
-      # Inject the F-Droid build flag to exclude precompiled maven dependencies
+      # Inject the FOSS compiler properties flag
       printf "\nfdroid=true\n" >> gradle.properties
     gradle:
       - yes
