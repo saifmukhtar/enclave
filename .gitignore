@@ -36,42 +36,42 @@ release_test_log.txt
 # ------------------------------------------------------------------------------
 # Enclave Client (Android) Ignored Files
 # ------------------------------------------------------------------------------
-enclave-ui/local.properties
-enclave-ui/app/google-services.json
-enclave-ui/app/google-services.json.backup
-enclave-ui/app/src/main/res/values/secrets.xml
-enclave-ui/.gradle/
-enclave-ui/build/
-enclave-ui/app/build/
-enclave-ui/captures/
-enclave-ui/.externalNativeBuild/
-enclave-ui/.cxx/
-enclave-ui/*.jks
-enclave-ui/*.keystore
-enclave-ui/*.ap_
-enclave-ui/*.der
-enclave-ui/*.pk8
-enclave-ui/*.pem
-enclave-ui/logcat.txt
-enclave-ui/logcat_problems.md
-enclave-ui/.navigation/
-enclave-ui/idea.properties
+apps/android/local.properties
+apps/android/app/google-services.json
+apps/android/app/google-services.json.backup
+apps/android/app/src/main/res/values/secrets.xml
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/
+apps/android/captures/
+apps/android/.externalNativeBuild/
+apps/android/.cxx/
+apps/android/*.jks
+apps/android/*.keystore
+apps/android/*.ap_
+apps/android/*.der
+apps/android/*.pk8
+apps/android/*.pem
+apps/android/logcat.txt
+apps/android/logcat_problems.md
+apps/android/.navigation/
+apps/android/idea.properties
 
 # ------------------------------------------------------------------------------
 # Enclave Server (Backend) Ignored Files
 # ------------------------------------------------------------------------------
-enclave-server/.env
-enclave-server/.env.backup
-enclave-server/.env.fixed
-enclave-server/signaling-server/firebase-adminsdk.json
-enclave-server/signaling-server/node_modules/
-enclave-server/signaling-server/dist/
-enclave-server/signaling-server.log
-enclave-server/volumes/db/data/
-enclave-server/signaling-server/package-lock.json
-enclave-server/signaling-server/npm-debug.log*
-enclave-server/signaling-server/yarn-debug.log*
-enclave-server/signaling-server/yarn-error.log*
+backend/server/.env
+backend/server/.env.backup
+backend/server/.env.fixed
+backend/server/signaling-server/firebase-adminsdk.json
+backend/server/signaling-server/node_modules/
+backend/server/signaling-server/dist/
+backend/server/signaling-server.log
+backend/server/volumes/db/data/
+backend/server/signaling-server/package-lock.json
+backend/server/signaling-server/npm-debug.log*
+backend/server/signaling-server/yarn-debug.log*
+backend/server/signaling-server/yarn-error.log*
 
 # ------------------------------------------------------------------------------
 # Global Build Outputs & Package Manager Cache Fallbacks
@@ -86,7 +86,7 @@ obj/
 *.apk
 *.aar
 *.jar
-!enclave-ui/gradle/wrapper/gradle-wrapper.jar
+!apps/android/gradle/wrapper/gradle-wrapper.jar
 *.class
 
 # Test outputs
@@ -95,6 +95,6 @@ testing/*/
 *.db-shm
 *.db-wal
 testing/
-enclave-react/dist/
-enclave-react/node_modules/
-enclave-react/.env
+apps/web/dist/
+apps/web/node_modules/
+apps/web/.env
