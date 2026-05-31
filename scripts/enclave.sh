@@ -934,7 +934,7 @@ cat > "$SUMMARY_FILE" << SUMMARY_EOF
   Ntfy Push     :  https://${DOMAIN_NTFY}
 
 ================================================================================
-  📋  COPY THIS BLOCK INTO:  enclave-ui/local.properties
+  📋  COPY THIS BLOCK INTO:  apps/android/local.properties
 ================================================================================
 sdk.dir=/path/to/your/Android/Sdk
 

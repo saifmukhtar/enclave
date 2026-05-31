@@ -1,0 +1,36 @@
+Categories:
+  - Internet
+  - Security
+License: AGPL-3.0-only
+SourceCode: https://github.com/saifmukhtar/enclave
+IssueTracker: https://github.com/saifmukhtar/enclave/issues
+WebSite: https://github.com/saifmukhtar/enclave
+
+RepoType: git
+Repo: https://github.com/saifmukhtar/enclave.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 2
+    commit: v1.1.0
+    subdir: apps/android
+    srclibs:
+      - libsignal:
+          project: signalapp/libsignal
+          tag: v0.39.2
+          subdir: java
+          build:
+            - ./gradlew build
+    prebuild: |
+      # Create target libs directory
+      mkdir -p app/libs
+      # Copy the source-built JNI AAR and Java Client JAR from srclibs
+      cp $$libsignal$$/java/android/build/outputs/aar/*.aar app/libs/
+      cp $$libsignal$$/java/client/build/libs/*.jar app/libs/
+      # Inject the F-Droid build flag to exclude precompiled maven dependencies
+      printf "\nfdroid=true\n" >> gradle.properties
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags

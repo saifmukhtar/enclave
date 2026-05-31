@@ -70,7 +70,7 @@
           │  WebSocket   │  REST/WS       │  WebRTC
           │              │                │
 ┌─────────┴──────────────┴────────────────┴────────────────┐
-│                  ANDROID APP (enclave-ui)                │
+│                  ANDROID APP (apps/android)              │
 │                                                          │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │  Jetpack  │  │   Signal     │  │    Room DB        │  │
@@ -80,7 +80,7 @@
 └──────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────┐
-│             REACT WEBSITE (enclave-react)                │
+│             REACT WEBSITE (apps/web)                     │
 │                                                          │
 │  Marketing/docs site — deployed to GitHub Pages          │
 │  No backend connection. Static SPA.                      │
@@ -104,7 +104,7 @@
 
 ## Tech Stack Breakdown
 
-### Android App (`enclave-ui`)
+### Android App (`apps/android`)
 
 | Category | Technology | Version | Source |
 |----------|-----------|---------|--------|
@@ -130,7 +130,7 @@
 | Media Playback | Media3 (ExoPlayer) | 1.3.1 | `build.gradle.kts` |
 | QR Codes | ZXing Core | 3.5.3 | `build.gradle.kts` |
 
-### Backend (`enclave-server`)
+### Backend (`backend/server`)
 
 | Category | Technology | Version | Source |
 |----------|-----------|---------|--------|
@@ -148,7 +148,7 @@
 | STUN/TURN | Coturn | — | `setup_coturn.sh` |
 | Process Manager | PM2 | — | `deploy.sh` |
 
-### React Website (`enclave-react`)
+### React Website (`apps/web`)
 
 | Category | Technology | Version | Source |
 |----------|-----------|---------|--------|
@@ -175,12 +175,12 @@
 
 ```
 enclave/                           ← Root of the monorepo
-├── enclave-ui/                    ← 📱 ANDROID APP (Kotlin + Compose)
+├── apps/android/                  ← 📱 ANDROID APP (Kotlin + Compose)
 │   ├── app/
 │   │   ├── build.gradle.kts       ← All dependencies, SDK versions, plugins
 │   │   └── src/main/
 │   │       ├── AndroidManifest.xml ← Permissions, activities, services
-│   │       └── java/com/enclave/app/
+│   │       └── java/dev/saifmukhtar/enclave/
 │   │           ├── MainActivity.kt          ← Entry point, sets up Compose
 │   │           ├── crypto/
 │   │           │   ├── CryptoManager.kt     ← 🔑 Double Ratchet encrypt/decrypt + local AES
@@ -247,7 +247,7 @@ enclave/                           ← Root of the monorepo
 │   │               └── TimeCapsuleWorker.kt       ← Sends scheduled future messages
 │   └── local.properties.example           ← Template for server URLs/keys
 │
-├── enclave-server/                   ← ☁️ BACKEND (Docker + Node.js)
+├── backend/server/                   ← ☁️ BACKEND (Docker + Node.js)
 │   ├── docker-compose.yml            ← 🐳 Full Supabase stack + Ntfy
 │   ├── .env.example                  ← All environment variable templates
 │   ├── deploy.sh                     ← Local deployment script
@@ -276,7 +276,7 @@ enclave/                           ← Root of the monorepo
 │       │   └── data.sql                       ← Seed data
 │       └── ntfy/                     ← Ntfy auth database
 │
-├── enclave-react/                    ← 🌐 MARKETING WEBSITE (React + Vite)
+├── apps/web/                         ← 🌐 MARKETING WEBSITE (React + Vite)
 │   ├── package.json                  ← React 18, Router, Framer Motion
 │   ├── vite.config.ts               ← Vite build with vendor chunk splitting
 │   ├── src/
@@ -287,11 +287,6 @@ enclave/                           ← Root of the monorepo
 │   │   └── styles.css               ← Global styles
 │   └── public/
 │       └── docs/                     ← Markdown doc files
-│
-├── enclave-page/                     ← 📄 STATIC LANDING PAGE (HTML/CSS/JS)
-│   ├── index.html                    ← SEO-optimized landing page
-│   ├── style.css                     ← Custom CSS
-│   └── script.js                     ← Interaction logic
 │
 ├── .github/workflows/
 │   └── deploy-pages.yml              ← GitHub Actions: build React + deploy to Pages
@@ -678,7 +673,7 @@ This starts:
 #### Step 2: Build the Signaling Server
 
 ```bash
-cd enclave-server/signaling-server
+cd backend/server/signaling-server
 npm ci
 npm run build
 node dist/server.js   # Or: npm start
@@ -691,15 +686,15 @@ Open Supabase Studio at `http://localhost:3000`, navigate to Auth → Users, and
 #### Step 4: Generate Keys
 
 ```bash
-cd enclave-server
+cd backend/server
 node generate_keys.js
-# Copy the output into .env and enclave-ui/local.properties
+# Copy the output into .env and apps/android/local.properties
 ```
 
 #### Step 5: Configure the Android App
 
 ```bash
-cd enclave-ui
+cd apps/android
 cp local.properties.example local.properties
 ```
 
@@ -742,7 +737,7 @@ These are stored in hardware-backed `EncryptedSharedPreferences` and never hardc
 
 ```bash
 # On your VPS:
-cd ~/enclave-server
+cd ~/backend/server
 cp .env.example .env
 # Edit .env with your production values:
 # - POSTGRES_PASSWORD (strong random)
@@ -758,7 +753,7 @@ cp .env.example .env
 
 ```bash
 # From your local machine:
-cd enclave-server
+cd backend/server
 ./deploy_to_cloud.sh
 ```
 
@@ -774,7 +769,7 @@ This script:
 
 ```bash
 # On your VPS:
-sudo bash enclave-server/setup_coturn.sh
+sudo bash backend/server/setup_coturn.sh
 # Edit /etc/turnserver.conf with your public IP
 # Open firewall ports: 3478, 5349 (TCP/UDP) + 49152-65535 (UDP)
 ```
@@ -797,7 +792,7 @@ git push
 
 The workflow (`.github/workflows/deploy-pages.yml`):
 1. Checks out the repo
-2. Installs `enclave-react` dependencies
+2. Installs `apps/web` dependencies
 3. Builds the Vite app
 4. Deploys the `dist/` folder to GitHub Pages
 

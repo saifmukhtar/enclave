@@ -1,0 +1,17 @@
+Enclave is an elite, self-hosted, zero-knowledge private communication platform built specifically for couples who want absolute control over their digital intimacy. By removing third-party cloud infrastructure entirely, Enclave ensures that your private conversations, shared moments, and media remain strictly between the two of you.
+
+Key Features:
+
+• CRYPTOGRAPHIC SOVEREIGNTY: Industry-standard End-to-End Encryption (E2EE) powered by the Signal Protocol (Double Ratchet, X3DH) protects all texts, photos, and voice notes. Local data is secured at rest via hardware-backed cryptography and biometric locks.
+
+• ZERO-KNOWLEDGE BACKUPS: Automatically run encrypted backups of your chats and media directly to your self-hosted instance. Not even your server administrator or VPS provider can inspect your data.
+
+• THE KISS SIMULATOR: A unique multi-sensory interaction space featuring soft-body physics, mutual touch sync, real-time haptic feedback, and ASMR WebRTC audio. Connect and feel your partner's presence even across thousands of miles.
+
+• LIVE COLLABORATIVE CANVAS: Draw together in real-time on a shared whiteboard synced over low-latency WebSockets.
+
+• THE LOUNGE: Access shared countdown timers, a collaborative photo scrapbook, a synced music player, and daily love letters in a shared intimate environment.
+
+• SOVEREIGN INFRASTRUCTURE: Run the backend yourself. The system is packaged as a lightweight Docker Compose stack (including Supabase, Coturn, and Node.js WebSockets) targeted at modern Android devices.
+
+Take back your digital privacy and build your own sovereign space with Enclave.

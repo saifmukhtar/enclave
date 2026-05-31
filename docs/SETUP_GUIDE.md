@@ -33,8 +33,8 @@ Before starting local development, ensure your machine has the following tools i
 From the repository root, copy the example configurations:
 
 ```bash
-cp enclave-ui/local.properties.example enclave-ui/local.properties
-cp enclave-server/.env.example enclave-server/.env
+cp apps/android/local.properties.example apps/android/local.properties
+cp backend/server/.env.example backend/server/.env
 ```
 
 ### Step 2 — Start Local Backend Stack
@@ -48,13 +48,13 @@ chmod +x setup-local.sh
 
 **What this script does:**
 - Verifies Docker is available
-- Starts the `enclave-server/docker-compose.yml` stack
+- Starts the `backend/server/docker-compose.yml` stack
 - Checks health endpoints for Kong (8000), Signaling (8085), Supabase Studio (3000), and Ntfy (2586).
-- Creates `enclave-ui/local.properties` if missing and points app URLs to the emulator loopback (`10.0.2.2`).
+- Creates `apps/android/local.properties` if missing and points app URLs to the emulator loopback (`10.0.2.2`).
 
 ### Step 3 — Complete `local.properties`
 
-Open `enclave-ui/local.properties`. The Android app build requires all keys below:
+Open `apps/android/local.properties`. The Android app build requires all keys below:
 
 ```properties
 sdk.dir=/absolute/path/to/Android/Sdk
@@ -81,7 +81,7 @@ NTFY_PASSWORD=replace_with_ntfy_password
 Compile the app using Gradle:
 
 ```bash
-cd enclave-ui
+cd apps/android
 ./gradlew assembleDebug
 ```
 
@@ -90,7 +90,7 @@ cd enclave-ui
 We highly recommend verifying the signaling server typescript compilation locally:
 
 ```bash
-cd enclave-server/signaling-server
+cd backend/server/signaling-server
 npm install
 npm run typecheck
 npm run build

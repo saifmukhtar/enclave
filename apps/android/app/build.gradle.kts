@@ -123,7 +123,10 @@ dependencies {
     if (project.hasProperty("fdroid") || System.getenv("FDROID") == "true") {
         // F-Droid Build: Consume the source-built AARs/JARs compiled during the prebuild step
         implementation(fileTree("libs") {
-            include("*.jar", "*.aar")
+            include("*-release.aar")
+            include("libsignal-client-*.jar")
+            exclude("*-sources.jar")
+            exclude("*-javadoc.jar")
         })
     } else {
         // Local Developer Build: Use precompiled Maven binaries
