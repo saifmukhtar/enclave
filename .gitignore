@@ -95,6 +95,5 @@ testing/*/
 *.db-shm
 *.db-wal
 testing/
-enclave-react/public/
 enclave-react/dist/
 enclave-react/node_modules/
