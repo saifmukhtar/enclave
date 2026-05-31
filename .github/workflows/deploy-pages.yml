@@ -43,6 +43,12 @@ jobs:
       - name: Build React site
         working-directory: ./enclave-react
         run: npm run build
+        env:
+          # Automatically inject the details of whoever owns the repository (you, or anyone who forks it)
+          VITE_AUTHOR_NAME: ${{ github.repository_owner }}
+          VITE_AUTHOR_URL: https://github.com/${{ github.repository_owner }}
+          VITE_REPO_URL: https://github.com/${{ github.repository }}
+          VITE_INSTALL_SCRIPT_URL: https://install.enclave.${{ github.repository_owner }}.dev
       
       - name: Setup Pages
         uses: actions/configure-pages@v5
