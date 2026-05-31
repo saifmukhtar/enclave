@@ -61,7 +61,7 @@ The easiest way to deploy the entire production backend (Supabase, WebRTC, Ntfy,
 > Make sure you have your DNS records pointing to your server IP before running this script. Disable Cloudflare proxying (orange cloud).
 
 ```bash
-curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
+curl -fsSL https://enclave.saifmukhtar.dev/install | sudo bash
 ```
 
 This script will prompt you for your root domain and automatically provision `api.enclave.*`, `wss.enclave.*`, and `ntfy.enclave.*`.

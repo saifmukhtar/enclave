@@ -10,7 +10,7 @@
 #  MASTER DROPLET SETUP SCRIPT
 #  Run as root on a fresh Ubuntu 22.04 / 24.04 Droplet.
 #
-#  curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
+#  curl -fsSL https://enclave.saifmukhtar.dev/install | sudo bash
 # =============================================================================
 
 set -Eeuo pipefail
@@ -986,7 +986,7 @@ NTFY_PASSWORD=${NTFY_PASSWORD}
   Restart signaling     : pm2 restart enclave-signaling
   View signaling logs   : pm2 logs enclave-signaling
   Renew SSL certs       : certbot renew
-  Re-run full setup     : curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash
+  Re-run full setup     : curl -fsSL https://enclave.saifmukhtar.dev/install | sudo bash
 ================================================================================
 SUMMARY_EOF
 
