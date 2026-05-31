@@ -97,3 +97,4 @@ testing/*/
 testing/
 enclave-react/dist/
 enclave-react/node_modules/
+enclave-react/.env
