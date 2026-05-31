@@ -1,14 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Footer from './components/Footer';
 import DocsLayout from './components/DocsLayout';
 
-type NavItem = {
-  label: string;
-  href: string;
-};
+// ── Data Types ──────────────────────────────────────────
 
 type Feature = {
   title: string;
@@ -18,11 +15,17 @@ type Feature = {
   span?: 'default' | 'wide' | 'full';
 };
 
-type Credit = {
+type PresenceCard = {
   title: string;
-  href: string;
   description: string;
-  icon: string;
+  bullets: string[];
+};
+
+type ArchCard = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tags: string[];
 };
 
 type SetupStep = {
@@ -32,16 +35,27 @@ type SetupStep = {
   code: string;
 };
 
-const navItems: NavItem[] = [
-  { label: 'Why', href: '#motivation' },
-  { label: 'Features', href: '#features' },
-  { label: 'Presence Engine', href: '#presence-engine' },
-  { label: 'Architecture', href: '#architecture' },
-  { label: 'Setup', href: '#setup' },
-  { label: 'Security', href: '#security' },
-  { label: 'Credits', href: '#credits' },
-  { label: 'Docs', href: '#docs' },
-];
+type Credit = {
+  title: string;
+  href: string;
+  description: string;
+  icon: string;
+};
+
+type Doc = {
+  title: string;
+  description: string;
+  href: string;
+  icon: string;
+};
+
+type PaletteLink = {
+  name: string;
+  target: string;
+  icon: string;
+};
+
+// ── Static Data ─────────────────────────────────────────
 
 const features: Feature[] = [
   {
@@ -91,7 +105,7 @@ const features: Feature[] = [
   },
 ];
 
-const presenceCards = [
+const presenceCards: PresenceCard[] = [
   {
     title: '2D Soft-Body Physics Mesh',
     description:
@@ -134,7 +148,7 @@ const presenceCards = [
   },
 ];
 
-const architectureCards = [
+const architectureCards: ArchCard[] = [
   {
     eyebrow: 'Client',
     title: 'Android Client',
@@ -169,55 +183,9 @@ const setupSteps: SetupStep[] = [
   {
     label: '1-Click Install',
     title: 'Production Auto-Deploy',
-    description: 'The fastest way to deploy the entire stack (Supabase, WebRTC, Ntfy, Nginx, SSL) to a fresh Ubuntu Droplet.',
+    description:
+      'The fastest way to deploy the entire stack (Supabase, WebRTC, Ntfy, Nginx, SSL) to a fresh Ubuntu Droplet.',
     code: `curl -fsSL https://install.enclave.saifmukhtar.dev | sudo bash`,
-  },
-  {
-    label: 'Clone (Advanced)',
-    title: 'Manual setup (Advanced)',
-    description: 'Start with the repository and scaffold local configuration files manually.',
-    code: `git clone https://github.com/saifmukhtar/enclave.git
-cd enclave
-
-cp enclave-ui/local.properties.example enclave-ui/local.properties
-cp enclave-server/.env.example enclave-server/.env`,
-  },
-  {
-    label: 'Backend',
-    title: 'Bootstrap the backend stack',
-    description: 'Bring up PostgreSQL, Supabase services, Coturn, and Ntfy.',
-    code: `chmod +x setup-local.sh
-./setup-local.sh`,
-  },
-  {
-    label: 'Android',
-    title: 'Configure Android variables',
-    description: 'Set your SDK path, server URLs, and push credentials.',
-    code: `sdk.dir=/home/username/Android/Sdk
-SUPABASE_URL=https://your-supabase-instance.com
-SUPABASE_KEY=your-anon-key
-SIGNALING_SERVER_URL=wss://wss.yourdomain.com
-TURN_SERVER_URL=turn:your-vps-ip:3478
-NTFY_SERVER_URL=https://ntfy.yourdomain.com
-NTFY_USERNAME=your-ntfy-user
-NTFY_PASSWORD=your-ntfy-pass`,
-  },
-  {
-    label: 'Build',
-    title: 'Compile the app',
-    description: 'Build debug or release variants directly from Gradle.',
-    code: `cd enclave-ui
-./gradlew assembleDebug
-
-# or
-./gradlew assembleRelease`,
-  },
-  {
-    label: 'Deploy',
-    title: 'Cloud deploy',
-    description: 'Harden the VPS and deploy the server stack with TLS and PM2.',
-    code: `cd enclave-server
-./deploy_to_cloud.sh`,
   },
 ];
 
@@ -286,7 +254,7 @@ const credits: Credit[] = [
     title: 'Jetpack Compose',
     href: 'https://developer.android.com/compose',
     description: 'Modern declarative UI toolkit for Android.',
-    icon: '🎨',
+    icon: '✨',
   },
   {
     title: 'Docker',
@@ -296,7 +264,7 @@ const credits: Credit[] = [
   },
 ];
 
-const docs = [
+const docs: Doc[] = [
   {
     title: 'README.md',
     description: 'Feature dictionary, architecture summary, quick start guide.',
@@ -305,7 +273,7 @@ const docs = [
   },
   {
     title: 'SETUP_GUIDE.md',
-    description: 'VPS deployment, Nginx, Certbot, Coturn, and PM2 configuration.',
+    description: 'Local development setup, prerequisites, and build steps.',
     href: '#/docs/setup',
     icon: '⚙️',
   },
@@ -317,7 +285,7 @@ const docs = [
   },
 ];
 
-const paletteLinks = [
+const paletteLinks: PaletteLink[] = [
   { name: 'Why Enclave?', target: '#motivation', icon: '🏡' },
   { name: 'Explore Core Features', target: '#features', icon: '⚡' },
   { name: 'Presence Engine', target: '#presence-engine', icon: '📳' },
@@ -328,55 +296,406 @@ const paletteLinks = [
   { name: 'Workspace Docs', target: '#docs', icon: '📖' },
 ];
 
+const flowSteps = [
+  { title: 'Touch Input', detail: 'User touch or press input captured from device sensors.' },
+  { title: 'Physics Mesh', detail: 'Input mapped to a soft-body physics mesh for realistic motion.' },
+  { title: 'Synthesizer', detail: 'Audio/haptic synthesis converts energy maps to tactile output.' },
+  { title: 'WebSocket Relay', detail: 'Realtime relay forwards synced interaction data between partners.' },
+  { title: 'Haptic Engine', detail: 'Device-specific haptic motor instructions render the sensation.' },
+];
+
+// ── Utility ─────────────────────────────────────────────
+
 function scrollToTarget(target: string) {
   const element = document.querySelector(target);
   if (!(element instanceof HTMLElement)) return;
   element.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-export default function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('hero');
+// ── Home Page ────────────────────────────────────────────
+
+function HomePage() {
   const [activeSetupIndex, setActiveSetupIndex] = useState(0);
+  const [activeFlowIndex, setActiveFlowIndex] = useState<number | null>(0);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMsg, setToastMsg] = useState('Copied!');
+  const [terminalCopied, setTerminalCopied] = useState(false);
+
+  const toastTimeoutRef = useRef<number | null>(null);
+
+  const showToast = (msg = 'Copied!') => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMsg(msg);
+    setToastVisible(true);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+      toastTimeoutRef.current = null;
+    }, 1800);
+  };
+
+  const copySetupCode = async () => {
+    try {
+      await navigator.clipboard.writeText(setupSteps[activeSetupIndex].code);
+      setTerminalCopied(true);
+      setTimeout(() => setTerminalCopied(false), 2000);
+      showToast('Copied to clipboard!');
+    } catch {
+      showToast('Copied!');
+    }
+  };
+
+  const activeSetupStep = setupSteps[activeSetupIndex];
+
+  return (
+    <main id="main-content">
+      <Hero />
+
+      {/* ── Why Enclave ─────────────────────────────── */}
+      <section id="motivation" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Why Enclave</p>
+          <h2>Why Enclave Exists</h2>
+          <p>
+            Mainstream messaging apps centralize metadata, keys, and trust. Enclave inverts that
+            model for a strictly private two-person communication space.
+          </p>
+        </div>
+        <div className="pill-grid">
+          {[
+            'Signal-grade Double Ratchet + X3DH',
+            'Self-hosted Supabase backend',
+            'Dedicated WebSocket signaling server',
+            'Coturn STUN/TURN for resilient calls',
+            'Private push notifications',
+            'Android 14+ hardware-backed client',
+            'Biometric Keystore protection',
+            'AGPLv3 open source',
+          ].map((item) => (
+            <span className="pill" key={item}>{item}</span>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Core Features ────────────────────────────── */}
+      <section id="features" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Features</p>
+          <h2>Core Features</h2>
+          <p>
+            Every feature is built around the principle that your private life should stay
+            private — encrypted on-device before anything touches the network.
+          </p>
+        </div>
+        <div className="feature-grid">
+          {features.map((feature) => (
+            <article
+              key={feature.title}
+              className={[
+                'feature-card',
+                feature.span === 'wide' ? 'feature-card-wide' : '',
+                feature.span === 'full' ? 'feature-card-full' : '',
+              ].join(' ').trim()}
+            >
+              <div className="feature-icon" aria-hidden="true">
+                {feature.icon}
+              </div>
+              <h3>{feature.title}</h3>
+              <p>{feature.description}</p>
+              <div className="tag-row">
+                {feature.tags.map((tag) => (
+                  <span className="tag" key={tag}>{tag}</span>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Presence Engine ──────────────────────────── */}
+      <section id="presence-engine" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Signature Module</p>
+          <h2>The Presence Engine</h2>
+          <p>
+            A multi-layered intimate interaction engine that translates touch, sound, and
+            motion into synchronized sensory output.
+          </p>
+        </div>
+
+        <div className="presence-grid">
+          {presenceCards.map((card) => (
+            <article key={card.title} className="presence-card">
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+              <ul>
+                {card.bullets.map((bullet) => (
+                  <li key={bullet}>{bullet}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+
+        {/* Interaction data flow */}
+        <div className="flow-card">
+          <div className="flow-card-header">
+            <h3>Interaction Data Flow</h3>
+            <small>Tap a step for details</small>
+          </div>
+          <div className="flow-steps-track" role="tablist" aria-label="Data flow steps">
+            {flowSteps.map((step, index) => {
+              const isActive = index === activeFlowIndex;
+              const isDone = activeFlowIndex !== null && index < activeFlowIndex;
+
+              return (
+                <button
+                  key={step.title}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`flow-step ${isActive ? 'is-active' : ''} ${isDone ? 'is-done' : ''}`}
+                  onClick={() => setActiveFlowIndex(index)}
+                >
+                  <span className="flow-step-num">{index + 1}</span>
+                  <span className="flow-step-label">{step.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeFlowIndex !== null && (
+            <div className="flow-detail-panel" role="tabpanel">
+              <span className="flow-detail-title">{flowSteps[activeFlowIndex].title}</span>
+              <p className="flow-detail-body">
+                {flowSteps[activeFlowIndex].detail} The system preserves timing and fidelity by batching
+                updates and using low-latency transport where possible.
+              </p>
+              <div className="flow-detail-actions">
+                <a
+                  className="detail-link"
+                  href="#docs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToTarget('#docs');
+                  }}
+                >
+                  Learn more ↗
+                </a>
+                <button
+                  className="detail-copy"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(`${flowSteps[activeFlowIndex!].title}: ${flowSteps[activeFlowIndex!].detail}`);
+                      showToast('Copied!');
+                    } catch {
+                      showToast('Copied!');
+                    }
+                  }}
+                >
+                  Copy step
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── System Architecture ───────────────────────── */}
+      <section id="architecture" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Architecture</p>
+          <h2>System Architecture</h2>
+          <p>
+            Every component is self-hosted. No third-party cloud infrastructure touches your
+            data in transit or at rest.
+          </p>
+        </div>
+        <div className="architecture-grid">
+          {architectureCards.map((card) => (
+            <article key={card.title} className="mini-card">
+              <span className="mini-badge">{card.eyebrow}</span>
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+              <div className="tag-row">
+                {card.tags.map((tag) => (
+                  <span className="tag" key={tag}>{tag}</span>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Setup Guide ───────────────────────────────── */}
+      <section id="setup" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Setup</p>
+          <h2>Setup Guide</h2>
+          <p>
+            Run a single command to deploy the complete stack on a fresh Ubuntu server.
+            For advanced manual deployment, <a href="#/docs/readme">see the README</a>.
+          </p>
+        </div>
+
+        <div className="terminal-card">
+          {/* Tab bar — only shown when there are multiple setup steps */}
+          {setupSteps.length > 1 && (
+            <div className="terminal-tabs" role="tablist" aria-label="Setup steps">
+              {setupSteps.map((step, index) => (
+                <button
+                  key={step.label}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === activeSetupIndex}
+                  className={index === activeSetupIndex ? 'terminal-tab is-active' : 'terminal-tab'}
+                  onClick={() => setActiveSetupIndex(index)}
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Terminal window */}
+          <div className="terminal-window">
+            <div className="terminal-header">
+              <div>
+                <strong>{activeSetupStep.title}</strong>
+                <p>{activeSetupStep.description}</p>
+              </div>
+              <button
+                className="btn button-secondary terminal-copy"
+                type="button"
+                onClick={copySetupCode}
+              >
+                {terminalCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <pre className="terminal-body">
+              <code>{activeSetupStep.code}</code>
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Security Model ────────────────────────────── */}
+      <section id="security" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Security</p>
+          <h2>Security Model</h2>
+          <p>
+            Authentication, pairing, local key derivation, and private notification wakes
+            remain fully sovereign.
+          </p>
+        </div>
+        <div className="security-grid">
+          {[
+            {
+              title: 'Client-side email whitelist',
+              description: 'Registration is restricted to a pre-approved identity list.',
+            },
+            {
+              title: 'Deterministic peer pairing',
+              description: 'Pairing logic is fixed client-side for a no-discovery trust model.',
+            },
+            {
+              title: 'Permanent lockdown',
+              description: 'Disable signups after provisioning both partners.',
+            },
+            {
+              title: 'Zero-knowledge keys',
+              description: 'Keys derive locally and never leave the device.',
+            },
+          ].map((card) => (
+            <article key={card.title} className="mini-card">
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Credits ───────────────────────────────────── */}
+      <section id="credits" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Acknowledgements</p>
+          <h2>Open-Source Credits</h2>
+          <p>
+            The app builds on excellent open-source work across cryptography, UI,
+            infrastructure, and media tooling.
+          </p>
+        </div>
+        <div className="credits-grid">
+          {credits.map((credit) => (
+            <a
+              key={credit.title}
+              className="credit-card"
+              href={credit.href}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="credit-icon" aria-hidden="true">{credit.icon}</span>
+              <span className="credit-body">
+                <strong>{credit.title}</strong>
+                <small>{credit.description}</small>
+              </span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Docs ──────────────────────────────────────── */}
+      <section id="docs" className="section-shell section-card">
+        <div className="section-heading">
+          <p className="eyebrow">Documentation</p>
+          <h2>Workspace Documentation</h2>
+          <p>Supporting docs cover features, setup, and repository structure.</p>
+        </div>
+        <div className="docs-grid">
+          {docs.map((doc) => (
+            <a key={doc.title} className="doc-card" href={doc.href}>
+              <span className="doc-icon" aria-hidden="true">{doc.icon}</span>
+              <strong>{doc.title}</strong>
+              <small>{doc.description}</small>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Toast notification ──────────────────────────── */}
+      <div className={`toast ${toastVisible ? 'is-visible' : ''}`} role="status" aria-live="polite">
+        {toastMsg}
+      </div>
+    </main>
+  );
+}
+
+// ── App Component ────────────────────────────────────────
+
+export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
 
   const filteredPalette = useMemo(() => {
-    const query = paletteQuery.trim().toLowerCase();
-    if (!query) return paletteLinks;
-    return paletteLinks.filter((item) => item.name.toLowerCase().includes(query));
+    const q = paletteQuery.trim().toLowerCase();
+    if (!q) return paletteLinks;
+    return paletteLinks.filter((item) => item.name.toLowerCase().includes(q));
   }, [paletteQuery]);
 
+  // Sticky header shadow on scroll
   useEffect(() => {
-    const nav = document.querySelector('.site-nav');
-    const onScroll = () => nav?.classList.toggle('is-scrolled', window.scrollY > 8);
+    const header = document.getElementById('site-header');
+    const onScroll = () => header?.classList.toggle('is-scrolled', window.scrollY > 4);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const sections = ['hero', 'motivation', 'features', 'presence-engine', 'architecture', 'setup', 'security', 'credits', 'docs'];
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection((entry.target as HTMLElement).id);
-          }
-        });
-      },
-      { rootMargin: '-35% 0px -55% 0px', threshold: 0.01 },
-    );
-
-    sections.forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
+  // Keyboard palette toggle
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -386,28 +705,17 @@ export default function App() {
       }
       if (event.key === 'Escape') {
         setPaletteOpen(false);
-        setMenuOpen(false);
       }
     };
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const copySetupCode = async () => {
-    try {
-      await navigator.clipboard.writeText(setupSteps[activeSetupIndex].code);
-      setToastVisible(true);
-      window.setTimeout(() => setToastVisible(false), 1800);
-    } catch {
-      setToastVisible(true);
-      window.setTimeout(() => setToastVisible(false), 1800);
-    }
-  };
-
-  const activeSetupStep = setupSteps[activeSetupIndex];
-  const location = useLocation();
-  const isDocsRoute = location.pathname.startsWith('/docs');
+  // Body scroll locking when command palette is open
+  useEffect(() => {
+    document.body.style.overflow = paletteOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [paletteOpen]);
 
   return (
     <div className="page">
@@ -417,317 +725,62 @@ export default function App() {
 
       <Header />
 
-      {isDocsRoute ? (
-        <main id="main-content" className="docs-page-shell">
-          <DocsLayout />
-        </main>
-      ) : (
-        <main id="main-content">
-          <Hero />
-
-        <section id="motivation" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>Why Enclave Exists</h2>
-            <p>
-              Mainstream messaging apps centralize metadata, keys, and trust. Enclave inverts that model for a strictly
-              private two-person communication space.
-            </p>
-          </div>
-          <div className="pill-grid">
-            {[
-              'Signal-grade Double Ratchet + X3DH',
-              'Self-hosted Supabase backend',
-              'Dedicated WebSocket signaling server',
-              'Coturn STUN/TURN for resilient calls',
-              'Private push notifications',
-              'Android 14+ hardware-backed client',
-              'Biometric Keystore protection',
-              'AGPLv3 open source',
-            ].map((item) => (
-              <span className="pill" key={item}>
-                {item}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section id="features" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>Core Features</h2>
-            <p>Responsive cards reflow from one column on mobile to a multi-column layout on larger screens.</p>
-          </div>
-          <div className="feature-grid">
-            {features.map((feature) => (
-              <article
-                key={feature.title}
-                className={[
-                  'feature-card',
-                  feature.span === 'wide' ? 'feature-card-wide' : '',
-                  feature.span === 'full' ? 'feature-card-full' : '',
-                ].join(' ')}
-              >
-                <div className="feature-icon" aria-hidden="true">
-                  {feature.icon}
-                </div>
-                <h3>{feature.title}</h3>
-                <p>{feature.description}</p>
-                <div className="tag-row">
-                  {feature.tags.map((tag) => (
-                    <span className="tag" key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="presence-engine" className="section-shell section-card">
-          <div className="section-heading">
-            <p className="eyebrow eyebrow-inline">Signature Module</p>
-            <h2>The Presence Engine</h2>
-            <p>
-              A multi-layered intimate interaction engine that translates touch, sound, and motion into synchronized
-              sensory output.
-            </p>
-          </div>
-
-          <div className="presence-grid">
-            {presenceCards.map((card) => (
-              <article key={card.title} className="presence-card">
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-                <ul>
-                  {card.bullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-
-          <div className="flow-card">
-            <h3>Interaction Data Flow</h3>
-            <div className="flow-diagram" aria-label="Presence engine data flow diagram">
-              {[
-                { title: 'Touch Input', detail: 'User touch or press input captured from device sensors.' },
-                { title: 'Physics Mesh', detail: 'Input mapped to a soft-body physics mesh for realistic motion.' },
-                { title: 'Synthesizer', detail: 'Audio/haptic synthesis converts energy maps to tactile output.' },
-                { title: 'WebSocket Relay', detail: 'Realtime relay forwards synced interaction data between partners.' },
-                { title: 'Haptic Engine', detail: 'Device-specific haptic motor instructions render the sensation.' },
-              ].map((step, index, arr) => (
-                <React.Fragment key={step.title}>
-                  <div className="flow-node" tabIndex={0} aria-labelledby={`flow-${index}-title`}>
-                    <span aria-hidden="true">{index + 1}</span>
-                    <strong id={`flow-${index}-title`}>{step.title}</strong>
-                    <div className="flow-node-detail" aria-hidden="true">
-                      <div className="detail-row">
-                        <svg className="detail-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                          <path d="M12 2v6l4-2-4 8-4-2 4-8V2z" fill="currentColor" />
-                        </svg>
-                        <p className="detail-text">{step.detail} The system preserves timing and fidelity by batching updates and using low-latency transport where possible.</p>
-                      </div>
-                      <div className="detail-actions">
-                        <a className="detail-link" href="#docs" onClick={(e) => { e.preventDefault(); scrollToTarget('#docs'); }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                            <path d="M14 3h7v7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M10 14L21 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M21 21H3V3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          <span>Learn</span>
-                        </a>
-                        <button
-                          className="detail-copy button-secondary"
-                          type="button"
-                          onClick={() => {
-                            try {
-                              navigator.clipboard.writeText(`${step.title}: ${step.detail}`);
-                              setToastVisible(true);
-                              window.setTimeout(() => setToastVisible(false), 1400);
-                            } catch (err) {
-                              setToastVisible(true);
-                              window.setTimeout(() => setToastVisible(false), 1400);
-                            }
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                            <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                            <rect x="4" y="4" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                          </svg>
-                          <span>Copy</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  {index < arr.length - 1 ? (
-                    <span
-                      className="flow-arrow"
-                      role="img"
-                      aria-label={`From ${step.title} to ${arr[index + 1].title}`}
-                    >
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                        <path d="M6 12h12M12 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span className="visually-hidden">From {step.title} to {arr[index + 1].title}</span>
-                    </span>
-                  ) : null}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="architecture" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>System Architecture</h2>
-            <p>Every component is self-hosted. No third-party cloud infrastructure touches your data in transit or at rest.</p>
-          </div>
-
-          <div className="architecture-grid">
-            {architectureCards.map((card) => (
-              <article key={card.title} className="mini-card">
-                <span className="mini-badge">{card.eyebrow}</span>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-                <div className="tag-row">
-                  {card.tags.map((tag) => (
-                    <span className="tag" key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="setup" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>Setup Guide</h2>
-            <p>A practical walkthrough that stays usable on mobile by collapsing into stacked panels and scrollable tabs.</p>
-          </div>
-
-          <div className="terminal-card">
-            <div className="terminal-tabs" role="tablist" aria-label="Setup steps">
-              {setupSteps.map((step, index) => (
-                <button
-                  key={step.label}
-                  type="button"
-                  className={index === activeSetupIndex ? 'terminal-tab is-active' : 'terminal-tab'}
-                  onClick={() => setActiveSetupIndex(index)}
-                >
-                  {index + 1}. {step.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="terminal-window">
-              <div className="terminal-header">
-                <div>
-                  <strong>{activeSetupStep.title}</strong>
-                  <p>{activeSetupStep.description}</p>
-                </div>
-                <button className="button button-secondary terminal-copy" type="button" onClick={copySetupCode}>
-                  Copy
-                </button>
-              </div>
-
-              <pre className="terminal-body">
-                <code>{activeSetupStep.code}</code>
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        <section id="security" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>Security Model</h2>
-            <p>Authentication, pairing, local key derivation, and private notification wakes remain fully sovereign.</p>
-          </div>
-          <div className="security-grid">
-            {[
-              {
-                title: 'Client-side email whitelist',
-                description: 'Registration is restricted to a pre-approved identity list.',
-              },
-              {
-                title: 'Deterministic peer pairing',
-                description: 'Pairing logic is fixed client-side for a no-discovery trust model.',
-              },
-              {
-                title: 'Permanent lockdown',
-                description: 'Disable signups after provisioning both partners.',
-              },
-              {
-                title: 'Zero-knowledge keys',
-                description: 'Keys derive locally and never leave the device.',
-              },
-            ].map((card) => (
-              <article key={card.title} className="mini-card">
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="credits" className="section-shell section-card">
-          <div className="section-heading">
-            <h2>Open-Source Credits</h2>
-            <p>The app builds on excellent open-source work across cryptography, UI, infrastructure, and media tooling.</p>
-          </div>
-          <div className="credits-grid">
-            {credits.map((credit) => (
-              <a key={credit.title} className="credit-card" href={credit.href} target="_blank" rel="noreferrer">
-                <span className="credit-icon" aria-hidden="true">
-                  {credit.icon}
-                </span>
-                <span className="credit-body">
-                  <strong>{credit.title}</strong>
-                  <small>{credit.description}</small>
-                </span>
-                <span aria-hidden="true">↗</span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-          <section id="docs" className="section-shell section-card">
-            <div className="section-heading">
-              <h2>Workspace Documentation</h2>
-              <p>Supporting docs cover features, setup, and repository structure.</p>
-            </div>
-
-            <div className="docs-grid">
-              {docs.map((doc) => (
-                <a key={doc.title} className="doc-card" href={doc.href} target="_blank" rel="noreferrer">
-                  <span className="doc-icon" aria-hidden="true">
-                    {doc.icon}
-                  </span>
-                  <strong>{doc.title}</strong>
-                  <small>{doc.description}</small>
-                </a>
-              ))}
-            </div>
-          </section>
-        </main>
-      )}
+      {/*
+       * CRITICAL BUG FIX:
+       * Previously, App used `useLocation().pathname.startsWith('/docs')` to detect the docs route.
+       * But the app uses HashRouter, where `location.pathname` is always '/' — the route lives in
+       * the hash (e.g. /#/docs/readme). This means the docs route NEVER activated.
+       *
+       * Fix: Use <Routes> / <Route> which work correctly with HashRouter.
+       * react-router-dom's HashRouter + Routes matches on the hash portion automatically.
+       */}
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route
+          path="/docs"
+          element={
+            <main id="main-content">
+              <DocsLayout />
+            </main>
+          }
+        />
+        <Route
+          path="/docs/:slug"
+          element={
+            <main id="main-content">
+              <DocsLayout />
+            </main>
+          }
+        />
+        {/* Catch-all → home */}
+        <Route path="*" element={<HomePage />} />
+      </Routes>
 
       <Footer />
 
+      {/* ── Command Palette ─────────────────────────────── */}
       {paletteOpen ? (
-        <div className="palette-backdrop" role="presentation" onClick={() => setPaletteOpen(false)}>
-          <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="palette-backdrop"
+          role="presentation"
+          onClick={() => setPaletteOpen(false)}
+        >
+          <div
+            className="palette"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="palette-header">
               <input
                 autoFocus
                 value={paletteQuery}
                 onChange={(event) => setPaletteQuery(event.target.value)}
-                placeholder="Type to search sections..."
+                placeholder="Type to search sections…"
                 aria-label="Search site sections"
               />
-              <button className="button button-secondary" type="button" onClick={() => setPaletteOpen(false)}>
+              <button className="btn btn-ghost" type="button" onClick={() => setPaletteOpen(false)}>
                 Close
               </button>
             </div>
@@ -750,8 +803,6 @@ export default function App() {
           </div>
         </div>
       ) : null}
-
-      {toastVisible ? <div className="toast">Copied to clipboard!</div> : null}
     </div>
   );
 }
