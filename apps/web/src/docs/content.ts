@@ -1,6 +1,6 @@
-import readme from '../../../README.md?raw';
-import setupGuide from '../../../SETUP_GUIDE.md?raw';
-import repoStructure from '../../../REPO_STRUCTURE.md?raw';
+import readme from '../../../../README.md?raw';
+import setupGuide from '../../../../docs/SETUP_GUIDE.md?raw';
+import repoStructure from '../../../../docs/REPO_STRUCTURE.md?raw';
 
 export type DocsPage = {
   key: string;
