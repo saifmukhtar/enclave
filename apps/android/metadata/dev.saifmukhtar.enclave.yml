@@ -16,21 +16,23 @@ Builds:
     subdir: apps/android
     submodules: yes
     prebuild: |
-      # Build the libsignal dependency from source inside the local Git submodule workspace
+      # Save the absolute path of Enclave's Android directory
+      ENCLAVE_DIR=$(pwd)
+      
+      # From apps/android, the submodule lives two directories up
       cd ../../libsignal-src/java
       echo "sdk.dir=$ANDROID_HOME" > local.properties
-      ./gradlew build -x test
-      cd ../../apps/android
+      ./gradlew assembleRelease -x test
       
-      # Create target libs directory inside Enclave main Android module
+      # Return to Enclave Android directory and copy artifacts safely
+      cd $ENCLAVE_DIR
       mkdir -p app/libs
-      # Copy the freshly compiled FOSS JNI release AAR and java client JAR
       cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
       cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
-      # Inject the FOSS compiler properties flag
-      printf "\nfdroid=true\n" >> gradle.properties
     gradle:
       - yes
+    gradleprops:
+      - fdroid=true
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
