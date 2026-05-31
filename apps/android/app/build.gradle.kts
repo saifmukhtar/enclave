@@ -38,8 +38,8 @@ android {
         applicationId = "dev.saifmukhtar.enclave"
         minSdk = 34
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "2.0.0"
         
         // BuildConfig keys are no longer hardcoded at compile time.
         // Server infrastructure details are loaded dynamically at runtime.
