@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.enclave.app.data.config
 
 import android.content.Context
@@ -5,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 
+@Suppress("DEPRECATION")
 class ConfigManager private constructor(context: Context) {
 
     private val prefs: SharedPreferences

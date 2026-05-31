@@ -107,7 +107,6 @@ fun ChatScreen(
     // Multi-selection states
     var isChatSelectionMode by rememberSaveable { mutableStateOf(false) }
     val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
-    val coroutineScope = rememberCoroutineScope()
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     LaunchedEffect(autoShowKissCanvas) {

@@ -82,7 +82,6 @@ fun VaultGrid(
     modifier: Modifier = Modifier
 ) {
     val vaultItems by viewModel.vaultItems.collectAsState()
-    val context = LocalContext.current
 
     val displayItems = if (isUnlocked) vaultItems else List(12) {
         MediaMetadataEntity("mock_$it", "", "", "image/jpeg", 0, false, null)
@@ -320,6 +319,7 @@ fun VaultGrid(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun FullscreenMediaPager(
     items: List<MediaMetadataEntity>,
@@ -552,13 +552,7 @@ fun FullscreenMediaPager(
     }
 }
 
-@Composable
-fun ZoomableImage(
-    fileName: String,
-    repository: VaultRepository
-) {
-    // ZoomableImage is inline now in FullscreenMediaPager for better gesture integration.
-}
+
 
 @Composable
 fun SecureVideoPlayer(

@@ -53,8 +53,6 @@ fun ChatInputBar(
 
     val replyTo by viewModel.replyToMessage.collectAsState()
     val context = LocalContext.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
 
     // Helper: send and dismiss keyboard atomically
     val doSend: () -> Unit = {

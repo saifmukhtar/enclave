@@ -59,6 +59,7 @@ val FluidShapes = Shapes(
     large = RoundedCornerShape(36.dp)
 )
 
+@Suppress("UNUSED_PARAMETER", "DEPRECATION")
 @Composable
 fun EnclaveTheme(
     darkTheme: Boolean = false,
