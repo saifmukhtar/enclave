@@ -124,7 +124,7 @@ dependencies {
     implementation("org.signal:libsignal-android:0.39.2")
 
     // WebRTC & Signaling
-    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    implementation("im.conversations.webrtc:webrtc-android:129.0.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // WorkManager
