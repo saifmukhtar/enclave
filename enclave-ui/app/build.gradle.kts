@@ -105,7 +105,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
     implementation("androidx.compose.material:material-icons-extended")
 
     // QR Code Generation
@@ -120,8 +119,17 @@ dependencies {
     // Security & Cryptography
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
-    implementation("org.signal:libsignal-client:0.39.2")
-    implementation("org.signal:libsignal-android:0.39.2")
+    // Conditional Libsignal Integration
+    if (project.hasProperty("fdroid") || System.getenv("FDROID") == "true") {
+        // F-Droid Build: Consume the source-built AARs/JARs compiled during the prebuild step
+        implementation(fileTree("libs") {
+            include("*.jar", "*.aar")
+        })
+    } else {
+        // Local Developer Build: Use precompiled Maven binaries
+        implementation("org.signal:libsignal-client:0.39.2")
+        implementation("org.signal:libsignal-android:0.39.2")
+    }
 
     // WebRTC & Signaling
     implementation("im.conversations.webrtc:webrtc-android:129.0.0")
