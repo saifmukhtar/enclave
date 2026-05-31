@@ -58,7 +58,6 @@ apps/android/.navigation/
 apps/android/idea.properties
 
 # F-Droid & libsignal Source Build Simulation
-libsignal-src/
 apps/android/app/libs/*.aar
 apps/android/app/libs/*.jar
 
