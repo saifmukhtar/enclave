@@ -32,7 +32,20 @@ class MusicPlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
+        val clientPackage = controllerInfo.packageName
+        // 1. Authorize our own app package to control media
+        if (clientPackage == packageName) {
+            return mediaSession
+        }
+        // 2. Authorize standard Android OS UI, system packages, and projection systems (e.g. Android Auto)
+        if (clientPackage.startsWith("com.android.") || 
+            clientPackage.startsWith("android.media.") || 
+            clientPackage == "com.google.android.projection.gearhead"
+        ) {
+            return mediaSession
+        }
+        // 3. Reject any untrusted third-party apps
+        return null
     }
 
     override fun onDestroy() {
