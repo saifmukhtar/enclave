@@ -39,7 +39,7 @@
 ## 📐 Architecture Overview
 
 > [!TIP]
-> See the detailed [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) and [REPO_STRUCTURE.md](REPO_STRUCTURE.md) for a deeper dive.
+> See the detailed [SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) and [REPO_STRUCTURE.md](docs/REPO_STRUCTURE.md) for a deeper dive.
 
 ```mermaid
 graph TD
@@ -70,20 +70,20 @@ This script will prompt you for your root domain and automatically provision `ap
 
 ## 💻 Local Development Setup
 
-For local testing and Android development without a public domain. Full details are in [`SETUP_GUIDE.md`](SETUP_GUIDE.md).
+For local testing and Android development without a public domain. Full details are in [`SETUP_GUIDE.md`](docs/SETUP_GUIDE.md).
 
 ### 1) Start local backend
 ```bash
-cp enclave-ui/local.properties.example enclave-ui/local.properties
-cp enclave-server/.env.example enclave-server/.env
-chmod +x setup-local.sh
-./setup-local.sh
+cp apps/android/local.properties.example apps/android/local.properties
+cp backend/server/.env.example backend/server/.env
+chmod +x scripts/setup-local.sh
+./scripts/setup-local.sh
 ```
 
 ### 2) Build Android App
-Configure your SDK path in `enclave-ui/local.properties`, then:
+Configure your SDK path in `apps/android/local.properties`, then:
 ```bash
-cd enclave-ui
+cd apps/android
 ./gradlew assembleDebug
 ```
 
@@ -96,7 +96,7 @@ cd enclave-ui
 
 1. **Provision DNS:** Create A records for `api.enclave.<domain>`, `wss.enclave.<domain>`, `ntfy.enclave.<domain>` pointing to your VPS.
 2. **Install Dependencies:** Docker, Node.js, PM2, Nginx, Certbot, Coturn.
-3. **Copy Server Files:** `rsync` the `enclave-server/` folder to `/opt/enclave-server`.
+3. **Copy Server Files:** `rsync` the `backend/server/` folder to `/opt/enclave-server`.
 4. **Configure Secrets:** Manually generate cryptographic keys and populate `/opt/enclave-server/.env`.
 5. **Deploy Backend:** Run `docker compose up -d` in the server directory.
 6. **Signaling Server:** Run `npm install && npm run build` in `signaling-server/`, then run with PM2.
@@ -115,7 +115,7 @@ cd enclave-ui
 ### Useful Commands
 ```bash
 # View backend stack
-docker compose -f enclave-server/docker-compose.yml ps
+docker compose -f backend/server/docker-compose.yml ps
 
 # Restart signaling server
 pm2 restart enclave-signaling

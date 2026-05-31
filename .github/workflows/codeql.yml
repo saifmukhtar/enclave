@@ -45,7 +45,7 @@ jobs:
     - name: Create local.properties for Gradle
       if: matrix.language == 'java-kotlin'
       run: |
-        cd enclave-ui
+        cd apps/android
         echo "SUPABASE_URL=https://dummy.supabase.co" > local.properties
         echo "SUPABASE_KEY=dummy-key" >> local.properties
         echo "SIGNALING_SERVER_URL=ws://127.0.0.1:3000" >> local.properties
@@ -59,7 +59,7 @@ jobs:
     - name: Build Android App (CodeQL)
       if: matrix.language == 'java-kotlin'
       run: |
-        cd enclave-ui
+        cd apps/android
         chmod +x gradlew
         ./gradlew assembleDebug
 

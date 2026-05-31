@@ -1,0 +1,818 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+package dev.saifmukhtar.enclave.ui.chat
+
+import android.widget.Toast
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.saifmukhtar.enclave.media.MemoryMediaDataSource
+import dev.saifmukhtar.enclave.media.MusicSyncController
+import dev.saifmukhtar.enclave.ui.chat.components.*
+import dev.saifmukhtar.enclave.ui.theme.BlushBackground
+import dev.saifmukhtar.enclave.ui.theme.PlayfairFont
+import dev.saifmukhtar.enclave.ui.theme.CharcoalText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import dev.saifmukhtar.enclave.ui.theme.InterFont
+import androidx.compose.material.icons.automirrored.filled.Reply
+
+// ─── ChatScreen – thin orchestrator ──────────────────────────────────────────
+// All Composable building blocks live in dev.saifmukhtar.enclave.ui.chat.components.*
+// This file owns only: state wiring, navigation events, and scaffold assembly.
+
+@Composable
+fun ChatScreen(
+    viewModel: ChatViewModel,
+    musicSyncController: MusicSyncController?,
+    kissViewModel: dev.saifmukhtar.enclave.ui.kiss.KissViewModel,
+    profileViewModel: dev.saifmukhtar.enclave.ui.profile.ProfileViewModel? = null,
+    loungeViewModel: dev.saifmukhtar.enclave.ui.lounge.LoungeViewModel? = null,
+    signalingClient: dev.saifmukhtar.enclave.webrtc.SignalingClient,
+    autoShowKissCanvas: Boolean = false,
+    onKissCanvasClosed: () -> Unit = {},
+    onAudioCallClick: () -> Unit = {},
+    onVideoCallClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val isPartnerTyping by viewModel.partnerTyping.collectAsState()
+    val messages by viewModel.messages.collectAsState()
+
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
+    val partnerProfile by profileViewModel?.partnerProfile?.collectAsState()
+        ?: remember { mutableStateOf(null) }
+    val partnerStatus by loungeViewModel?.partnerStatus?.collectAsState()
+        ?: remember { mutableStateOf(null) }
+
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    var isSearchActive by remember { mutableStateOf(false) }
+
+    // ── Partner display helpers ───────────────────────────────────────────────
+    val partnerName = partnerProfile?.displayName
+        ?.ifBlank { partnerProfile?.username }?.ifBlank { "Partner" } ?: "Partner"
+    val partnerInitials = partnerName.split(" ")
+        .mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
+    val isPartnerOnline = partnerProfile?.isOnline == true
+    val lastSeenText = if (!isPartnerOnline && (partnerProfile?.lastSeen ?: 0L) > 0L) {
+        val diffMs = System.currentTimeMillis() - (partnerProfile?.lastSeen ?: 0L)
+        when {
+            diffMs < 60_000 -> "Last seen just now"
+            diffMs < 3_600_000 -> "Last seen ${diffMs / 60_000}m ago"
+            diffMs < 86_400_000 -> "Last seen ${diffMs / 3_600_000}h ago"
+            else -> "Last seen ${diffMs / 86_400_000}d ago"
+        }
+    } else ""
+
+    // ── Overlay / sheet state ─────────────────────────────────────────────────
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    val attachmentSheetState = rememberModalBottomSheetState()
+    var showKissCanvas by remember { mutableStateOf(false) }
+    val activePlaybackKiss by viewModel.activePlaybackKiss.collectAsState()
+    var lightboxMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var showHapticDialog by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var showSelectionDeleteDialog by remember { mutableStateOf(false) }
+    var showSelectionInfoDialog by remember { mutableStateOf(false) }
+
+    // Multi-selection states
+    var isChatSelectionMode by rememberSaveable { mutableStateOf(false) }
+    val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    LaunchedEffect(autoShowKissCanvas) {
+        if (autoShowKissCanvas) showKissCanvas = true
+    }
+
+    // ── Back-press handling ───────────────────────────────────────────────────
+    androidx.activity.compose.BackHandler(
+        enabled = showKissCanvas || lightboxMessage != null ||
+                showAttachmentSheet || activePlaybackKiss != null || isSearchActive || isChatSelectionMode
+    ) {
+        when {
+            showKissCanvas -> showKissCanvas = false
+            lightboxMessage != null -> lightboxMessage = null
+            showAttachmentSheet -> showAttachmentSheet = false
+            activePlaybackKiss != null -> viewModel.clearPlaybackKiss()
+            isSearchActive -> { isSearchActive = false; viewModel.updateSearchQuery("") }
+            isChatSelectionMode -> {
+                isChatSelectionMode = false
+                selectedMessages.clear()
+            }
+        }
+    }
+
+    // ── Media launchers ───────────────────────────────────────────────────────
+    val context = LocalContext.current
+
+    val pickMedia = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            val mimeType = context.contentResolver.getType(it) ?: "image/jpeg"
+            context.contentResolver.openInputStream(it)?.use { stream ->
+                viewModel.sendMediaMessage(stream.readBytes(), mimeType)
+            }
+        }
+    }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        bitmap?.let {
+            val stream = java.io.ByteArrayOutputStream()
+            it.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+            viewModel.sendMediaMessage(stream.toByteArray(), "image/jpeg")
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            dev.saifmukhtar.enclave.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+            takePictureLauncher.launch(null)
+        } else {
+            Toast.makeText(
+                context,
+                "Camera permission is required to take pictures",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val pickFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val mimeType = context.contentResolver.getType(it) ?: "*/*"
+            context.contentResolver.openInputStream(it)?.use { stream ->
+                viewModel.sendMediaMessage(stream.readBytes(), mimeType)
+            }
+        }
+    }
+
+    val pickAudioLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val mimeType = context.contentResolver.getType(it) ?: "audio/mpeg"
+            context.contentResolver.openInputStream(it)?.use { stream ->
+                viewModel.sendMediaMessage(stream.readBytes(), mimeType)
+            }
+        }
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) viewModel.startAudioRecording()
+        else Toast.makeText(
+            context,
+            "Microphone permission is required to record voice notes",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    val listState = rememberLazyListState()
+
+    val driftTransition = rememberInfiniteTransition(label = "drifting_bg")
+    val driftAnim by driftTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(25000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "drift"
+    )
+
+    var listLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(messages.size) {
+        listLoaded = true
+        if (messages.isNotEmpty()) {
+            val latestMessage = messages.firstOrNull()
+            val isFromMe = latestMessage?.isFromMe == true
+            val isNearBottom = listState.firstVisibleItemIndex <= 2
+            if (isFromMe || isNearBottom) {
+                listState.animateScrollToItem(0)
+            }
+        }
+    }
+
+    // ── Scaffold ──────────────────────────────────────────────────────────────
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .imePadding()) {
+        // Organic slow-drifting custom canvas gradient backdrop
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val xOffset = (Math.cos(Math.toRadians(driftAnim.toDouble())) * (width * 0.12f)).toFloat()
+            val yOffset = (Math.sin(Math.toRadians(driftAnim.toDouble())) * (height * 0.12f)).toFloat()
+            drawRect(
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(Color(0xFFFFF0F2), Color(0xFFFFF5F6)),
+                    start = androidx.compose.ui.geometry.Offset(xOffset, yOffset),
+                    end = androidx.compose.ui.geometry.Offset(width + xOffset, height + yOffset)
+                )
+            )
+        }
+
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent, // Make Scaffold transparent to reveal dynamic canvas backdrop
+            topBar = {
+                if (isChatSelectionMode) {
+                    ChatSelectionTopBar(
+                        selectedCount = selectedMessages.size,
+                        onCloseClick = {
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onDeleteClick = {
+                            showSelectionDeleteDialog = true
+                        },
+                        onCopyClick = {
+                            val textToCopy = selectedMessages
+                                .filter { it.messageType == "TEXT" }
+                                .joinToString("\n") { it.text }
+                            clipboardManager.setText(AnnotatedString(textToCopy))
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onReplyClick = {
+                            if (selectedMessages.size == 1) {
+                                viewModel.setReplyToMessage(selectedMessages.first())
+                            }
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onSaveClick = {
+                            selectedMessages.forEach { msg ->
+                                viewModel.exportChatMessageMedia(msg.id, context)
+                            }
+                            isChatSelectionMode = false
+                            selectedMessages.clear()
+                        },
+                        onInfoClick = {
+                            showSelectionInfoDialog = true
+                        },
+                        showDelete = selectedMessages.isNotEmpty(),
+                        showCopy = selectedMessages.any { it.messageType == "TEXT" },
+                        showReply = selectedMessages.size == 1,
+                        showSave = selectedMessages.any { it.messageType == "MEDIA" || it.messageType == "MEDIA_IMAGE" || it.messageType == "MEDIA_VIDEO" || it.messageType == "MEDIA_FILE" },
+                        showInfo = selectedMessages.size == 1
+                    )
+                } else {
+                    GlassmorphicTopBar(
+                        uiState = uiState,
+                        partnerName = partnerName,
+                        partnerInitials = partnerInitials.ifBlank { "P" },
+                        isPartnerOnline = isPartnerOnline,
+                        lastSeenText = lastSeenText,
+                        partnerAvatarUrl = partnerProfile?.avatarUrl,
+                        profileViewModel = profileViewModel,
+                        partnerDisplayName = partnerProfile?.displayName,
+                        partnerUsername = partnerProfile?.username,
+                        partnerBio = partnerProfile?.bio,
+                        partnerStatusText = partnerStatus?.statusText,
+                        onAudioCallClick = onAudioCallClick,
+                        onVideoCallClick = onVideoCallClick,
+                        onKissClick = { showKissCanvas = !showKissCanvas },
+                        onClearChatClick = { showClearChatDialog = true },
+                        onProfileClick = onProfileClick,
+                        isSearchActive = isSearchActive,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                        onToggleSearch = { active ->
+                            isSearchActive = active
+                            if (!active) viewModel.updateSearchQuery("")
+                        }
+                    )
+                }
+            },
+            bottomBar = {
+                ChatInputBar(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    onAttachClick = { showAttachmentSheet = true },
+                    onRecordVoiceClick = {
+                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context, android.Manifest.permission.RECORD_AUDIO
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (granted) viewModel.startAudioRecording()
+                        else recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                CoListeningLounge(musicSyncController)
+
+                val displayMessages = if (isSearchActive && searchQuery.isNotEmpty()) {
+                    searchResults
+                } else {
+                    messages
+                }
+
+                // ViewModel emits sortedByDescending(timestamp) — newest first.
+                // reverseLayout=true makes index-0 (newest) render at the BOTTOM.
+                // DO NOT call .reversed() here — that would produce a double-inversion
+                // and put the newest messages at the TOP (the bug we just fixed).
+                val orderedMessages = displayMessages
+
+                val consecutiveMediaFlags = remember(orderedMessages) {
+                    val prevFlags = BooleanArray(orderedMessages.size)
+                    val nextFlags = BooleanArray(orderedMessages.size)
+                    for (i in orderedMessages.indices) {
+                        val current = orderedMessages[i]
+                        val isCurrentMedia = current.messageType == "MEDIA" || current.messageType == "MEDIA_IMAGE" || current.messageType == "MEDIA_VIDEO"
+                        if (isCurrentMedia) {
+                            var foundBelow = false
+                            for (j in (i + 1) until orderedMessages.size) {
+                                val other = orderedMessages[j]
+                                val isOtherMedia = other.messageType == "MEDIA" || other.messageType == "MEDIA_IMAGE" || other.messageType == "MEDIA_VIDEO"
+                                if (isOtherMedia) {
+                                    if (other.isFromMe == current.isFromMe) {
+                                        foundBelow = true
+                                    }
+                                    break
+                                } else if (other.messageType == "TEXT" && other.text.isNotEmpty()) {
+                                    break
+                                }
+                            }
+                            prevFlags[i] = foundBelow
+
+                            var foundAbove = false
+                            for (j in (i - 1) downTo 0) {
+                                val other = orderedMessages[j]
+                                val isOtherMedia = other.messageType == "MEDIA" || other.messageType == "MEDIA_IMAGE" || other.messageType == "MEDIA_VIDEO"
+                                if (isOtherMedia) {
+                                    if (other.isFromMe == current.isFromMe) {
+                                        foundAbove = true
+                                    }
+                                    break
+                                } else if (other.messageType == "TEXT" && other.text.isNotEmpty()) {
+                                    break
+                                }
+                            }
+                            nextFlags[i] = foundAbove
+                        }
+                    }
+                    Pair(prevFlags, nextFlags)
+                }
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    reverseLayout = true
+                ) {
+                    if (isPartnerTyping && !isSearchActive) {
+                        item {
+                            BouncingTypingIndicator()
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                    itemsIndexed(orderedMessages, key = { _, msg -> msg.id }) { index, message ->
+                        val delay = (index * 40).coerceAtMost(300)
+                        val slideOffset by animateDpAsState(
+                            targetValue = if (listLoaded) 0.dp else 40.dp,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            ),
+                            label = "item_slide"
+                        )
+                        val itemAlpha by animateFloatAsState(
+                            targetValue = if (listLoaded) 1.0f else 0.0f,
+                            animationSpec = tween(
+                                durationMillis = 300,
+                                delayMillis = delay
+                            ),
+                            label = "item_alpha"
+                        )
+
+                        val isMediaType = message.messageType == "MEDIA" || message.messageType == "MEDIA_IMAGE" || message.messageType == "MEDIA_VIDEO"
+                        val prevIsConsecutiveMedia = if (isMediaType) consecutiveMediaFlags.first[index] else false
+                        val nextIsConsecutiveMedia = if (isMediaType) consecutiveMediaFlags.second[index] else false
+
+                        Box(
+                            modifier = Modifier
+                                .offset(y = slideOffset)
+                                .graphicsLayer(alpha = itemAlpha)
+                        ) {
+                            SwipeToReplyMessageBubble(
+                                message = message,
+                                viewModel = viewModel,
+                                searchQuery = if (isSearchActive) searchQuery else "",
+                                isSelectionMode = isChatSelectionMode,
+                                isSelected = selectedMessages.contains(message),
+                                isGroupedMedia = isMediaType && (prevIsConsecutiveMedia || nextIsConsecutiveMedia),
+                                isGroupStart = isMediaType && prevIsConsecutiveMedia && !nextIsConsecutiveMedia,
+                                isGroupEnd = isMediaType && nextIsConsecutiveMedia && !prevIsConsecutiveMedia,
+                                onSelectedChange = { selected ->
+                                    if (selected) {
+                                        isChatSelectionMode = true
+                                        selectedMessages.add(message)
+                                    } else {
+                                        selectedMessages.remove(message)
+                                        if (selectedMessages.isEmpty()) {
+                                            isChatSelectionMode = false
+                                        }
+                                    }
+                                },
+                                onMediaClick = {
+                                    if (message.messageType == "MEDIA" ||
+                                        message.messageType == "MEDIA_IMAGE" ||
+                                        message.messageType == "MEDIA_VIDEO"
+                                    ) {
+                                        lightboxMessage = message
+                                    } else if (message.messageType == "MEDIA_FILE") {
+                                        viewModel.openDecryptedFile(message.id, context)
+                                    }
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+
+        // ── Full-screen overlays ──────────────────────────────────────────────
+        if (showKissCanvas) {
+            KissGestureCanvasOverlay(
+                viewModel = kissViewModel,
+                signalingClient = signalingClient,
+                onClose = {
+                    showKissCanvas = false
+                    onKissCanvasClosed()
+                },
+                onSendRecordedKiss = { payload ->
+                    viewModel.sendRecordedKiss(payload)
+                    showKissCanvas = false
+                    onKissCanvasClosed()
+                }
+            )
+        }
+
+        activePlaybackKiss?.let { payload ->
+            RecordedKissPlaybackOverlay(
+                payload = payload,
+                onClose = { viewModel.clearPlaybackKiss() }
+            )
+        }
+
+        lightboxMessage?.let { msg ->
+            LightboxOverlay(
+                message = msg,
+                viewModel = viewModel,
+                onClose = { lightboxMessage = null }
+            )
+        }
+
+        if (showHapticDialog) {
+            AlertDialog(
+                onDismissRequest = { showHapticDialog = false },
+                title = { Text("Send Haptic Pattern 📳") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        listOf("Heartbeat", "Purr", "Rapid").forEach { pattern ->
+                            TextButton(
+                                onClick = {
+                                    viewModel.sendHapticMessage(pattern)
+                                    showHapticDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(pattern, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showHapticDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+
+    // ── Attachment bottom sheet ───────────────────────────────────────────────
+    if (showAttachmentSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAttachmentSheet = false },
+            sheetState = attachmentSheetState,
+            containerColor = BlushBackground
+        ) {
+            AttachmentSheet(
+                onCamera = {
+                    showAttachmentSheet = false
+                    val hasCamera = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.CAMERA
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (hasCamera) {
+                        dev.saifmukhtar.enclave.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                        takePictureLauncher.launch(null)
+                    } else {
+                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                    }
+                },
+                onGallery = {
+                    showAttachmentSheet = false
+                    dev.saifmukhtar.enclave.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                    pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                },
+                onFile = {
+                    showAttachmentSheet = false
+                    dev.saifmukhtar.enclave.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                    pickFileLauncher.launch("*/*")
+                },
+                onAudio = {
+                    showAttachmentSheet = false
+                    dev.saifmukhtar.enclave.ui.vault.BiometricPromptManager.isSystemPickerActive = true
+                    pickAudioLauncher.launch("audio/*")
+                },
+                onHaptic = {
+                    showAttachmentSheet = false
+                    showHapticDialog = true
+                }
+            )
+        }
+    }
+
+    if (showClearChatDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearChatDialog = false },
+            title = { Text("Clear Entire Chat", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete all messages? This action is permanent.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearEntireChat()
+                        showClearChatDialog = false
+                    }
+                ) {
+                    Text("Clear All", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearChatDialog = false }) {
+                    Text("Cancel", color = CharcoalText)
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
+
+    if (showSelectionDeleteDialog && selectedMessages.isNotEmpty()) {
+        val allOutgoing = selectedMessages.all { it.isFromMe }
+        AlertDialog(
+            onDismissRequest = { showSelectionDeleteDialog = false },
+            title = {
+                Text("Delete ${selectedMessages.size} Messages", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Are you sure you want to delete these messages?")
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (allOutgoing) {
+                        TextButton(
+                            onClick = {
+                                selectedMessages.forEach { msg ->
+                                    viewModel.deleteMessage(msg.id, forEveryone = true)
+                                }
+                                selectedMessages.clear()
+                                isChatSelectionMode = false
+                                showSelectionDeleteDialog = false
+                            }
+                        ) {
+                            Text("Delete for Everyone", color = Color.Red, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedMessages.forEach { msg ->
+                                viewModel.deleteMessage(msg.id, forEveryone = false)
+                            }
+                            selectedMessages.clear()
+                            isChatSelectionMode = false
+                            showSelectionDeleteDialog = false
+                        }
+                    ) {
+                        Text("Delete for Me", color = Color.Red)
+                    }
+                    TextButton(onClick = { showSelectionDeleteDialog = false }) {
+                        Text("Cancel", color = CharcoalText)
+                    }
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
+
+    if (showSelectionInfoDialog && selectedMessages.size == 1) {
+        val msg = selectedMessages.first()
+        val timeText = try {
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(msg.timestamp))
+        } catch (e: Exception) { "" }
+        AlertDialog(
+            onDismissRequest = { showSelectionInfoDialog = false },
+            title = {
+                Text("Message Info", fontFamily = PlayfairFont, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Sender: ${if (msg.isFromMe) "Me" else "Partner"}", fontFamily = InterFont)
+                    Text("Type: ${msg.messageType}", fontFamily = InterFont)
+                    Text("Timestamp: $timeText", fontFamily = InterFont)
+                    Text("Delivery Status: ${msg.deliveryStatus}", fontFamily = InterFont)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSelectionInfoDialog = false }) {
+                    Text("Close", color = Color(0xFFE598A7))
+                }
+            },
+            containerColor = BlushBackground
+        )
+    }
+}
+
+// ─── Attachment sheet content (used only by ChatScreen) ───────────────────────
+@Composable
+private fun AttachmentSheet(
+    onCamera: () -> Unit,
+    onGallery: () -> Unit,
+    onFile: () -> Unit,
+    onAudio: () -> Unit,
+    onHaptic: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Share Content",
+            fontFamily = PlayfairFont,
+            fontSize = 18.sp,
+            color = dev.saifmukhtar.enclave.ui.theme.CharcoalText,
+            modifier = Modifier.padding(bottom = 20.dp)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            AttachmentOptionItem(
+                icon = Icons.Default.CameraAlt,
+                label = "Camera",
+                color = androidx.compose.ui.graphics.Color(0xFFE598A7),
+                onClick = onCamera
+            )
+            AttachmentOptionItem(
+                icon = Icons.Default.Image,
+                label = "Gallery",
+                color = androidx.compose.ui.graphics.Color(0xFF88B04B),
+                onClick = onGallery
+            )
+            AttachmentOptionItem(
+                icon = Icons.Default.AttachFile,
+                label = "File",
+                color = androidx.compose.ui.graphics.Color(0xFF5B5EA6),
+                onClick = onFile
+            )
+            AttachmentOptionItem(
+                icon = Icons.Default.MusicNote,
+                label = "Audio",
+                color = androidx.compose.ui.graphics.Color(0xFFEFC050),
+                onClick = onAudio
+            )
+            AttachmentOptionItem(
+                icon = Icons.Default.Vibration,
+                label = "Haptic",
+                color = androidx.compose.ui.graphics.Color(0xFFF06292),
+                onClick = onHaptic
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatSelectionTopBar(
+    selectedCount: Int,
+    onCloseClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onCopyClick: () -> Unit,
+    onReplyClick: () -> Unit,
+    onSaveClick: () -> Unit,
+    onInfoClick: () -> Unit,
+    showDelete: Boolean,
+    showCopy: Boolean,
+    showReply: Boolean,
+    showSave: Boolean,
+    showInfo: Boolean
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding(),
+        color = Color(0xFFFFF5F6),
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCloseClick) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF2A1B1D))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "$selectedCount selected",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2A1B1D),
+                modifier = Modifier.weight(1f)
+            )
+            
+            if (showReply) {
+                IconButton(onClick = onReplyClick) {
+                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Reply", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showCopy) {
+                IconButton(onClick = onCopyClick) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showSave) {
+                IconButton(onClick = onSaveClick) {
+                    Icon(Icons.Default.Download, contentDescription = "Save Media", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showInfo) {
+                IconButton(onClick = onInfoClick) {
+                    Icon(Icons.Default.Info, contentDescription = "Info", tint = Color(0xFF2A1B1D))
+                }
+            }
+            if (showDelete) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F))
+                }
+            }
+        }
+    }
+}
+

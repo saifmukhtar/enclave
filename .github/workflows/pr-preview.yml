@@ -17,18 +17,18 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm ci
 
       - name: Build site
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm run build
 
       - name: Upload preview artifact
         uses: actions/upload-artifact@v4
         with:
           name: site-preview-${{ github.sha }}
-          path: enclave-react/dist
+          path: apps/web/dist
 
       - name: Comment preview available
         uses: actions/github-script@v7

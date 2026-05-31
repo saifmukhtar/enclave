@@ -17,16 +17,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: enclave-react/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm run test:e2e

@@ -18,11 +18,11 @@ jobs:
           node-version: 20
 
       - name: Install
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm ci
 
       - name: Build
-        working-directory: ./enclave-react
+        working-directory: ./apps/web
         run: npm run build
 
       - name: Deploy to Netlify (preview)
@@ -34,4 +34,4 @@ jobs:
             echo "Netlify secrets not set; skipping preview deploy.";
             exit 0;
           fi
-          npx netlify-cli deploy --dir=enclave-react/dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN --message "PR preview $GITHUB_SHA" --prod=false
+          npx netlify-cli deploy --dir=apps/web/dist --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN --message "PR preview $GITHUB_SHA" --prod=false
