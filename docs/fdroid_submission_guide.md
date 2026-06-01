@@ -77,6 +77,11 @@ Builds:
       mkdir -p app/libs
       cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
       cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
+      
+      # Clean up compilation artifacts to prevent F-Droid's binary scanner from flagging them
+      rm -rf ../../libsignal-src/target
+      rm -rf ../../libsignal-src/java/android/build
+      rm -rf ../../libsignal-src/java/client/build
     gradle:
       - yes
     gradleprops:
@@ -115,6 +120,11 @@ Builds:
       mkdir -p app/libs
       cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
       cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
+      
+      # Clean up compilation artifacts to prevent F-Droid's binary scanner from flagging them
+      rm -rf ../../libsignal-src/target
+      rm -rf ../../libsignal-src/java/android/build
+      rm -rf ../../libsignal-src/java/client/build
     gradle:
       - yes
     gradleprops:
