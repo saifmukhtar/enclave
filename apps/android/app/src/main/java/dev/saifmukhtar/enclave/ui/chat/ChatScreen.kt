@@ -34,7 +34,6 @@ import dev.saifmukhtar.enclave.ui.theme.BlushBackground
 import dev.saifmukhtar.enclave.ui.theme.PlayfairFont
 import dev.saifmukhtar.enclave.ui.theme.CharcoalText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.AnnotatedString
 import dev.saifmukhtar.enclave.ui.theme.InterFont
 import androidx.compose.material.icons.automirrored.filled.Reply
 
@@ -107,7 +106,6 @@ fun ChatScreen(
     // Multi-selection states
     var isChatSelectionMode by rememberSaveable { mutableStateOf(false) }
     val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     LaunchedEffect(autoShowKissCanvas) {
         if (autoShowKissCanvas) showKissCanvas = true
@@ -266,7 +264,7 @@ fun ChatScreen(
                             val textToCopy = selectedMessages
                                 .filter { it.messageType == "TEXT" }
                                 .joinToString("\n") { it.text }
-                            clipboardManager.setText(AnnotatedString(textToCopy))
+                            dev.saifmukhtar.enclave.security.SecureClipboardManager.copyAndScheduleClear(context, textToCopy)
                             isChatSelectionMode = false
                             selectedMessages.clear()
                         },

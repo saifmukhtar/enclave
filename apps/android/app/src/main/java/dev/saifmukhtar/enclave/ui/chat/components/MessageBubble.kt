@@ -27,10 +27,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -65,7 +63,6 @@ fun SwipeToReplyMessageBubble(
     var showContextMenu by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
     val isPressed = remember { mutableStateOf(false) }
@@ -479,7 +476,7 @@ fun SwipeToReplyMessageBubble(
                             Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CharcoalText)
                         },
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(message.text))
+                            dev.saifmukhtar.enclave.security.SecureClipboardManager.copyAndScheduleClear(context, message.text)
                             showContextMenu = false
                         }
                     )

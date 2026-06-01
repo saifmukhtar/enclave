@@ -702,7 +702,7 @@ Edit `local.properties`:
 ```properties
 sdk.dir=/path/to/Android/Sdk
 SUPABASE_URL=http://10.0.2.2:8000    # 10.0.2.2 = emulator's host loopback
-SUPABASE_KEY=your-anon-key
+SUPABASE_ANON_KEY=your-anon-key
 SIGNALING_SERVER_URL=ws://10.0.2.2:8085
 ```
 

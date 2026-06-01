@@ -1,7 +1,7 @@
 services:
   studio:
     container_name: supabase-studio
-    image: supabase/studio:latest
+    image: supabase/studio:20240129-c81a28a
     restart: unless-stopped
     ports:
       - 127.0.0.1:${STUDIO_PORT}:3000/tcp
@@ -10,8 +10,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      STUDIO_DEFAULT_ORGANIZATION: "Default Organization"
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
     volumes:
@@ -114,8 +115,8 @@ services:
       db:
         condition: service_healthy
     environment:
-      ANON_KEY: ${ANON_KEY}
-      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
       PGRST_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
@@ -177,7 +178,7 @@ services:
 
   ntfy:
     container_name: enclave-ntfy
-    image: binwiederhier/ntfy:latest
+    image: binwiederhier/ntfy:v2.11.0
     restart: unless-stopped
     command: serve
     environment:

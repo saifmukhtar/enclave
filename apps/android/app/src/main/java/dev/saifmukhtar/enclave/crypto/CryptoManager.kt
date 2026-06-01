@@ -165,6 +165,19 @@ class CryptoManager(private val context: Context) {
         }
     }
 
+    fun getDatabasePassphrase(): String {
+        val key = sharedPreferences.getString("database_symmetric_key_hex", null)
+        return if (key != null) {
+            key
+        } else {
+            val randomBytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(randomBytes)
+            val hexString = randomBytes.joinToString("") { "%02x".format(it) }
+            sharedPreferences.edit().putString("database_symmetric_key_hex", hexString).apply()
+            hexString
+        }
+    }
+
     fun encryptLocal(plaintext: ByteArray): String {
         val key = getOrCreateLocalKey()
         val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")

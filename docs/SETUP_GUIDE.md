@@ -65,7 +65,7 @@ TURN_PASSWORD=localdevpass123
 
 SIGNALING_SERVER_URL=ws://10.0.2.2:8085
 SUPABASE_URL=http://10.0.2.2:8000
-SUPABASE_KEY=replace_with_local_anon_key
+SUPABASE_ANON_KEY=replace_with_local_anon_key
 
 NTFY_SERVER_URL=http://10.0.2.2:2586
 NTFY_USERNAME=replace_with_ntfy_user

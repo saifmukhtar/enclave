@@ -63,14 +63,14 @@ const output = `================================================================
 JWT_SECRET=${jwtSecret}
 SECRET_KEY_BASE=${secretKeyBase}
 POSTGRES_PASSWORD=${dbPassword}
-ANON_KEY=${anonKey}
-SERVICE_ROLE_KEY=${serviceRoleKey}
+SUPABASE_ANON_KEY=${anonKey}
+SUPABASE_SERVICE_ROLE_KEY=${serviceRoleKey}
 
 --------------------------------------------------------------------------------
 
 📍 [STEP 2] COPY THIS ENTRY TO YOUR CLIENT 'local.properties' FILE:
 
-SUPABASE_KEY=${anonKey}
+SUPABASE_ANON_KEY=${anonKey}
 
 ================================================================================
 ✅ Key generation complete! Copy these secure coordinates into place and deploy.

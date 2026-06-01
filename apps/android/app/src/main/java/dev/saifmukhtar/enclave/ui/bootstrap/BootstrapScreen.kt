@@ -345,7 +345,7 @@ fun BootstrapScreen(
         try {
             val props = Properties().also { it.load(text.byteInputStream()) }
             supabaseUrl  = props.getProperty("SUPABASE_URL",          supabaseUrl)
-            supabaseKey  = props.getProperty("SUPABASE_KEY",          supabaseKey)
+            supabaseKey  = props.getProperty("SUPABASE_ANON_KEY",     supabaseKey)
             signalingUrl = props.getProperty("SIGNALING_SERVER_URL",  signalingUrl)
             turnUrl      = props.getProperty("TURN_SERVER_URL",       turnUrl)
             turnUser     = props.getProperty("TURN_USERNAME",         turnUser)
@@ -453,7 +453,7 @@ fun BootstrapScreen(
                         Spacer(Modifier.height(12.dp))
 
                         BootstrapField("SUPABASE_URL",         supabaseUrl)  { supabaseUrl  = it }
-                        BootstrapField("SUPABASE_KEY",         supabaseKey)  { supabaseKey  = it }
+                        BootstrapField("SUPABASE_ANON_KEY",    supabaseKey)  { supabaseKey  = it }
                         BootstrapField("SIGNALING_SERVER_URL", signalingUrl) { signalingUrl = it }
                         BootstrapField("TURN_SERVER_URL",      turnUrl)      { turnUrl      = it }
                         BootstrapField("TURN_USERNAME",        turnUser)     { turnUser     = it }

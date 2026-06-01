@@ -4,6 +4,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import net.sqlcipher.database.SQLiteDatabase
+import net.sqlcipher.database.SupportFactory
+import dev.saifmukhtar.enclave.crypto.CryptoManager
 
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -150,11 +153,24 @@ abstract class EnclaveDatabase : RoomDatabase() {
 
         fun getInstance(context: android.content.Context): EnclaveDatabase {
             return INSTANCE ?: synchronized(this) {
+                val appContext = context.applicationContext
+                
+                // Initialize SQLCipher native libraries
+                SQLiteDatabase.loadLibs(appContext)
+                
+                // Fetch the secure Keystore-backed database passphrase
+                val cryptoManager = CryptoManager(appContext)
+                val dbPassphrase = cryptoManager.getDatabasePassphrase()
+                
+                // Create the support open helper factory utilizing the secure passphrase
+                val factory = SupportFactory(dbPassphrase.toByteArray(Charsets.UTF_8))
+                
                 val instance = androidx.room.Room.databaseBuilder(
-                    context.applicationContext,
+                    appContext,
                     EnclaveDatabase::class.java,
                     "enclave_db"
                 )
+                .openHelperFactory(factory)
                 .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .fallbackToDestructiveMigration()
                 .build()

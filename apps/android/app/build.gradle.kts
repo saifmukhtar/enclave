@@ -119,6 +119,7 @@ dependencies {
     // Security & Cryptography
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     // Conditional Libsignal Integration
     if (project.hasProperty("fdroid") || System.getenv("FDROID") == "true") {
         // F-Droid Build: Consume the source-built AARs/JARs compiled during the prebuild step

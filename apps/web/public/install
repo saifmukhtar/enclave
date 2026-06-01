@@ -396,10 +396,10 @@ _sign_jwt() {
   "
 }
 
-ANON_KEY=$(_sign_jwt "anon")
-SERVICE_ROLE_KEY=$(_sign_jwt "service_role")
-ok "ANON_KEY signed (valid until 2036)"
-ok "SERVICE_ROLE_KEY signed (valid until 2036)"
+SUPABASE_ANON_KEY=$(_sign_jwt "anon")
+SUPABASE_SERVICE_ROLE_KEY=$(_sign_jwt "service_role")
+ok "SUPABASE_ANON_KEY signed (valid until 2036)"
+ok "SUPABASE_SERVICE_ROLE_KEY signed (valid until 2036)"
 
 step "Detecting Droplet public IP address..."
 DROPLET_IP=$(curl -s --max-time 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address 2>/dev/null \
@@ -443,8 +443,8 @@ GOTRUE_SITE_URL=https://${DOMAIN}
 ADDITIONAL_REDIRECT_URLS=https://${DOMAIN}
 
 # — Supabase API Keys —
-ANON_KEY=${ANON_KEY}
-SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
 
 # — Internal Ports (bound to 127.0.0.1, exposed via Nginx) —
 STUDIO_PORT=3000
@@ -892,8 +892,8 @@ _create_user() {
   
   local resp
   resp=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:8000/auth/v1/admin/users" \
-    -H "apikey: ${SERVICE_ROLE_KEY}" \
-    -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+    -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"${email}\",\"password\":\"${pass}\",\"email_confirm\":true}")
   
@@ -939,7 +939,7 @@ cat > "$SUMMARY_FILE" << SUMMARY_EOF
 sdk.dir=/path/to/your/Android/Sdk
 
 SUPABASE_URL=${DOMAIN_API}
-SUPABASE_KEY=${ANON_KEY}
+SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 SIGNALING_SERVER_URL=wss://${DOMAIN_WSS}
 TURN_SERVER_URL=turn:${DROPLET_IP}:3478
 TURN_USERNAME=enclave
@@ -954,8 +954,8 @@ NTFY_PASSWORD=${NTFY_PASSWORD}
   POSTGRES_PASSWORD   : ${POSTGRES_PASSWORD}
   JWT_SECRET          : ${JWT_SECRET}
   SECRET_KEY_BASE     : ${SECRET_KEY_BASE}
-  ANON_KEY            : ${ANON_KEY}
-  SERVICE_ROLE_KEY    : ${SERVICE_ROLE_KEY}
+  SUPABASE_ANON_KEY   : ${SUPABASE_ANON_KEY}
+  SUPABASE_SERVICE_ROLE_KEY : ${SUPABASE_SERVICE_ROLE_KEY}
   COTURN_AUTH_SECRET  : ${COTURN_SECRET}
   NTFY_USERNAME       : ${NTFY_USERNAME}
   NTFY_PASSWORD       : ${NTFY_PASSWORD}

@@ -45,30 +45,65 @@ function loadEnv() {
 }
 loadEnv();
 
-// Map SERVICE_ROLE_KEY or ANON_KEY to SUPABASE_KEY if needed
-if (!process.env.SUPABASE_KEY) {
-  process.env.SUPABASE_KEY = process.env.SERVICE_ROLE_KEY || process.env.ANON_KEY;
+// Function to generate a restricted signaling JWT signed with JWT_SECRET
+function generateSignalingToken(secret: string): string {
+  const header = {
+    alg: "HS256",
+    typ: "JWT"
+  };
+  
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    role: "signaling_server",
+    iss: "supabase",
+    iat: now,
+    exp: now + 60 * 60 * 24 * 365 // 1 year expiration
+  };
+
+  const base64UrlEncode = (obj: any) => {
+    return Buffer.from(JSON.stringify(obj))
+      .toString('base64')
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+  };
+
+  const encodedHeader = base64UrlEncode(header);
+  const encodedPayload = base64UrlEncode(payload);
+
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
 }
 
-// Removed firebase-admin initialization
-
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://your-project.supabase.co';
-const SUPABASE_KEY = process.env.SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY ?? process.env.ANON_KEY ?? 'your-anon-key';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? 'your-anon-key';
 
-if (process.env.SERVICE_ROLE_KEY && SUPABASE_KEY === process.env.SERVICE_ROLE_KEY) {
-  console.log("Supabase API successfully initialized using SERVICE_ROLE_KEY (RLS bypass enabled).");
-} else if (process.env.ANON_KEY && SUPABASE_KEY === process.env.ANON_KEY) {
-  console.warn("Supabase API initialized using ANON_KEY (may fail push token lookup due to RLS).");
+// Initialize the restricted key for PostgREST queries
+let restrictedSupabaseKey = SUPABASE_ANON_KEY;
+if (process.env.JWT_SECRET) {
+  try {
+    restrictedSupabaseKey = generateSignalingToken(process.env.JWT_SECRET);
+    console.log("Supabase API successfully initialized using custom generated restricted JWT (signaling_server role RLS enforced).");
+  } catch (err) {
+    console.error("Failed to generate custom restricted JWT token, falling back to SUPABASE_ANON_KEY", err);
+  }
 } else {
-  console.log("Supabase API successfully initialized with provided SUPABASE_KEY.");
+  console.warn("JWT_SECRET not found in environment, falling back to SUPABASE_ANON_KEY");
 }
 
 async function fetchTargetPushToken(targetId: string): Promise<string | null> {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${targetId}&select=push_token,fcm_token`, {
       headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${restrictedSupabaseKey}`
       }
     });
     if (!res.ok) {
@@ -89,8 +124,8 @@ async function setOfflineInSupabase(userId: string): Promise<void> {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
       method: 'PATCH',
       headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${restrictedSupabaseKey}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal'
       },
@@ -327,7 +362,7 @@ async function verifySupabaseToken(token: string): Promise<string | null> {
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: {
-        'apikey': SUPABASE_KEY,
+        'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${token}`
       }
     });
