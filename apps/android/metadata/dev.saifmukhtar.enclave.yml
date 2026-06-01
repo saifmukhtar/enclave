@@ -27,6 +27,15 @@ Builds:
       cd ../../libsignal-src/java
       echo "sdk.dir=$ANDROID_HOME" > local.properties
       echo "ndk.dir=$$NDK$$" >> local.properties
+      
+      # Configure bindgen to use NDK's prebuilt LLVM/Clang to avoid host Clang parser issues
+      NDK_DIR="$$NDK$$"
+      if [ -d "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64" ]; then
+          export CLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export LIBCLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/lib64"
+          export BINDGEN_EXTRA_CLANG_ARGS="-I$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+      fi
+      
       ./gradlew assembleRelease -x test
       
       # Return to Enclave Android directory and copy artifacts safely
@@ -56,6 +65,15 @@ Builds:
       cd ../../libsignal-src/java
       echo "sdk.dir=$ANDROID_HOME" > local.properties
       echo "ndk.dir=$$NDK$$" >> local.properties
+      
+      # Configure bindgen to use NDK's prebuilt LLVM/Clang to avoid host Clang parser issues
+      NDK_DIR="$$NDK$$"
+      if [ -d "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64" ]; then
+          export CLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export LIBCLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/lib64"
+          export BINDGEN_EXTRA_CLANG_ARGS="-I$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+      fi
+      
       ./gradlew assembleRelease -x test
       
       # Return to Enclave Android directory and copy artifacts safely
