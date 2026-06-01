@@ -356,6 +356,7 @@ fun ScratchToRevealTab(
                                 )
                             }
                     ) {
+                        @Suppress("UNUSED_EXPRESSION")
                         drawTrigger // Read state to trigger redraw without recomposing parent
                         drawRect(color = Color(0xFFE598A7))
 

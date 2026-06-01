@@ -16,6 +16,7 @@ Builds:
     subdir: apps/android
     submodules: true
     ndk: r25c
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
     sudo:
       - apt-get update
       - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git
@@ -67,6 +68,7 @@ Builds:
     subdir: apps/android
     submodules: true
     ndk: r25c
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
     sudo:
       - apt-get update
       - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git

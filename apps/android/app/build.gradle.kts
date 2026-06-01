@@ -18,6 +18,15 @@ android {
     namespace = "dev.saifmukhtar.enclave"
     compileSdk = 35
 
+    // Dynamically align ndkVersion with ndk.dir if configured to prevent AGP mismatch warnings
+    val ndkPath = properties.getProperty("ndk.dir")
+    if (ndkPath != null) {
+        val version = ndkPath.split("/").lastOrNull()
+        if (version != null && version.firstOrNull()?.isDigit() == true) {
+            ndkVersion = version
+        }
+    }
+
     val storeFilePath = properties.getProperty("RELEASE_STORE_FILE")
     val storePass = properties.getProperty("RELEASE_STORE_PASSWORD")
     val alias = properties.getProperty("RELEASE_KEY_ALIAS")

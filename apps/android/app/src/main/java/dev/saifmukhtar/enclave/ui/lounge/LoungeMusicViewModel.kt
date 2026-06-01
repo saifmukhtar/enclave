@@ -112,7 +112,7 @@ class LoungeMusicViewModel(
         if (bundleRepository == null) return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val repo = bundleRepository ?: return@launch
+                val repo = bundleRepository
                 repo.insertQueueItem(songId)
                 refreshQueue()
                 sendLoungeMessage("LOUNGE_QUEUE_UPDATE", "")
