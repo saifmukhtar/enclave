@@ -109,6 +109,37 @@ fun AppLockScreen(
             )
         }
 
+        if (dev.saifmukhtar.enclave.BuildConfig.DEBUG) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 24.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFFECEF))
+                    .border(1.dp, Color(0xFFFFD1DC), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "⚠️",
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text(
+                        text = "Debug Build: Screenshot Protection Disabled",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFC83D60),
+                        fontFamily = InterFont
+                    )
+                }
+            }
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier

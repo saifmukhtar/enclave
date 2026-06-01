@@ -48,7 +48,7 @@ services:
 
   auth:
     container_name: supabase-auth
-    image: supabase/gotrue:v2.132.3
+    image: supabase/gotrue:v2.132.3@sha256:2b186a30a6336fb0c845a9be9ab3b4d2f76f6a45c7e91056a1d900d31ad02991
     restart: unless-stopped
     environment:
       GOTRUE_API_HOST: 0.0.0.0
@@ -149,7 +149,7 @@ services:
 
   db:
     container_name: supabase-db
-    image: supabase/postgres:15.1.0.147
+    image: supabase/postgres:15.1.0.147@sha256:b3426a8a277a1757d82a05aaf6fae0aad1a8bee0a8a25ecf4214114622d02e0d
     restart: unless-stopped
     ports:
       - 127.0.0.1:${POSTGRES_PORT}:5432

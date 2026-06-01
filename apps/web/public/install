@@ -723,7 +723,9 @@ ok "Default site removed"
 # ── Supabase (api.domain) ──────────────────────────────────────
 step "Writing Nginx config for ${DOMAIN_API} (Supabase)..."
 cat > /etc/nginx/sites-available/enclave-api << NGINX_EOF
-# ── Enclave: Supabase API Gateway ── auto-configured by setup_droplet.sh
+# Rate limiting zone for public API traffic (30 requests per second burstable to 50)
+limit_req_zone \$binary_remote_addr zone=api_limit_zone:10m rate=30r/s;
+
 server {
     listen 80;
     listen [::]:80;
@@ -731,6 +733,9 @@ server {
 
     # All Supabase REST/Auth/Storage/Realtime traffic
     location / {
+        # Enforce rate-limiting
+        limit_req zone=api_limit_zone burst=50 nodelay;
+
         proxy_pass         http://127.0.0.1:8000;
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
@@ -755,13 +760,18 @@ ok "${DOMAIN_API} configured"
 # ── Signaling WebSocket (wss.domain) ─────────────────────────
 step "Writing Nginx config for ${DOMAIN_WSS} (Signaling)..."
 cat > /etc/nginx/sites-available/enclave-wss << NGINX_EOF
-# ── Enclave: E2EE Signaling WebSocket ── auto-configured by setup_droplet.sh
+# Rate limiting zone for signaling websocket connections (10 connections per second burstable to 20)
+limit_req_zone \$binary_remote_addr zone=wss_limit_zone:10m rate=10r/s;
+
 server {
     listen 80;
     listen [::]:80;
     server_name ${DOMAIN_WSS};
 
     location / {
+        # Enforce WebSocket rate-limiting
+        limit_req zone=wss_limit_zone burst=20 nodelay;
+
         proxy_pass         http://127.0.0.1:8085;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade \$http_upgrade;

@@ -281,6 +281,31 @@ fun ProfileScreen(
                     Text("Invite Partner", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
 
+                if (dev.saifmukhtar.enclave.BuildConfig.DEBUG) {
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                            .border(1.dp, MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚠️", fontSize = 14.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Debug Build: Screenshot Protection is Disabled",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(32.dp))
             }
         }

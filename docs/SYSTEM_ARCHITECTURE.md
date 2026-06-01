@@ -776,6 +776,18 @@ Set up Nginx with Let's Encrypt to terminate TLS:
 - `wss.your-domain.com` → `localhost:8085` (Signaling WebSocket, with upgrade headers)
 - `ntfy.your-domain.com` → `localhost:2586` (Ntfy)
 
+##### Nginx Rate-Limiting Policy (Security Hardening)
+To mitigate Distributed Denial of Service (DDoS) and brute-force attacks on our public endpoints, the Nginx reverse-proxy enforces strict request throttling:
+
+1. **Supabase REST/Auth Gateway Limit (`api.your-domain.com`)**:
+   * **Tracking Zone:** 10MB memory state tracker (`api_limit_zone`) supporting ~160,000 unique client states.
+   * **Request Rate:** Maximum 30 requests per second (`30r/s`) per unique binary client IP.
+   * **Burst Buffer:** Tolerance up to 50 requests (`burst=50`) processed with `nodelay` to allow smooth Jetpack Compose bootstrap batches.
+2. **Signaling WebSocket Gateway Limit (`wss.your-domain.com`)**:
+   * **Tracking Zone:** 10MB memory state tracker (`wss_limit_zone`) dedicated to WebSocket handshake packets.
+   * **Connection Rate:** Maximum 10 connection handshakes per second (`10r/s`) per unique IP.
+   * **Burst Buffer:** Tolerance up to 20 requests (`burst=20`) with `nodelay` to ensure high availability for mutual touch sync requests.
+
 #### Step 5: Deploy the Landing Page
 
 The React marketing site auto-deploys via GitHub Actions when a commit message contains `github-page` or the workflow is manually triggered:
