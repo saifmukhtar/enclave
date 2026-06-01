@@ -1,5 +1,6 @@
 ### Required
-* [x] The app complies with the [inclusion criteria](https://f-droid.org/wiki/page/Inclusion_Policy).
+* [x] The app complies with the [inclusion criteria](https://f-droid.org/wiki/page/Inclusion_Policy):
+  * *WebRTC Library FOSS-Compliance:* Instead of standard Google WebRTC binaries, Enclave consumes the open-source, F-Droid approved `im.conversations.webrtc:webrtc-android:129.0.0` library, which contains zero proprietary components or Google Play Services dependencies.
 * [x] The original app author has been notified (and does not oppose the inclusion) — *I am the original author of the application.*
 * [x] All related fdroiddata and RFP issues have been referenced in this merge request — *None (this is the initial submission).*
 * [x] Builds with `fdroid build` and all pipelines pass — *Verified locally with a successful build run using F-Droid server tools.*
