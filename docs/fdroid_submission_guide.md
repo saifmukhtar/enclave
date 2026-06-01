@@ -50,6 +50,9 @@ Builds:
     subdir: apps/android
     submodules: true
     ndk: r25c
+    sudo:
+      - apt-get update
+      - apt-get install -y cargo rustc
     prebuild: |
       # Save the absolute path of Enclave's Android directory
       ENCLAVE_DIR=$(pwd)
@@ -76,6 +79,9 @@ Builds:
     subdir: apps/android
     submodules: true
     ndk: r25c
+    sudo:
+      - apt-get update
+      - apt-get install -y cargo rustc
     prebuild: |
       # Save the absolute path of Enclave's Android directory
       ENCLAVE_DIR=$(pwd)
