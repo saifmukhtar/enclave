@@ -52,7 +52,7 @@ Builds:
     ndk: r25c
     sudo:
       - apt-get update
-      - apt-get install -y cargo rustc
+      - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git
     prebuild: |
       # Save the absolute path of Enclave's Android directory
       ENCLAVE_DIR=$(pwd)
@@ -81,7 +81,7 @@ Builds:
     ndk: r25c
     sudo:
       - apt-get update
-      - apt-get install -y cargo rustc
+      - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git
     prebuild: |
       # Save the absolute path of Enclave's Android directory
       ENCLAVE_DIR=$(pwd)
