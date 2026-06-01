@@ -11,7 +11,7 @@ Our Android client is engineered as a FOSS-compliant (Free and Open Source Softw
 Before submitting, ensure you have:
 - [x] **Public Git Repository:** Source code pushed to [github.com/saifmukhtar/enclave](https://github.com/saifmukhtar/enclave).
 - [x] **Stable Release Tag:** Git release tag created and pushed (e.g. `v2.0.0` at versionCode `3`).
-- [x] **Submodule Configuration:** `libsignal-src` configured at tag `v0.39.2` under the root tree directory.
+- [x] **Submodule Configuration:** `libsignal-src` configured at tag `v0.39.2` under the root tree directory, with Rust dependencies vendored and committed.
 - [x] **GitLab Account:** Required to fork the official metadata repository and open your merge request.
 
 ---
@@ -44,21 +44,23 @@ RepoType: git
 Repo: https://github.com/saifmukhtar/enclave.git
 
 Builds:
-  - versionName: 2.0.0
+  - versionName: '2.0.0'
     versionCode: 3
     commit: v2.0.0
     subdir: apps/android
-    submodules: yes
+    submodules: true
+    ndk: r25c
     prebuild: |
       # Save the absolute path of Enclave's Android directory
       ENCLAVE_DIR=$(pwd)
       
-      # Navigate to the submodule java client and build native libraries
+      # From apps/android, the submodule lives two directories up
       cd ../../libsignal-src/java
       echo "sdk.dir=$ANDROID_HOME" > local.properties
+      echo "ndk.dir=$$NDK$$" >> local.properties
       ./gradlew assembleRelease -x test
       
-      # Return to Enclave Android directory and copy compile artifacts
+      # Return to Enclave Android directory and copy artifacts safely
       cd $ENCLAVE_DIR
       mkdir -p app/libs
       cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
@@ -70,6 +72,8 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
+CurrentVersion: '2.0.0'
+CurrentVersionCode: 3
 ```
 
 ---
@@ -133,3 +137,37 @@ Before opening the Merge Request, you can run F-Droid's official build servers i
    fdroid build -v -s dev.saifmukhtar.enclave
    ```
    *Verify that the output finishes with `BUILD SUCCESSFUL` and packages the dynamically generated `libsignal` binaries properly.*
+
+---
+
+## 6. Offline Rust Dependency Compilation (Cargo Vendoring)
+
+Because F-Droid build servers compile applications in an isolated sandbox with **no internet access**, standard Rust Cargo compilations will fail when cargo attempts to fetch library dependencies from crates.io.
+
+To resolve this, we vendor our Rust dependencies inside the `libsignal-src` submodule and commit them. Before tagging a new release, developers must perform the following steps:
+
+1. **Vendor Cargo Dependencies:**
+   Navigate to the root of the `libsignal-src` directory and run:
+   ```bash
+   cargo vendor
+   ```
+   This downloads and structures all Rust crate dependencies into a local `vendor/` directory.
+
+2. **Configure Cargo Offline Source Replacement:**
+   Create or edit the local cargo configuration file at `libsignal-src/.cargo/config.toml` to tell Cargo to use the local `vendor` folder instead of crates.io:
+   ```toml
+   [source.crates-io]
+   replace-with = "vendored-sources"
+
+   [source.vendored-sources]
+   directory = "vendor"
+   ```
+
+3. **Commit and Push the Submodule Assets:**
+   Commit and push the `vendor/` directory and `.cargo/config.toml` changes inside the submodule:
+   ```bash
+   git add .cargo/config.toml vendor/
+   git commit -m "Vendor Rust dependencies for F-Droid compliance"
+   git push origin main
+   ```
+   *Note: Ensure the main repository's submodule pointer is updated to point to this new commit.*
