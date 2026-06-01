@@ -52,13 +52,13 @@ chmod +x setup-local.sh
 - Checks health endpoints for Kong (8000), Signaling (8085), Supabase Studio (3000), and Ntfy (2586).
 - Creates `apps/android/local.properties` if missing and points app URLs to the emulator loopback (`10.0.2.2`).
 
-### Step 3 — Complete `local.properties`
+### Step 3 — Copy App Bootstrap Properties Block
 
-Open `apps/android/local.properties`. The Android app build requires all keys below:
+When you launch the Android app for the first time, you will configure its node dynamically at runtime. You do **not** need to hardcode these coordinates in your compile-time `local.properties` file (which strictly only requires your `sdk.dir` and private signing release keys). 
+
+Instead, copy the properties block below. When the compiled app is launched, you will paste this exact block directly into the **"Admin Properties Block"** text field in the **Manual Setup** tab to initialize connection keys:
 
 ```properties
-sdk.dir=/absolute/path/to/Android/Sdk
-
 TURN_SERVER_URL=turn:10.0.2.2:3478
 TURN_USERNAME=localdev
 TURN_PASSWORD=localdevpass123

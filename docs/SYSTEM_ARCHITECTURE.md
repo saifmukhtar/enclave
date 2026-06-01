@@ -691,19 +691,14 @@ node generate_keys.js
 # Copy the output into .env and apps/android/local.properties
 ```
 
-#### Step 5: Configure the Android App
+#### Step 5: Configure Build Environment
 
+The compile-time Android environment strictly only requires your Android SDK path (and private signing credentials if creating a release build). All server coordinates are parsed dynamically at runtime inside the first-run bootstrap screen for maximum zero-knowledge security and convenience.
+
+Create your compile-time properties file containing strictly your SDK path:
 ```bash
 cd apps/android
-cp local.properties.example local.properties
-```
-
-Edit `local.properties`:
-```properties
-sdk.dir=/path/to/Android/Sdk
-SUPABASE_URL=http://10.0.2.2:8000    # 10.0.2.2 = emulator's host loopback
-SUPABASE_ANON_KEY=your-anon-key
-SIGNALING_SERVER_URL=ws://10.0.2.2:8085
+echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 ```
 
 #### Step 6: Build & Install
