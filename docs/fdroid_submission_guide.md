@@ -10,7 +10,7 @@ Our Android client is engineered as a FOSS-compliant (Free and Open Source Softw
 
 Before submitting, ensure you have:
 - [x] **Public Git Repository:** Source code pushed to [github.com/saifmukhtar/enclave](https://github.com/saifmukhtar/enclave).
-- [x] **Stable Release Tag:** Git release tag created and pushed (e.g. `v2.0.0` at versionCode `3`).
+- [x] **Stable Release Tag:** Git release tag created and pushed (e.g. `v3.0.0` at versionCode `4`).
 - [x] **Submodule Configuration:** `libsignal-src` configured at tag `v0.39.2` under the root tree directory, with Rust dependencies vendored and committed.
 - [x] **GitLab Account:** Required to fork the official metadata repository and open your merge request.
 
@@ -70,10 +70,36 @@ Builds:
     gradleprops:
       - fdroid=true
 
+  - versionName: '3.0.0'
+    versionCode: 4
+    commit: v3.0.0
+    subdir: apps/android
+    submodules: true
+    ndk: r25c
+    prebuild: |
+      # Save the absolute path of Enclave's Android directory
+      ENCLAVE_DIR=$(pwd)
+      
+      # From apps/android, the submodule lives two directories up
+      cd ../../libsignal-src/java
+      echo "sdk.dir=$ANDROID_HOME" > local.properties
+      echo "ndk.dir=$$NDK$$" >> local.properties
+      ./gradlew assembleRelease -x test
+      
+      # Return to Enclave Android directory and copy artifacts safely
+      cd $ENCLAVE_DIR
+      mkdir -p app/libs
+      cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
+      cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
+    gradle:
+      - yes
+    gradleprops:
+      - fdroid=true
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.0.0'
-CurrentVersionCode: 3
+CurrentVersion: '3.0.0'
+CurrentVersionCode: 4
 ```
 
 ---

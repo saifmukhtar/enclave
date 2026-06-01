@@ -36,7 +36,33 @@ Builds:
     gradleprops:
       - fdroid=true
 
+  - versionName: '3.0.0'
+    versionCode: 4
+    commit: v3.0.0
+    subdir: apps/android
+    submodules: true
+    ndk: r25c
+    prebuild: |
+      # Save the absolute path of Enclave's Android directory
+      ENCLAVE_DIR=$(pwd)
+      
+      # From apps/android, the submodule lives two directories up
+      cd ../../libsignal-src/java
+      echo "sdk.dir=$ANDROID_HOME" > local.properties
+      echo "ndk.dir=$$NDK$$" >> local.properties
+      ./gradlew assembleRelease -x test
+      
+      # Return to Enclave Android directory and copy artifacts safely
+      cd $ENCLAVE_DIR
+      mkdir -p app/libs
+      cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
+      cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
+    gradle:
+      - yes
+    gradleprops:
+      - fdroid=true
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.0.0'
-CurrentVersionCode: 3
+CurrentVersion: '3.0.0'
+CurrentVersionCode: 4
