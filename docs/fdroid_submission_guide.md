@@ -86,6 +86,14 @@ Builds:
       - yes
     gradleprops:
       - fdroid=true
+    scanignore:
+      - apps/android/app/libs/libsignal-android-release.aar
+      - apps/android/app/libs/libsignal-client-0.39.2.jar
+      - libsignal-src/java/android/src/main/jniLibs
+      - libsignal-src/java/shared/resources
+    scandelete:
+      - backend
+      - libsignal-src/rust/attest/fuzz/seeds/dcap/cds2_test
 
   - versionName: '3.0.0'
     versionCode: 4
@@ -129,6 +137,14 @@ Builds:
       - yes
     gradleprops:
       - fdroid=true
+    scanignore:
+      - apps/android/app/libs/libsignal-android-release.aar
+      - apps/android/app/libs/libsignal-client-0.39.2.jar
+      - libsignal-src/java/android/src/main/jniLibs
+      - libsignal-src/java/shared/resources
+    scandelete:
+      - backend
+      - libsignal-src/rust/attest/fuzz/seeds/dcap/cds2_test
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
