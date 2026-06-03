@@ -13,7 +13,7 @@ Repo: https://github.com/saifmukhtar/enclave.git
 Builds:
   - versionName: '3.0.0'
     versionCode: 4
-    commit: 356cd1e1d81414a6b540d76df597627726992b97
+    commit: a15e69a7ea72419ad58f5f57e948398e78960cf9
     subdir: apps/android/app
     submodules: true
     ndk: r25c
