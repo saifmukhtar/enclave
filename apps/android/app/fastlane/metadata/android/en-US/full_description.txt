@@ -1,0 +1,65 @@
+Enclave is an elite, self-hosted, zero-knowledge private communication platform built specifically for couples navigating long-distance relationships who want absolute control over their digital intimacy.
+
+Unlike commercial messaging apps, Enclave removes third-party cloud infrastructure entirely. Your conversations, shared moments, photos, and voice notes are encrypted end-to-end and stored exclusively on your own server — never on a third-party cloud. Not even the developers can read your data.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• CRYPTOGRAPHIC SOVEREIGNTY
+Industry-standard E2EE powered by the Signal Protocol (Double Ratchet algorithm + X3DH key agreement). Every message, photo, and voice note is encrypted before it leaves your device. Local data at rest is protected by hardware-backed AES-256 encryption and biometric locks.
+
+• ZERO-KNOWLEDGE BACKUPS
+Encrypted backups are written directly to your self-hosted instance. The backup keys never leave your devices. Not even your VPS provider or server administrator can inspect the contents of your data.
+
+• THE KISS SIMULATOR
+A signature multi-sensory interaction space featuring real-time soft-body physics simulation, mutual touch synchronization over WebRTC, haptic feedback, and spatial ASMR audio synthesis. Designed to bridge the physical gap of long-distance relationships.
+
+• LIVE COLLABORATIVE CANVAS
+A real-time shared whiteboard synchronized over low-latency WebSockets. Draw, sketch, and annotate together from opposite sides of the world.
+
+• THE LOUNGE
+A shared intimate environment containing: a collaborative photo scrapbook, shared countdown timers to your next meeting, a synchronized music player, status stories, and daily encrypted love letters.
+
+• SECRET PHOTOS & TIMELINE
+A private encrypted gallery and personal relationship timeline, stored securely on your self-hosted instance.
+
+• SOVEREIGN INFRASTRUCTURE
+Run the entire backend yourself. The server stack is packaged as a lightweight Docker Compose project including Supabase (PostgreSQL + Auth), Coturn (WebRTC relay), and Node.js WebSocket signaling. Full self-hosting setup takes under 15 minutes on any VPS.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRIVACY & SECURITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• No analytics, no ads, no telemetry
+• No third-party cloud services
+• Signal Protocol cryptography (same as Signal messenger)
+• Hardware-backed biometric app lock
+• Screenshot protection in release builds
+• Fully open source under AGPLv3
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+SELF-HOSTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Enclave is designed for self-hosting on any Linux VPS. The backend requires Docker and approximately 1GB of RAM. Full setup documentation is available at:
+
+https://enclave.saifmukhtar.dev
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOURCE CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Enclave is fully open source. You can inspect, audit, build, and contribute to the codebase:
+
+https://github.com/saifmukhtar/enclave
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Android 14 (API 34) or higher
+• A self-hosted Enclave backend instance
+• Active internet connection for real-time features
+
+Take back your digital privacy and build your own sovereign space with Enclave.
