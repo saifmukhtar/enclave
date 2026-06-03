@@ -2,14 +2,22 @@ diff --git a/java/android/build.gradle b/java/android/build.gradle
 index b982bf473..44984c489 100644
 --- a/java/android/build.gradle
 +++ b/java/android/build.gradle
-@@ -1,5 +1,5 @@
+@@ -1,8 +1,10 @@
  plugins {
 -    id 'com.android.library' version '7.0.0'
 +    id 'com.android.library'
      id 'maven-publish'
      id 'signing'
  }
-@@ -13,6 +13,7 @@ repositories {
+ 
+-archivesBaseName = "libsignal-android"
++base {
++    archivesName = "libsignal-android"
++}
+ 
+ repositories {
+     google()
+@@ -13,6 +15,7 @@ repositories {
  }
  
  android {
@@ -85,6 +93,16 @@ diff --git a/java/client/build.gradle b/java/client/build.gradle
 index c5f615167..ac02885fb 100644
 --- a/java/client/build.gradle
 +++ b/java/client/build.gradle
+@@ -5,6 +5,8 @@ plugins {
+ }
+ 
+ sourceCompatibility = 1.8
+-archivesBaseName = "libsignal-client"
++base {
++    archivesName = "libsignal-client"
++}
+ 
+ repositories {
 @@ -57,48 +57,7 @@ tasks.named('jar') {
  }
  
