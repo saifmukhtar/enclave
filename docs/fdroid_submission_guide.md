@@ -36,6 +36,11 @@ Categories:
   - Internet
   - Security
 License: AGPL-3.0-only
+AutoName: Enclave
+Description: |-
+  Zero-knowledge private communication platform for couples.
+  Features Signal-grade E2EE chat, WebRTC voice & video calls,
+  shared canvas, and self-hosted backend. Full setup guide at https://enclave.saifmukhtar.dev
 SourceCode: https://github.com/saifmukhtar/enclave
 IssueTracker: https://github.com/saifmukhtar/enclave/issues
 WebSite: https://enclave.saifmukhtar.dev
@@ -44,104 +49,28 @@ RepoType: git
 Repo: https://github.com/saifmukhtar/enclave.git
 
 Builds:
-  - versionName: '2.0.0'
-    versionCode: 3
-    commit: v2.0.0
-    subdir: apps/android
-    submodules: true
-    ndk: r25c
-    sudo:
-      - apt-get update
-      - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git
-    prebuild: |
-      # Save the absolute path of Enclave's Android directory
-      ENCLAVE_DIR=$(pwd)
-      
-      # From apps/android, the submodule lives two directories up
-      cd ../../libsignal-src/java
-      echo "sdk.dir=$ANDROID_HOME" > local.properties
-      echo "ndk.dir=$$NDK$$" >> local.properties
-      
-      # Configure bindgen to use NDK's prebuilt LLVM/Clang to avoid host Clang parser issues
-      NDK_DIR="$$NDK$$"
-      if [ -d "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64" ]; then
-          export CLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-          export LIBCLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/lib64"
-          export BINDGEN_EXTRA_CLANG_ARGS="-I$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
-      fi
-      
-      ./gradlew assembleRelease -x test
-      
-      # Return to Enclave Android directory and copy artifacts safely
-      cd $ENCLAVE_DIR
-      mkdir -p app/libs
-      cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
-      cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
-      
-      # Clean up compilation artifacts to prevent F-Droid's binary scanner from flagging them
-      rm -rf ../../libsignal-src/target
-      rm -rf ../../libsignal-src/java/android/build
-      rm -rf ../../libsignal-src/java/client/build
-    gradle:
-      - yes
-    gradleprops:
-      - fdroid=true
-    scanignore:
-      - apps/android/app/libs/libsignal-android-release.aar
-      - apps/android/app/libs/libsignal-client-0.39.2.jar
-      - libsignal-src/java/android/src/main/jniLibs
-      - libsignal-src/java/shared/resources
-    scandelete:
-      - backend
-      - libsignal-src/rust/attest/fuzz/seeds/dcap/cds2_test
-
   - versionName: '3.0.0'
     versionCode: 4
     commit: v3.0.0
     subdir: apps/android
     submodules: true
     ndk: r25c
-    sudo:
-      - apt-get update
-      - apt-get install -y cargo rustc clang libclang-dev cmake make protobuf-compiler git
-    prebuild: |
-      # Save the absolute path of Enclave's Android directory
-      ENCLAVE_DIR=$(pwd)
-      
-      # From apps/android, the submodule lives two directories up
-      cd ../../libsignal-src/java
-      echo "sdk.dir=$ANDROID_HOME" > local.properties
-      echo "ndk.dir=$$NDK$$" >> local.properties
-      
-      # Configure bindgen to use NDK's prebuilt LLVM/Clang to avoid host Clang parser issues
-      NDK_DIR="$$NDK$$"
-      if [ -d "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64" ]; then
-          export CLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-          export LIBCLANG_PATH="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/lib64"
-          export BINDGEN_EXTRA_CLANG_ARGS="-I$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
-      fi
-      
-      ./gradlew assembleRelease -x test
-      
-      # Return to Enclave Android directory and copy artifacts safely
-      cd $ENCLAVE_DIR
-      mkdir -p app/libs
-      cp ../../libsignal-src/java/android/build/outputs/aar/*-release.aar app/libs/
-      cp ../../libsignal-src/java/client/build/libs/*.jar app/libs/
-      
-      # Clean up compilation artifacts to prevent F-Droid's binary scanner from flagging them
-      rm -rf ../../libsignal-src/target
-      rm -rf ../../libsignal-src/java/android/build
-      rm -rf ../../libsignal-src/java/client/build
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    srclibs:
+      - rustup@1.28.0
+    prebuild:
+      - echo "sdk.dir=$ANDROID_HOME" > local.properties
+      - echo "ndk.dir=$$NDK$$" >> local.properties
+      - echo "sdk.dir=$ANDROID_HOME" > ../../libsignal-src/java/local.properties
+      - echo "ndk.dir=$$NDK$$" >> ../../libsignal-src/java/local.properties
+      - patch -p1 -d ../../libsignal-src < libsignal.patch
+      - $$rustup$$/rustup-init.sh -y
+      - export PATH=$HOME/.cargo/bin:$PATH
+      - rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
     gradle:
       - yes
     gradleprops:
       - fdroid=true
-    scanignore:
-      - apps/android/app/libs/libsignal-android-release.aar
-      - apps/android/app/libs/libsignal-client-0.39.2.jar
-      - libsignal-src/java/android/src/main/jniLibs
-      - libsignal-src/java/shared/resources
     scandelete:
       - backend
       - libsignal-src/rust/attest/fuzz/seeds/dcap/cds2_test

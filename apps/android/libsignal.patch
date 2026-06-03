@@ -1,0 +1,138 @@
+diff --git a/java/android/build.gradle b/java/android/build.gradle
+index b982bf473..44984c489 100644
+--- a/java/android/build.gradle
++++ b/java/android/build.gradle
+@@ -1,5 +1,5 @@
+ plugins {
+-    id 'com.android.library' version '7.0.0'
++    id 'com.android.library'
+     id 'maven-publish'
+     id 'signing'
+ }
+@@ -13,6 +13,7 @@ repositories {
+ }
+ 
+ android {
++    namespace 'org.signal.libsignal'
+     compileSdkVersion 30
+     buildToolsVersion '30.0.2'
+     ndkVersion '25.2.9519653'
+@@ -71,6 +72,12 @@ task makeJniLibraries(type:Exec) {
+   // Explicitly specify 'bash' for Windows compatibility.
+   commandLine 'bash', '../build_jni.sh', 'android'
+   environment 'ANDROID_NDK_HOME', android.ndkDirectory
++  environment 'PATH', System.getenv('HOME') + '/.cargo/bin:' + System.getenv('PATH')
++
++  def ndkDir = android.ndkDirectory.absolutePath
++  environment 'CLANG_PATH', "${ndkDir}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
++  environment 'LIBCLANG_PATH', "${ndkDir}/toolchains/llvm/prebuilt/linux-x86_64/lib64"
++  environment 'BINDGEN_EXTRA_CLANG_ARGS', "-I${ndkDir}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+ }
+ 
+ task collectAssets(type:Copy) {
+@@ -80,47 +87,4 @@ task collectAssets(type:Copy) {
+     into 'src/main/assets/acknowledgments'
+ }
+ 
+-// MARK: Publication
+-afterEvaluate {
+-    publishing {
+-        publications {
+-            mavenJava(MavenPublication) {
+-                artifactId = archivesBaseName
+-                from components.release
+-                artifact libsWithDebugSymbols
+-
+-                pom {
+-                    name = archivesBaseName
+-                    packaging = 'aar'
+-                    description = 'Signal Protocol cryptography library for Android'
+-                    url = 'https://github.com/signalapp/libsignal'
+-
+-                    scm {
+-                        url = 'scm:git@github.com:signalapp/libsignal.git'
+-                        connection = 'scm:git@github.com:signalapp/libsignal.git'
+-                        developerConnection = 'scm:git@github.com:signalapp/libsignal.git'
+-                    }
+-
+-                    licenses {
+-                        license {
+-                            name = 'AGPLv3'
+-                            url = 'https://www.gnu.org/licenses/agpl-3.0.txt'
+-                        }
+-                    }
+-
+-                    developers {
+-                        developer {
+-                            name = 'Signal Messenger LLC'
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-    }
+-
+-    setUpSigningKey(signing)
+-    signing {
+-        required { isReleaseBuild() && gradle.taskGraph.hasTask(":android:publish") }
+-        sign publishing.publications.mavenJava
+-    }
+-}
+\ No newline at end of file
++// Removed publication block for standalone build compatibility
+\ No newline at end of file
+diff --git a/java/client/build.gradle b/java/client/build.gradle
+index c5f615167..ac02885fb 100644
+--- a/java/client/build.gradle
++++ b/java/client/build.gradle
+@@ -57,48 +57,7 @@ tasks.named('jar') {
+ }
+ 
+ processResources {
+-    // TODO: Build a different variant of the JNI library for server.
+-    dependsOn ':makeJniLibrariesDesktop'
++    // Removed makeJniLibrariesDesktop dependency for Android build compatibility
+ }
+ 
+-// MARK: Publishing
+-
+-publishing {
+-    publications {
+-        mavenJava(MavenPublication) {
+-            artifactId = archivesBaseName
+-            from components.java
+-
+-            pom {
+-                name = archivesBaseName
+-                description = 'Signal Protocol cryptography library for Java'
+-                url = 'https://github.com/signalapp/libsignal'
+-
+-                scm {
+-                    url = 'scm:git@github.com:signalapp/libsignal.git'
+-                    connection = 'scm:git@github.com:signalapp/libsignal.git'
+-                    developerConnection = 'scm:git@github.com:signalapp/libsignal.git'
+-                }
+-
+-                licenses {
+-                    license {
+-                        name = 'AGPLv3'
+-                        url = 'https://www.gnu.org/licenses/agpl-3.0.txt'
+-                    }
+-                }
+-
+-                developers {
+-                    developer {
+-                        name = 'Signal Messenger LLC'
+-                    }
+-                }
+-            }
+-        }
+-    }
+-}
+-
+-setUpSigningKey(signing)
+-signing {
+-    required { isReleaseBuild() && gradle.taskGraph.hasTask(":client:publish") }
+-    sign publishing.publications.mavenJava
+-}
++// Removed publication block for standalone build compatibility

@@ -82,6 +82,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -105,6 +106,7 @@ ksp {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
@@ -131,13 +133,8 @@ dependencies {
     implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     // Conditional Libsignal Integration
     if (project.hasProperty("fdroid") || System.getenv("FDROID") == "true") {
-        // F-Droid Build: Consume the source-built AARs/JARs compiled during the prebuild step
-        implementation(fileTree("libs") {
-            include("*-release.aar")
-            include("libsignal-client-*.jar")
-            exclude("*-sources.jar")
-            exclude("*-javadoc.jar")
-        })
+        // F-Droid Build: Compile directly from submodule source projects
+        implementation(project(":android"))
     } else {
         // Local Developer Build: Use precompiled Maven binaries
         implementation("org.signal:libsignal-client:0.39.2")
